@@ -9,6 +9,8 @@ export interface Db {
   query: Q;
   exec(sql: string): Promise<void>;
   tx<R>(fn: (q: Q) => Promise<R>): Promise<R>;
+  /** Exclusão mútua entre instâncias (só PostgreSQL real): evita migrações concorrentes em cold start. */
+  withLock?<R>(fn: () => Promise<R>): Promise<R>;
   close(): Promise<void>;
 }
 
@@ -61,6 +63,22 @@ async function postgresDb(url: string): Promise<Db> {
         c.release();
       }
     },
+    async withLock<R>(fn: () => Promise<R>) {
+      const c = await pool.connect();
+      try {
+        // Lock de transação: funciona também no pooler em modo transação (Supabase, porta 6543).
+        await c.query("begin");
+        await c.query("select pg_advisory_xact_lock(727274)");
+        const out = await fn();
+        await c.query("commit");
+        return out;
+      } catch (e) {
+        await c.query("rollback").catch(() => {});
+        throw e;
+      } finally {
+        c.release();
+      }
+    },
     async close() {
       await pool.end();
     },
@@ -68,6 +86,10 @@ async function postgresDb(url: string): Promise<Db> {
 }
 
 export async function migrate(db: Db, dir = path.join(/*turbopackIgnore: true*/ process.cwd(), "db", "migrations")) {
+  return db.withLock ? db.withLock(() => migrateUnlocked(db, dir)) : migrateUnlocked(db, dir);
+}
+
+async function migrateUnlocked(db: Db, dir: string) {
   await db.exec("create table if not exists schema_migrations (name text primary key, applied_at timestamptz not null default now())");
   const done = new Set((await db.query<{ name: string }>("select name from schema_migrations")).map((r) => r.name));
   const files = fs.readdirSync(/*turbopackIgnore: true*/ dir).filter((f) => f.endsWith(".sql")).sort();
