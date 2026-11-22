@@ -1,0 +1,95 @@
+import fs from "node:fs";
+import path from "node:path";
+import { PGlite } from "@electric-sql/pglite";
+import { btree_gist } from "@electric-sql/pglite/contrib/btree_gist";
+
+export type Q = <T = Record<string, any>>(sql: string, params?: unknown[]) => Promise<T[]>;
+
+export interface Db {
+  query: Q;
+  exec(sql: string): Promise<void>;
+  tx<R>(fn: (q: Q) => Promise<R>): Promise<R>;
+  close(): Promise<void>;
+}
+
+const INT8 = 20;
+const toNumber = (v: string) => Number(v);
+
+function pgliteDb(dataDir: string): Db {
+  if (!dataDir.includes("://")) fs.mkdirSync(/*turbopackIgnore: true*/ path.dirname(dataDir), { recursive: true });
+  const pg = new PGlite(dataDir, { extensions: { btree_gist }, parsers: { [INT8]: toNumber } });
+  const mk = (t: { query: PGlite["query"] }): Q =>
+    async <T,>(sql: string, params: unknown[] = []) => (await t.query(sql, params)).rows as T[];
+  return {
+    query: mk(pg),
+    async exec(sql) {
+      await pg.exec(sql);
+    },
+    async tx(fn) {
+      return pg.transaction(async (t) => fn(mk(t)));
+    },
+    async close() {
+      await pg.close();
+    },
+  };
+}
+
+// Caminho de produção (Supabase/Postgres). Ainda não validado contra um Postgres real.
+async function postgresDb(url: string): Promise<Db> {
+  const { Pool, types } = await import("pg");
+  types.setTypeParser(INT8, toNumber);
+  const pool = new Pool({ connectionString: url, max: 5, ssl: url.includes("localhost") ? undefined : { rejectUnauthorized: false } });
+  return {
+    async query<T>(sql: string, params: unknown[] = []) {
+      return (await pool.query(sql, params as any[])).rows as T[];
+    },
+    async exec(sql) {
+      await pool.query(sql);
+    },
+    async tx(fn) {
+      const c = await pool.connect();
+      try {
+        await c.query("begin");
+        const q: Q = async <T,>(sql: string, params: unknown[] = []) => (await c.query(sql, params as any[])).rows as T[];
+        const out = await fn(q);
+        await c.query("commit");
+        return out;
+      } catch (e) {
+        await c.query("rollback");
+        throw e;
+      } finally {
+        c.release();
+      }
+    },
+    async close() {
+      await pool.end();
+    },
+  };
+}
+
+export async function migrate(db: Db, dir = path.join(/*turbopackIgnore: true*/ process.cwd(), "db", "migrations")) {
+  await db.exec("create table if not exists schema_migrations (name text primary key, applied_at timestamptz not null default now())");
+  const done = new Set((await db.query<{ name: string }>("select name from schema_migrations")).map((r) => r.name));
+  const files = fs.readdirSync(/*turbopackIgnore: true*/ dir).filter((f) => f.endsWith(".sql")).sort();
+  for (const f of files) {
+    if (done.has(f)) continue;
+    const sql = fs.readFileSync(path.join(/*turbopackIgnore: true*/ dir, f), "utf8");
+    await db.exec(`${sql}\ninsert into schema_migrations(name) values ('${f}');`);
+  }
+}
+
+export async function createDb(opts: { dataDir?: string; url?: string } = {}): Promise<Db> {
+  const url = opts.url ?? process.env.DATABASE_URL;
+  if (!url && !opts.dataDir && !process.env.MARFIM_DATA_DIR && process.env.NODE_ENV === "production") {
+    throw new Error("DATABASE_URL não configurada. Em produção o sistema exige um PostgreSQL (ex.: Supabase); o banco local de arquivo é apenas para desenvolvimento e demonstração.");
+  }
+  const db = url ? await postgresDb(url) : pgliteDb(opts.dataDir ?? process.env.MARFIM_DATA_DIR ?? path.join(/*turbopackIgnore: true*/ process.cwd(), ".data", "pglite"));
+  await migrate(db);
+  return db;
+}
+
+const g = globalThis as unknown as { __marfimDb?: Promise<Db> };
+export function getDb(): Promise<Db> {
+  g.__marfimDb ??= createDb();
+  return g.__marfimDb;
+}

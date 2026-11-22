@@ -1,0 +1,77 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getDb } from "@/server/db";
+import { requirePerm } from "@/server/session";
+import { can } from "@/server/core";
+import { listAppointments } from "@/server/services/agenda";
+import { listCatalog } from "@/server/services/catalog";
+import { dayEndUtc, dayStartUtc, fmtDate, fmtDateTime, fmtTime, toYmd } from "@/lib/dates";
+import { fmtBRL } from "@/lib/money";
+import { ApptBadge, ConfirmAction, Field, Flash, PageHead } from "@/components/ui";
+import { cancelAppointmentAction, noShowAction, rescheduleAction, startAttendanceAction } from "@/app/actions/agenda";
+
+export const metadata = { title: "Agendamento" };
+
+export default async function AppointmentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; erro?: string }> }) {
+  const { id } = await params;
+  const sp = await searchParams;
+  const { ctx } = await requirePerm("agenda.view_all", "agenda.view_own");
+  const db = await getDb();
+  const [row] = await db.query<{ starts_at: Date }>("select starts_at from appointments where id=$1 and unit_id=$2", [id, ctx.unitId]);
+  if (!row) notFound();
+  const ymd = toYmd(row.starts_at);
+  const a = (await listAppointments(db, ctx, { from: dayStartUtc(ymd), to: dayEndUtc(ymd) }, { includeCancelled: true })).find((x) => x.id === id);
+  if (!a) notFound();
+  const cat = await listCatalog(db, ctx.unitId);
+  const mine = can(ctx, "agenda.manage") || (can(ctx, "agenda.manage_own") && ctx.staffId === a.staff_id);
+  const canRun = can(ctx, "attendance.run") || (can(ctx, "attendance.run_own") && ctx.staffId === a.staff_id);
+  const [h] = await db.query<{ cancelled_by_name: string | null; cancelled_at: Date | null }>("select u.full_name as cancelled_by_name, ap.cancelled_at from appointments ap left join users u on u.id=ap.cancelled_by where ap.id=$1", [id]);
+
+  return (
+    <>
+      <PageHead title={a.customer_name} sub={<>{fmtDate(a.starts_at)} · {fmtTime(a.starts_at)}–{fmtTime(a.ends_at)} · {a.staff_name} · {a.chair_name}</>}>
+        <ApptBadge s={a.status} />
+        <Link className="btn ghost" href={`/agenda?d=${ymd}`}>Voltar à agenda</Link>
+      </PageHead>
+      <Flash ok={sp.ok} erro={sp.erro} />
+      <div className="grid cols-2">
+        <section className="card stack">
+          <h2>Detalhes</h2>
+          <div><small>Serviços</small><br />{a.services} · <b className="mono">{fmtBRL(a.total_cents)}</b></div>
+          {a.customer_phone ? <div><small>Telefone</small><br />{a.customer_phone}</div> : null}
+          {a.customer_notes ? <div><small>Observações do cliente</small><br />{a.customer_notes}</div> : null}
+          {a.notes ? <div><small>Observações do agendamento</small><br />{a.notes}</div> : null}
+          {a.status === "cancelado" ? <div className="alert">Cancelado: {a.cancellation_reason}{h?.cancelled_by_name ? ` (por ${h.cancelled_by_name} em ${h.cancelled_at ? fmtDateTime(h.cancelled_at) : ""})` : ""}</div> : null}
+          {a.attendance_id ? <Link className="btn" href={`/atendimentos/${a.attendance_id}`}>Abrir atendimento</Link> : null}
+        </section>
+        {mine && a.status === "agendado" ? (
+          <section className="card stack">
+            <h2>Ações</h2>
+            {canRun ? <form action={startAttendanceAction}><input type="hidden" name="id" value={a.id} /><button className="btn accent" type="submit">Iniciar atendimento</button></form> : null}
+            <ConfirmAction label="Reagendar" tone="neutral" action={rescheduleAction} submit="Reagendar">
+              <input type="hidden" name="id" value={a.id} />
+              <div className="fields">
+                <Field label="Data"><input type="date" name="date" defaultValue={ymd} required /></Field>
+                <Field label="Hora"><input type="time" name="time" step={900} defaultValue={fmtTime(a.starts_at)} required /></Field>
+                {can(ctx, "agenda.manage") ? (
+                  <>
+                    <Field label="Profissional"><select name="staffId" defaultValue={a.staff_id}>{cat.staff.filter((s) => s.is_active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
+                    <Field label="Cadeira"><select name="chairId" defaultValue={a.chair_id}>{cat.chairs.filter((c) => c.is_active).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+                  </>
+                ) : null}
+              </div>
+              <Field label="Motivo (opcional)"><input name="reason" /></Field>
+            </ConfirmAction>
+            <ConfirmAction label="Cliente não compareceu" action={noShowAction} submit="Confirmar ausência" warn="Só é possível depois do horário marcado. Dependendo da configuração, pode gerar cobrança de taxa.">
+              <input type="hidden" name="id" value={a.id} />
+            </ConfirmAction>
+            <ConfirmAction label="Cancelar agendamento" action={cancelAppointmentAction} submit="Cancelar agendamento" warn="O horário será liberado. Informe o motivo.">
+              <input type="hidden" name="id" value={a.id} />
+              <Field label="Motivo do cancelamento"><input name="reason" minLength={3} required /></Field>
+            </ConfirmAction>
+          </section>
+        ) : null}
+      </div>
+    </>
+  );
+}
