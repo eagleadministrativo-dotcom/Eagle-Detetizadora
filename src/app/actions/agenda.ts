@@ -1,4 +1,6 @@
 "use server";
+import { after } from "next/server";
+import { flushPush } from "@/server/services/push";
 import { getDb } from "@/server/db";
 import { requireSession, run, str, optStr } from "@/server/session";
 import { cancelAppointment, createAppointment, createBlock, cancelBlock, markNoShow, rescheduleAppointment } from "@/server/services/agenda";
@@ -6,6 +8,11 @@ import { quickAttendance, startAttendance } from "@/server/services/attendance";
 import { saveCustomer } from "@/server/services/customers";
 import { DomainError } from "@/server/errors";
 import { atLocal } from "@/lib/dates";
+
+/** Envia o push logo após a resposta, sem atrasar a tela. */
+function pushNow(db: Awaited<ReturnType<typeof getDb>>) {
+  after(() => flushPush(db).catch((e) => console.error("[push]", e)));
+}
 
 function startsAt(fd: FormData) {
   const d = str(fd, "date"), t = str(fd, "time");
@@ -42,6 +49,7 @@ export async function createAppointmentAction(fd: FormData) {
     await createAppointment(db, ctx, {
       customerId, staffId: str(fd, "staffId"), chairId: optStr(fd, "chairId"), startsAt: startsAt(fd), serviceIds: fd.getAll("services").map(String), notes: optStr(fd, "notes"),
     });
+    pushNow(db);
     return { to: `/agenda?d=${str(fd, "date")}`, ok: "Agendamento criado." };
   });
 }
@@ -69,7 +77,9 @@ export async function cancelAppointmentAction(fd: FormData) {
   const { ctx } = await requireSession();
   const id = str(fd, "id");
   await run(`/agenda/${id}`, async () => {
-    await cancelAppointment(await getDb(), ctx, id, str(fd, "reason"));
+    const db = await getDb();
+    await cancelAppointment(db, ctx, id, str(fd, "reason"));
+    pushNow(db);
     return { to: "/agenda", ok: "Agendamento cancelado." };
   });
 }
@@ -87,7 +97,9 @@ export async function rescheduleAction(fd: FormData) {
   const { ctx } = await requireSession();
   const id = str(fd, "id");
   await run(`/agenda/${id}`, async () => {
-    await rescheduleAppointment(await getDb(), ctx, id, { startsAt: startsAt(fd), staffId: optStr(fd, "staffId") ?? undefined, chairId: optStr(fd, "chairId") ?? undefined, reason: optStr(fd, "reason") ?? undefined });
+    const db = await getDb();
+    await rescheduleAppointment(db, ctx, id, { startsAt: startsAt(fd), staffId: optStr(fd, "staffId") ?? undefined, chairId: optStr(fd, "chairId") ?? undefined, reason: optStr(fd, "reason") ?? undefined });
+    pushNow(db);
     return "Agendamento reagendado.";
   });
 }

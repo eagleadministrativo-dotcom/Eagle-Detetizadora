@@ -128,19 +128,23 @@ export async function createAppointmentTx(q: Q, ctx: Ctx, input: CreateAppointme
     await q("insert into appointment_services(appointment_id,service_id,name_snapshot,price_cents,duration_minutes) values ($1,$2,$3,$4,$5)", [a.id, s.id, s.name, s.price, s.minutes]);
   }
   await audit(q, ctx, "AGENDAMENTO_CRIADO", "appointment", a.id, null, { customer: input.customerId, staff: input.staffId, chair: chairId, starts_at: input.startsAt, ends_at: endsAt, services: svcs.map((s) => s.name) });
-  await notifyNewAppointment(q, ctx, a.id, input, svcs.map((s) => s.name));
+  await notifyAppointment(q, ctx, a.id, "novo_agendamento", "Novo agendamento", svcs.map((s) => s.name).join(", "));
   return a.id;
 }
 
-/** Avisa (alerta + push) proprietário/gerente e o próprio profissional sobre um novo agendamento. */
-async function notifyNewAppointment(q: Q, ctx: Ctx, id: string, input: CreateAppointmentInput, serviceNames: string[]) {
-  const [c] = await q<{ name: string }>("select name from customers where id=$1", [input.customerId]);
-  const [st] = await q<{ name: string; user_id: string | null }>("select name,user_id from staff where id=$1", [input.staffId]);
-  const when = input.startsAt.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-  const msg = `Novo agendamento: ${c?.name ?? "Cliente"} com ${st?.name ?? "profissional"} em ${when} (${serviceNames.join(", ")}).`;
-  await q("insert into notifications(unit_id,kind,severity,message,ref_entity,ref_id,dedupe_key) values ($1,'novo_agendamento','info',$2,'appointment',$3,$4) on conflict (dedupe_key) do nothing", [ctx.unitId, msg, id, `appt:${id}`]);
-  if (st?.user_id && st.user_id !== ctx.userId) {
-    await q("insert into notifications(unit_id,user_id,kind,severity,message,ref_entity,ref_id,dedupe_key) values ($1,$2,'novo_agendamento','info',$3,'appointment',$4,$5) on conflict (dedupe_key) do nothing", [ctx.unitId, st.user_id, msg, id, `appt:${id}:staff`]);
+/** Avisa (alerta + push) proprietário/gerente e o próprio profissional sobre mudanças na agenda. */
+async function notifyAppointment(q: Q, ctx: Ctx, id: string, kind: "novo_agendamento" | "agendamento_cancelado" | "agendamento_reagendado", verb: string, extra?: string) {
+  const [r] = await q<{ cname: string; sname: string; user_id: string | null; starts_at: Date }>(
+    "select c.name as cname, s.name as sname, s.user_id, a.starts_at from appointments a join customers c on c.id=a.customer_id join staff s on s.id=a.staff_id where a.id=$1",
+    [id],
+  );
+  if (!r) return;
+  const when = r.starts_at.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const msg = `${verb}: ${r.cname} com ${r.sname} em ${when}${extra ? ` (${extra})` : ""}.`;
+  const key = `${kind}:${id}:${Date.now()}`;
+  await q("insert into notifications(unit_id,kind,severity,message,ref_entity,ref_id,dedupe_key) values ($1,$2,$3,$4,'appointment',$5,$6)", [ctx.unitId, kind, kind === "agendamento_cancelado" ? "atencao" : "info", msg, id, key]);
+  if (r.user_id && r.user_id !== ctx.userId) {
+    await q("insert into notifications(unit_id,user_id,kind,severity,message,ref_entity,ref_id,dedupe_key) values ($1,$2,$3,$4,$5,'appointment',$6,$7)", [ctx.unitId, r.user_id, kind, kind === "agendamento_cancelado" ? "atencao" : "info", msg, id, key + ":staff"]);
   }
 }
 
@@ -170,6 +174,7 @@ export async function rescheduleAppointment(db: Db, ctx: Ctx, id: string, input:
       await validateSlot(q, { unitId: ctx.unitId, staffId, chairId, startsAt: input.startsAt, endsAt, excludeId: id });
       await q("update appointments set staff_id=$2, chair_id=$3, starts_at=$4, ends_at=$5, updated_at=now(), updated_by=$6 where id=$1", [id, staffId, chairId, input.startsAt, endsAt, ctx.userId]);
       await audit(q, ctx, "AGENDAMENTO_REAGENDADO", "appointment", id, { staff_id: a.staff_id, chair_id: a.chair_id, starts_at: a.starts_at }, { staff_id: staffId, chair_id: chairId, starts_at: input.startsAt }, input.reason);
+      await notifyAppointment(q, ctx, id, "agendamento_reagendado", "Agendamento reagendado");
     });
   } catch (e) {
     if ((e as { code?: string }).code === "23P01") throw new DomainError("conflict", "Esse horário acabou de ser ocupado por outro operador. Escolha outro.");
@@ -186,6 +191,7 @@ export async function cancelAppointment(db: Db, ctx: Ctx, id: string, reason: st
     if (a.status !== "agendado") throw new DomainError("bad_status", "Só é possível cancelar agendamentos com status Agendado.");
     await q("update appointments set status='cancelado', cancellation_reason=$2, cancelled_by=$3, cancelled_at=now(), updated_at=now(), updated_by=$3 where id=$1", [id, why, ctx.userId]);
     await audit(q, ctx, "AGENDAMENTO_CANCELADO", "appointment", id, { status: a.status }, { status: "cancelado" }, why);
+    await notifyAppointment(q, ctx, id, "agendamento_cancelado", "Agendamento cancelado", why);
   });
 }
 
