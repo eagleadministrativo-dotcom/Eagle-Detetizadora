@@ -128,7 +128,20 @@ export async function createAppointmentTx(q: Q, ctx: Ctx, input: CreateAppointme
     await q("insert into appointment_services(appointment_id,service_id,name_snapshot,price_cents,duration_minutes) values ($1,$2,$3,$4,$5)", [a.id, s.id, s.name, s.price, s.minutes]);
   }
   await audit(q, ctx, "AGENDAMENTO_CRIADO", "appointment", a.id, null, { customer: input.customerId, staff: input.staffId, chair: chairId, starts_at: input.startsAt, ends_at: endsAt, services: svcs.map((s) => s.name) });
+  await notifyNewAppointment(q, ctx, a.id, input, svcs.map((s) => s.name));
   return a.id;
+}
+
+/** Avisa (alerta + push) proprietário/gerente e o próprio profissional sobre um novo agendamento. */
+async function notifyNewAppointment(q: Q, ctx: Ctx, id: string, input: CreateAppointmentInput, serviceNames: string[]) {
+  const [c] = await q<{ name: string }>("select name from customers where id=$1", [input.customerId]);
+  const [st] = await q<{ name: string; user_id: string | null }>("select name,user_id from staff where id=$1", [input.staffId]);
+  const when = input.startsAt.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const msg = `Novo agendamento: ${c?.name ?? "Cliente"} com ${st?.name ?? "profissional"} em ${when} (${serviceNames.join(", ")}).`;
+  await q("insert into notifications(unit_id,kind,severity,message,ref_entity,ref_id,dedupe_key) values ($1,'novo_agendamento','info',$2,'appointment',$3,$4) on conflict (dedupe_key) do nothing", [ctx.unitId, msg, id, `appt:${id}`]);
+  if (st?.user_id && st.user_id !== ctx.userId) {
+    await q("insert into notifications(unit_id,user_id,kind,severity,message,ref_entity,ref_id,dedupe_key) values ($1,$2,'novo_agendamento','info',$3,'appointment',$4,$5) on conflict (dedupe_key) do nothing", [ctx.unitId, st.user_id, msg, id, `appt:${id}:staff`]);
+  }
 }
 
 export async function createAppointment(db: Db, ctx: Ctx, input: CreateAppointmentInput): Promise<string> {
