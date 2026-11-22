@@ -2,6 +2,7 @@ import { getDb } from "@/server/db";
 import { requirePerm } from "@/server/session";
 import { getSettings } from "@/server/core";
 import { Field, Flash, PageHead } from "@/components/ui";
+import { PushToggle } from "@/components/push-toggle";
 import { updateSettingsAction } from "@/app/actions/admin";
 
 export const metadata = { title: "Configurações" };
@@ -15,6 +16,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     <>
       <PageHead title="Configurações" sub="Políticas da unidade. Cada alteração fica registrada na auditoria." />
       <Flash ok={sp.ok} erro={sp.erro} />
+      <section className="card stack" id="notificacoes">
+        <h2>Notificações</h2>
+        <p>Ative ou desative os avisos do sistema neste aparelho. Vale para o navegador (Chrome) e para o aplicativo instalado: cada um é ativado separadamente.</p>
+        <PushToggle />
+        <small>Para instalar o aplicativo: no Chrome, menu e &quot;Instalar aplicativo&quot;. No iPhone, Safari e &quot;Adicionar à Tela de Início&quot;.</small>
+      </section>
       <form action={updateSettingsAction} className="form">
         <section className="card form">
           <h2>Descontos</h2>
