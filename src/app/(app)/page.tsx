@@ -44,9 +44,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<SP>
   const mine = await listAppointments(db, ctx, { from: dayStartUtc(today), to: dayEndUtc(today) }).catch(() => []);
   const nextUp = mine.filter((a) => a.status === "agendado" || a.status === "em_atendimento");
 
+  const heroKeys = full ? ["revenue", "operating_result", "cash_balance"] : ["revenue"];
+  const heroes = heroKeys.map((key) => dash.kpis.find((k) => k.key === key)).filter((k): k is NonNullable<typeof k> => !!k);
+  const rest = dash.kpis.filter((k) => !heroes.includes(k));
+
   return (
     <>
-      <PageHead title={full ? "Visão geral" : "Meu dia"} sub={`${fmtYmd(p.start)} a ${fmtYmd(p.end)} · atualizado às ${fmtTime(dash.updatedAt)}`}>
+      <PageHead eyebrow={full ? "Painel do proprietário" : "Agenda pessoal"} title={full ? "Visão geral" : "Meu dia"} sub={`${fmtYmd(p.start)} a ${fmtYmd(p.end)} · atualizado às ${fmtTime(dash.updatedAt)}`}>
         {full ? (
           <>
             <Seg items={[
@@ -99,8 +103,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<SP>
         </section>
       ) : null}
 
+      {heroes.length ? (
+        <section className="heroes" aria-label="Indicadores principais">
+          {heroes.map((k, i) => <KpiCard key={k.key} k={k} hero={(["olive", "wine", "stone"] as const)[i]} href={`/relatorios/${k.key}?${qs}`} />)}
+        </section>
+      ) : null}
       <section className="kpis" aria-label="Indicadores">
-        {dash.kpis.map((k) => <KpiCard key={k.key} k={k} href={`/relatorios/${k.key}?${qs}`} />)}
+        {rest.map((k) => <KpiCard key={k.key} k={k} href={`/relatorios/${k.key}?${qs}`} />)}
       </section>
 
       {dash.accounts.length ? (
@@ -113,18 +122,18 @@ export default async function Home({ searchParams }: { searchParams: Promise<SP>
         </section>
       ) : null}
 
-      <div className="grid cols-2">
+      <div className="grid asym">
         <section className="card">
           <h2>{full ? "Receita × custos e despesas por dia" : "Receita por dia"}</h2>
           {dash.revenueByDay.some((d) => d.cents || d.expenses) ? (
             <>
               <BarChart data={dash.revenueByDay.map((d) => ({ date: d.date, a: d.cents, b: full ? d.expenses : undefined }))} />
-              {full ? <div className="legend"><span><i style={{ background: "var(--accent)" }} />Receita operacional</span><span><i style={{ background: "var(--muted)", opacity: 0.55 }} />Custos e despesas (competência)</span></div> : null}
+              {full ? <div className="legend"><span><i style={{ background: "var(--chart-1)" }} />Receita operacional</span><span><i style={{ background: "var(--chart-2)", opacity: 0.7 }} />Custos e despesas (competência)</span></div> : null}
             </>
           ) : <Empty title="Sem movimento no período">Nenhum atendimento concluído nem lançamento neste intervalo.</Empty>}
         </section>
         {full ? (
-          <section className="card">
+          <section className="card editorial">
             <h2>Evolução do resultado (acumulado)</h2>
             {dash.resultSeries.length > 1 ? <LineChart data={dash.resultSeries.map((d) => ({ date: d.date, v: d.cents }))} /> : <Empty title="Período curto demais para a evolução" />}
             <small>Receita operacional − custos e despesas lançados por competência.</small>
@@ -150,7 +159,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<SP>
         </div>
       ) : null}
 
-      <section className="card">
+      <section className="card analytic">
         <h2>Ocupação por dia e horário</h2>
         {dash.heat.length ? <Heatmap cells={dash.heat} /> : <Empty title="Sem atendimentos no período" />}
         <small>Cada célula conta os atendimentos que começaram naquele dia da semana e horário. É uma contagem, não um percentual.</small>

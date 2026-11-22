@@ -5,7 +5,8 @@ import { can } from "@/server/core";
 import { ROLE_LABEL } from "@/server/permissions";
 import { runDailyJobs, unreadCount } from "@/server/services/ops";
 import { logoutAction } from "@/app/actions/auth";
-import { BottomNav, SideNav, type NavGroup, type NavItem } from "@/components/nav";
+import { Icon } from "@/components/icons";
+import { BottomNav, SideNav, SideToggle, type NavGroup, type NavItem } from "@/components/nav";
 
 export const dynamic = "force-dynamic";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -48,18 +49,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="shell">
+      <a className="skip" href="#conteudo">Pular para o conteúdo</a>
       <aside className="side">
-        <Link className="brand" href="/">MARFIM<small>Studio OS</small></Link>
+        <Link className="brand" href="/" aria-label="MARFIM Studio OS — início"><span className="mark" aria-hidden="true">M</span><span className="name">MARFIM<small>Studio OS</small></span></Link>
         <SideNav groups={groups} />
+        <SideToggle />
       </aside>
       <div className="main">
         <header className="top">
           <span className="grow" />
-          {can(ctx, "finance.view") || can(ctx, "dashboard.full") ? (unread > 0 ? <Link className="badge warn" href="/notificacoes">{unread} alerta(s)</Link> : <Link className="muted" href="/notificacoes" style={{ fontSize: 13 }}>Alertas</Link>) : null}
-          <Link className="who" href="/conta">{s.user.fullName} · {ROLE_LABEL[ctx.role]}</Link>
+          {can(ctx, "finance.view") || can(ctx, "dashboard.full") ? (
+            <Link className={`bell ${unread > 0 ? "has" : ""}`} href="/notificacoes" aria-label={unread > 0 ? `${unread} alerta(s) não lido(s)` : "Alertas"}><Icon name="bell" />{unread > 0 ? `${unread}` : "Alertas"}</Link>
+          ) : null}
+          <Link className="who" href="/conta"><span className="avatar" aria-hidden="true">{s.user.fullName.trim().slice(0, 1).toUpperCase()}</span><span className="nm">{s.user.fullName} · {ROLE_LABEL[ctx.role]}</span></Link>
           <form action={logoutAction}><button className="btn small ghost" type="submit">Sair</button></form>
         </header>
-        <main className="content">{children}</main>
+        <main className="content" id="conteudo">{children}</main>
       </div>
       <BottomNav primary={primary} more={more} />
     </div>

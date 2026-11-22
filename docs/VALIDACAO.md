@@ -1,6 +1,6 @@
 # Validação do MVP
 
-Resultado em 22/11/2026: **53 testes automatizados passando**, `tsc` e `eslint` sem erros, build de produção concluído. Navegação real verificada no navegador (desktop e celular) com a base de demonstração.
+Resultado em 22/11/2026: **58 testes automatizados passando**, `tsc` e `eslint` sem erros, build de produção concluído. Navegação real verificada no navegador (desktop e celular) com a base de demonstração.
 
 ## Critérios de aceite do MVP (especificação V1.1 §11)
 

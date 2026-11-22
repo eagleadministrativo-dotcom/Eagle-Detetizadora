@@ -19,7 +19,7 @@ export default async function MfaSetupPage({ searchParams }: { searchParams: Pro
     <div className="login">
       <div className="card stack" style={{ width: "min(100%, 460px)" }}>
         <div>
-          <div className="brand">MARFIM</div>
+          <div className="brand"><span className="mark" aria-hidden="true">M</span><span className="name">MARFIM<small>Studio OS</small></span></div>
           <h1>Ative a verificação em duas etapas</h1>
           <p className="muted">Obrigatória para proprietário e gerente. Use um aplicativo autenticador (Google Authenticator, Microsoft Authenticator, Authy, 1Password...).</p>
         </div>

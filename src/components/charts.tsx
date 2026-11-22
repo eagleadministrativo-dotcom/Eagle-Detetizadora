@@ -13,7 +13,8 @@ export function BarChart({ data, labelEvery }: { data: { date: string; a: number
   const bw = (W - pl) / data.length;
   const every = labelEvery ?? Math.max(1, Math.ceil(data.length / 10));
   return (
-    <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Gráfico de barras por dia">
+    <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Gráfico de barras por dia (valores no texto alternativo de cada barra)">
+      <defs><linearGradient id="gA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--chart-1)" /><stop offset="1" stopColor="var(--chart-1)" stopOpacity="0.55" /></linearGradient></defs>
       {[0, 0.5, 1].map((t) => (
         <g key={t}>
           <line className="grid" x1={pl} x2={W} y1={pt + (H - pb - pt) * (1 - t)} y2={pt + (H - pb - pt) * (1 - t)} />
@@ -26,7 +27,8 @@ export function BarChart({ data, labelEvery }: { data: { date: string; a: number
         const x = pl + i * bw;
         const two = d.b != null;
         return (
-          <g key={d.date}>
+          <g key={d.date} className="col">
+            <rect className="hit" x={x} y={pt} width={bw} height={H - pb - pt} />
             <title>{`${dd(d.date)} · ${fmtBRL(d.a)}${two ? ` · despesas ${fmtBRL(d.b ?? 0)}` : ""}`}</title>
             <rect className="bar" x={x + bw * 0.12} width={Math.max(1, (bw * (two ? 0.38 : 0.76)))} y={H - pb - hA} height={hA} />
             {two ? <rect className="bar2" x={x + bw * 0.5} width={Math.max(1, bw * 0.38)} y={H - pb - hB} height={hB} /> : null}
@@ -49,14 +51,16 @@ export function LineChart({ data, estimateFrom }: { data: { date: string; v: num
   const path = (from: number, to: number) => data.slice(from, to).map((d, i) => `${i ? "L" : "M"}${x(from + i).toFixed(1)},${y(d.v).toFixed(1)}`).join(" ");
   const every = Math.max(1, Math.ceil(data.length / 8));
   return (
-    <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Gráfico de linha">
+    <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Gráfico de linha da evolução ao longo do período">
+      <defs><linearGradient id="gArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--chart-1)" stopOpacity="0.28" /><stop offset="1" stopColor="var(--chart-1)" stopOpacity="0" /></linearGradient></defs>
       {[min, (min + max) / 2, max].map((t) => (
         <g key={t}>
           <line className="grid" x1={pl} x2={W} y1={y(t)} y2={y(t)} />
           <text x={pl - 4} y={y(t) + 3} textAnchor="end">{fmtShort(t)}</text>
         </g>
       ))}
-      {min < 0 ? <line x1={pl} x2={W} y1={y(0)} y2={y(0)} stroke="var(--bad)" strokeDasharray="2 3" /> : null}
+      {min < 0 ? <line x1={pl} x2={W} y1={y(0)} y2={y(0)} className="zero" /> : null}
+      {idxEst < 0 ? <path className="area" d={`${path(0, data.length)} L${x(data.length - 1).toFixed(1)},${y(Math.max(min, 0)).toFixed(1)} L${x(0).toFixed(1)},${y(Math.max(min, 0)).toFixed(1)} Z`} /> : null}
       {idxEst > 0 ? (
         <>
           <path className="line" d={path(0, idxEst + 1)} />

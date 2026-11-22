@@ -14,7 +14,7 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
     <div className="login">
       <div className="card stack" style={{ width: "min(100%, 480px)" }}>
         <div>
-          <div className="brand">MARFIM</div>
+          <div className="brand"><span className="mark" aria-hidden="true">M</span><span className="name">MARFIM<small>Studio OS</small></span></div>
           <h1>Primeira configuração</h1>
           <p className="muted">Crie a empresa e a conta do proprietário. Todo o restante (serviços, preços, equipe, formas de pagamento, horários) é cadastrado depois, dentro do sistema.</p>
         </div>

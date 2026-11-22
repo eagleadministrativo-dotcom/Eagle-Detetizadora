@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { fmtBRL, fmtPct } from "@/lib/money";
+import { Icon } from "./icons";
 import type { Kpi } from "@/server/services/reports";
 
 type Tone = "ok" | "warn" | "bad" | "info" | "solid" | "";
@@ -14,10 +15,11 @@ export function Flash({ ok, erro }: { ok?: string; erro?: string }) {
   );
 }
 
-export function PageHead({ title, sub, children }: { title: string; sub?: ReactNode; children?: ReactNode }) {
+export function PageHead({ title, sub, eyebrow, children }: { title: string; sub?: ReactNode; eyebrow?: string; children?: ReactNode }) {
   return (
     <div className="pagehead">
       <div>
+        {eyebrow ? <span className="eyebrow">{eyebrow}</span> : null}
         <h1>{title}</h1>
         {sub ? <p>{sub}</p> : null}
       </div>
@@ -95,17 +97,17 @@ export function ConfirmAction({ label, action, children, submit, tone = "danger"
 
 const unitFmt = (k: Kpi, v: number | null) => (v == null ? "—" : k.unit === "brl" ? fmtBRL(v) : k.unit === "pct" ? fmtPct(v) : v.toLocaleString("pt-BR"));
 
-export function KpiCard({ k, href }: { k: Kpi; href: string }) {
+export function KpiCard({ k, href, hero }: { k: Kpi; href: string; hero?: "olive" | "wine" | "stone" }) {
   let delta: ReactNode = null;
   if (k.previous != null && k.value != null && k.previous !== 0) {
     const d = ((k.value - k.previous) / Math.abs(k.previous)) * 100;
     delta = <div className={`delta ${d >= 0 ? "up" : "down"}`}>{d >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(d), 0)} vs período anterior</div>;
   } else if (k.previous != null) delta = <div className="delta">Anterior: {unitFmt(k, k.previous)}</div>;
   return (
-    <Link className="kpi" href={href} title={k.definition}>
+    <Link className={`kpi${hero ? ` hero ${hero}` : ""}`} href={href} title={k.definition}>
       <div className="label">
         <span>{k.label}</span>
-        <span aria-hidden>↗</span>
+        <Icon name="arrow" />
       </div>
       <div className="value">{unitFmt(k, k.value)}</div>
       {delta}
@@ -126,3 +128,16 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 
 /** Chave de idempotência gerada ao renderizar: reenviar o mesmo formulário não duplica o lançamento. */
 export const newKey = () => `ui-${crypto.randomUUID()}`;
+
+export function Skeleton({ h = 80, w }: { h?: number; w?: number | string }) {
+  return <div className="skeleton" style={{ height: h, width: w }} aria-hidden="true" />;
+}
+
+export function ErrorBox({ title, children }: { title: string; children?: ReactNode }) {
+  return (
+    <div className="errorbox" role="alert">
+      <b style={{ fontFamily: "var(--serif)", fontSize: "1.1rem" }}>{title}</b>
+      {children}
+    </div>
+  );
+}

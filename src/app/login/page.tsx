@@ -17,8 +17,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <div className="login">
       <div className="card stack">
         <div>
-          <div className="brand">MARFIM</div>
-          <p className="muted">Studio OS · acesso restrito à equipe</p>
+          <div className="brand"><span className="mark" aria-hidden="true">M</span><span className="name">MARFIM<small>Studio OS</small></span></div>
+          <h1 style={{ fontSize: "1.35rem" }}>Acesso da equipe</h1>
+          <p className="muted" style={{ marginTop: 4 }}>Sistema privado. Entre com seu e-mail e senha.</p>
         </div>
         <Flash ok={sp.ok} erro={sp.erro} />
         <form action={loginAction} className="form">
@@ -26,7 +27,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <label>Senha<input name="password" type="password" autoComplete="current-password" required /></label>
           <button className="btn accent" type="submit">Entrar</button>
         </form>
-        <small>Após 5 tentativas incorretas a conta é bloqueada por 15 minutos.</small>
+        <small>Esqueceu a senha? Peça ao proprietário para redefinir em Administração → Usuários. Após 5 tentativas incorretas a conta é bloqueada por 15 minutos.</small>
       </div>
     </div>
   );

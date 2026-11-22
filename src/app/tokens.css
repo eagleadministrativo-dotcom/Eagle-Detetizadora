@@ -1,0 +1,88 @@
+/* MARFIM — tokens de design (única fonte dos valores de cor, sombra, raio, espaço e movimento).
+   Direção: "Architectural Dark" na estrutura (sidebar/login), "Olive Editorial" na leitura e
+   "Burgundy Atelier" nos pontos de ação. Bronze/Cognac só em linhas e reflexos. */
+
+:root {
+  /* paleta bruta */
+  --olive-900: #292d1e; --olive-700: #45482d; --olive-500: #686d47;
+  --burgundy-900: #351018; --burgundy-700: #591d27; --burgundy-500: #79353f;
+  --cream-100: #f6f1e7; --cream-200: #f3ebdd; --cream-300: #e7d8bc; --cream-400: #c9b798;
+  --charcoal: #151615; --graphite: #222321; --warm-gray: #77766f;
+  --cognac: #9c6845; --bronze: #a58d69;
+
+  /* tipografia */
+  --serif: "Fraunces Variable", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --sans: "Inter Variable", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  --fs-0: 0.75rem; --fs-1: 0.8125rem; --fs-2: 0.9375rem; --fs-3: 1.125rem;
+  --fs-4: clamp(1.4rem, 1.1rem + 1vw, 1.9rem); --fs-5: clamp(1.7rem, 1.2rem + 1.6vw, 2.4rem);
+
+  /* espaço (4/8/12/16/24/32/48) */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
+  --radius: 10px; --radius-sm: 6px; --radius-lg: 16px;
+
+  /* movimento */
+  --t-micro: 150ms; --t-trans: 220ms; --t-panel: 300ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  /* tema claro (papel/creme) */
+  --bg: var(--cream-100);
+  --surface: #fbf8f1;
+  --surface-2: var(--cream-200);
+  --surface-3: #ece1cb;
+  --ink: #1d1e1b;
+  --ink-2: #44443d;
+  --muted: #5f5e55;
+  --line: #ddd0b6;
+  --line-strong: #c9b798;
+  --accent: var(--burgundy-700);          /* ação principal */
+  --accent-ink: #f6f1e7;
+  --accent-soft: color-mix(in srgb, var(--burgundy-700) 10%, transparent);
+  --olive: var(--olive-700);
+  --olive-soft: color-mix(in srgb, var(--olive-500) 16%, transparent);
+  --highlight: var(--cognac);
+  --eyebrow: #7d4f30;
+  --chart-1: var(--olive-700); --chart-2: var(--burgundy-500); --chart-3: var(--cognac); --chart-4: var(--bronze); --chart-grid: #ddd0b6;
+  --graphite-btn: var(--graphite);
+  --graphite-ink: var(--cream-100);
+  --side-bg: var(--charcoal);
+  --side-ink: #ece3d0;
+  --side-muted: #9a9486;
+  --ok: #3d5a35; --warn: #8a5a0b; --bad: #8f2a2a; --info: #4a5d6b;
+  --focus: #1d4f91;
+  --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(53, 16, 24, 0.06);
+  --shadow-2: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 6px 18px -8px rgba(53, 16, 24, 0.22);
+  --shadow-3: 0 18px 40px -14px rgba(21, 22, 21, 0.35);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .45 0 0 0 0 .35 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121312;
+    --surface: #1b1c1a;
+    --surface-2: #232421;
+    --surface-3: #2b2c28;
+    --ink: #f1eadb;
+    --ink-2: #d6cdb9;
+    --muted: #aaa393;
+    --line: #34352f;
+    --line-strong: #4a4b42;
+    --accent: #8c3f4b;                    /* burgundy claro: 5,1:1 com creme */
+    --accent-ink: #f6f1e7;
+    --accent-soft: color-mix(in srgb, var(--burgundy-500) 22%, transparent);
+    --olive: #9aa06b;
+    --olive-soft: color-mix(in srgb, var(--olive-500) 24%, transparent);
+    --highlight: var(--bronze);
+    --eyebrow: #c9a77a;
+    --chart-1: #a3aa73; --chart-2: #b9606c; --chart-3: #c58b63; --chart-4: var(--bronze); --chart-grid: #34352f;
+    --graphite-btn: var(--cream-300);
+    --graphite-ink: var(--charcoal);
+    --side-bg: #0e0f0e;
+    --ok: #9cc08f; --warn: #e2b866; --bad: #e6928a; --info: #a9bfce;
+    --focus: #8fb8f0;
+    --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+    --shadow-2: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 8px 22px -10px rgba(0, 0, 0, 0.7);
+    --shadow-3: 0 22px 48px -14px rgba(0, 0, 0, 0.8);
+    color-scheme: dark;
+  }
+}

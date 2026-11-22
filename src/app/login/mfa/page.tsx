@@ -16,7 +16,7 @@ export default async function MfaPage({ searchParams }: { searchParams: Promise<
     <div className="login">
       <div className="card stack">
         <div>
-          <div className="brand">MARFIM</div>
+          <div className="brand"><span className="mark" aria-hidden="true">M</span><span className="name">MARFIM<small>Studio OS</small></span></div>
           <h1>Verificação em duas etapas</h1>
           <p className="muted">Digite o código de 6 dígitos do seu aplicativo autenticador.</p>
         </div>

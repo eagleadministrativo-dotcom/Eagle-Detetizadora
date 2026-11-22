@@ -27,7 +27,7 @@ Logins de demonstração (senha `Demo@Marfim2026`): `dono@demo.marfim.local`, `g
 ## Qualidade
 
 ```powershell
-npm test               # 53 testes: regras financeiras, concorrência, permissões, segurança, simulação de um mês
+npm test               # 58 testes: regras financeiras, concorrência, permissões, segurança, simulação de um mês
 npm run typecheck
 npm run lint
 npm run build
@@ -39,6 +39,7 @@ npm run build
 |---|---|
 | `DECISOES-TOMADAS.md` | Decisões de produto/engenharia tomadas durante a construção (leia primeiro) |
 | `ARQUITETURA.md` | Como o sistema está organizado e por quê |
+| `DESIGN-SYSTEM.md` | Identidade visual, tokens, componentes e limitações |
 | `VALIDACAO.md` | Critérios de aceite do MVP × evidências (testes e verificações) e o que ainda falta |
 | `OPERACAO.md` | Publicar na Vercel + Supabase, variáveis, backup, restauração, rotinas, custos |
 
