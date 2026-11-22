@@ -35,7 +35,8 @@ export async function countSubscriptions(db: Db, userId: string) {
 }
 
 async function defaultSender(): Promise<PushSender> {
-  const webpush = (await import("web-push")).default;
+  const mod = (await import("web-push")) as unknown as { default?: typeof import("web-push") } & typeof import("web-push");
+  const webpush = mod.default ?? mod; // interoperabilidade ESM/CommonJS no bundle de produção
   webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:contato@marfim.local", process.env.VAPID_PUBLIC_KEY!, process.env.VAPID_PRIVATE_KEY!);
   return async (sub, payload) => {
     await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(payload), { TTL: 60 * 60 * 12, urgency: payload.severity === "critico" ? "high" : "normal" });
@@ -55,7 +56,14 @@ export async function flushPush(db: Db, send?: PushSender): Promise<{ notificati
     "update notifications set pushed_at=now() where pushed_at is null and created_at > now() - interval '48 hours' returning id, unit_id, user_id, severity, message",
   );
   if (!claimed.length) return { notifications: 0, sent: 0, removed: 0 };
-  const sender = send ?? (await defaultSender());
+  let sender: PushSender;
+  try {
+    sender = send ?? (await defaultSender());
+  } catch (e) {
+    // não perde os avisos: devolve para a fila e tenta de novo na próxima chamada
+    await db.query("update notifications set pushed_at=null where id = any($1::uuid[])", [claimed.map((n) => n.id)]);
+    throw e;
+  }
   let sent = 0;
   let removed = 0;
   for (const n of claimed) {
