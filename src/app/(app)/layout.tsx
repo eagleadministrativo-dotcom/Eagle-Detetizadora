@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { after } from "next/server";
+import { flushPush } from "@/server/services/push";
 import { getDb } from "@/server/db";
 import { requireSession } from "@/server/session";
 import { can } from "@/server/core";
@@ -15,6 +17,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const db = await getDb();
   if (can(ctx, "finance.view")) await runDailyJobs(db, ctx.unitId).catch((e) => console.error("[rotina diaria]", e));
   const unread = await unreadCount(db, ctx);
+  // Envia por push os avisos novos, depois que a página já respondeu (não atrasa a tela).
+  after(() => flushPush(db).catch((e) => console.error("[push]", e)));
 
   const groups: NavGroup[] = [];
   const main: NavItem[] = [];

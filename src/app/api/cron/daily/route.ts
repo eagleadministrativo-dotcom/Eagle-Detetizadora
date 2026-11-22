@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { getDb } from "@/server/db";
 import { runDailyJobs } from "@/server/services/ops";
+import { flushPush } from "@/server/services/push";
 
 export const dynamic = "force-dynamic";
 
@@ -21,5 +22,6 @@ export async function GET(req: Request) {
   const units = await db.query<{ id: string }>("select id from units");
   const results: Record<string, unknown> = {};
   for (const u of units) results[u.id] = await runDailyJobs(db, u.id).catch((e) => ({ error: (e as Error).message }));
-  return Response.json({ ok: true, results });
+  const push = await flushPush(db).catch((e) => ({ error: (e as Error).message }));
+  return Response.json({ ok: true, results, push });
 }

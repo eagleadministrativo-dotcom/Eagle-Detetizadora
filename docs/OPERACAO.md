@@ -49,3 +49,12 @@ Rodam uma vez por dia (idempotentes): contas recorrentes (A07), alertas de venci
 ## 5. Retenção e privacidade (LGPD)
 
 Dados de clientes são opcionais além de nome/telefone. Defina o prazo de retenção em *Configurações* com orientação contábil/jurídica. Pedidos de correção/remoção de titulares: editar/desativar o cliente (o histórico financeiro permanece anonimizável por exigência legal de guarda dos registros contábeis).
+
+## Notificações no celular (push)
+
+- O sistema é um app instalável (PWA): `manifest`, `public/sw.js` e ícones em `public/icons` (gerados por `node scripts/make-icons.mjs`).
+- Cada pessoa ativa em **Minha conta → Notificações no celular**, em cada aparelho. Android/computador: Chrome ou Edge. iPhone: iOS 16.4+, só com o app instalado pelo Safari ("Adicionar à Tela de Início").
+- Variáveis de ambiente (Vercel, Production): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` (secreta), `VAPID_SUBJECT` (URL do site ou `mailto:`). Gere um par novo com `npx web-push generate-vapid-keys`. Trocar o par invalida as inscrições existentes (cada pessoa reativa).
+- Quem recebe: proprietário e gerente da unidade. Os avisos são os da central de alertas (caixa, vencimentos, metas…).
+- Envio: os avisos novos saem quando alguém usa o sistema (logo após a página carregar) e na rotina diária das 09:00. Plano Hobby da Vercel só permite cron diário, então com ninguém usando o sistema o aviso pode esperar até a rotina diária.
+- Ao trocar de domínio, as pessoas precisam reinstalar o app e reativar as notificações (inscrição é por endereço).

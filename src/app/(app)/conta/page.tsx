@@ -2,6 +2,7 @@ import { requireSession } from "@/server/session";
 import { ROLE_LABEL } from "@/server/permissions";
 import { changePasswordAction, mfaSetupStartAction } from "@/app/actions/auth";
 import { Badge, Flash, PageHead } from "@/components/ui";
+import { PushToggle } from "@/components/push-toggle";
 
 export const metadata = { title: "Minha conta" };
 
@@ -29,6 +30,12 @@ export default async function Account({ searchParams }: { searchParams: Promise<
           {!s.user.mfaEnabled ? (
             <form action={mfaSetupStartAction}><button className="btn accent" type="submit">Ativar agora</button></form>
           ) : <small>Para trocar de aparelho, peça ao proprietário para redefinir sua senha (isso reinicia o autenticador).</small>}
+        </section>
+        <section className="card stack">
+          <h2>Notificações no celular</h2>
+          <p>Receba os alertas do sistema (caixa, vencimentos, metas) como aviso do aplicativo, sem e-mail. Ative em cada aparelho que você usa.</p>
+          <PushToggle />
+          <small>Para instalar: no Chrome, abra o menu e escolha &quot;Instalar aplicativo&quot;. No iPhone, use o Safari e &quot;Adicionar à Tela de Início&quot;.</small>
         </section>
       </div>
     </>
