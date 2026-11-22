@@ -8,7 +8,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Chamar rotina de lembretes
-        run: curl -fsS --max-time 50 -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/reminders"
+        run: |
+          curl -fsS --max-time 50 -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/reminders"
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APP_URL: https://marfim-studio-os-tan.vercel.app
