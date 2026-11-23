@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { fmtBRL, fmtPct } from "@/lib/money";
 import { Icon } from "./icons";
 import type { Kpi } from "@/server/services/reports";
@@ -15,12 +15,17 @@ export function Flash({ ok, erro }: { ok?: string; erro?: string }) {
   );
 }
 
-export function PageHead({ title, sub, eyebrow, children }: { title: string; sub?: ReactNode; eyebrow?: string; children?: ReactNode }) {
+/** Título em movimento: cada palavra entra em sequência (desliga com "reduzir movimento"). accent vira a palavra em itálico. */
+export function PageHead({ title, accent, sub, eyebrow, children }: { title: string; accent?: string; sub?: ReactNode; eyebrow?: string; children?: ReactNode }) {
+  const words = title.split(/s+/).filter(Boolean);
   return (
     <div className="pagehead">
       <div>
         {eyebrow ? <span className="eyebrow">{eyebrow}</span> : null}
-        <h1>{title}</h1>
+        <h1 aria-label={accent ? `${title} ${accent}` : title}>
+          {words.map((w, i) => <span key={i} className="kw" aria-hidden="true" style={{ "--i": i } as CSSProperties}>{w}{i < words.length - 1 || accent ? " " : ""}</span>)}
+          {accent ? <em className="kw" aria-hidden="true" style={{ "--i": words.length } as CSSProperties}>{accent}</em> : null}
+        </h1>
         {sub ? <p>{sub}</p> : null}
       </div>
       {children ? <div className="row">{children}</div> : null}
@@ -113,6 +118,23 @@ export function KpiCard({ k, href, hero }: { k: Kpi; href: string; hero?: "olive
       {delta}
       {k.notReconciledCents ? <div className="note">{fmtBRL(k.notReconciledCents)} ainda não conferido</div> : null}
       {k.warning ? <div className="note">{k.warning}</div> : null}
+    </Link>
+  );
+}
+
+/** Indicador em linha (lista estrutural): rótulo, valor e variação. */
+export function KpiLine({ k, href }: { k: Kpi; href: string }) {
+  let delta: ReactNode = null;
+  if (k.previous != null && k.value != null && k.previous !== 0) {
+    const d = ((k.value - k.previous) / Math.abs(k.previous)) * 100;
+    delta = <span className={`kd ${d >= 0 ? "up" : "down"}`}>{d >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(d), 0)}</span>;
+  }
+  return (
+    <Link className="kl" href={href} title={k.definition}>
+      <span className="kl-l">{k.label}</span>
+      <span className="kl-v">{unitFmt(k, k.value)}</span>
+      {delta ?? <span className="kd" />}
+      {k.notReconciledCents ? <small className="kl-n">{fmtBRL(k.notReconciledCents)} a conferir</small> : null}
     </Link>
   );
 }

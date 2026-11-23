@@ -51,7 +51,7 @@ export function Spotlight() {
   useEffect(() => {
     if (!window.matchMedia("(hover: hover)").matches) return;
     const on = (e: PointerEvent) => {
-      const el = (e.target as Element | null)?.closest?.<HTMLElement>("[data-spot], .kpi");
+      const el = (e.target as Element | null)?.closest?.<HTMLElement>("[data-spot], .kpi, .card");
       if (!el) return;
       const r = el.getBoundingClientRect();
       el.style.setProperty("--mx", `${e.clientX - r.left}px`);

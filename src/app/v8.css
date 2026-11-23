@@ -1,0 +1,162 @@
+/* MARFIM V8 — copiloto, home com hierarquia, vidro com profundidade, paleta expandida e tipografia em movimento.
+   Paleta expandida (derivada das cores oficiais, para estados e gráficos):
+   musgo (oliva esverdeado) = sucesso · latão (ocre do linho) = atenção · argila (bordô aquecido) = crítico · névoa (grafite azulado) = informação. */
+:root {
+  --musgo: #4f5b2c; --latao: #8a6a2a; --argila: #8c3a26; --nevoa: #4e5a63; --areia: #d9d0c2;
+  --ok: var(--musgo); --warn: var(--latao); --bad: var(--argila); --info: var(--nevoa);
+  --chart-3: #b08a45; --chart-4: #6f7e88;
+  --rim: linear-gradient(150deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 32%, rgba(255, 255, 255, 0) 62%, rgba(255, 255, 255, 0.5));
+  --sheen: linear-gradient(165deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.12) 38%, rgba(255, 255, 255, 0) 60%);
+  --spot-glow: rgba(255, 255, 255, 0.5);
+  --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 1px 2px rgba(38, 1, 1, 0.05), 0 16px 36px -22px rgba(49, 8, 4, 0.3);
+  --shadow-2: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 26px 54px -26px rgba(49, 8, 4, 0.38);
+  --cp-bg: radial-gradient(120% 90% at 100% 0%, rgba(107, 35, 22, 0.55), transparent 60%), radial-gradient(90% 90% at 0% 100%, rgba(73, 69, 39, 0.6), transparent 60%), #1c1c1e;
+  --cp-ink: #ebe4dc; --cp-muted: rgba(235, 228, 220, 0.68); --cp-line: rgba(235, 228, 220, 0.12);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --musgo: #b6c48e; --latao: #e0bd72; --argila: #eb9c86; --nevoa: #b1c0ca; --areia: #3a3836;
+    --chart-3: #e0bd72; --chart-4: #8fa2ae;
+    --rim: linear-gradient(150deg, rgba(235, 228, 220, 0.34), rgba(235, 228, 220, 0) 30%, rgba(235, 228, 220, 0) 64%, rgba(235, 228, 220, 0.14));
+    --sheen: linear-gradient(165deg, rgba(235, 228, 220, 0.09), rgba(235, 228, 220, 0.02) 40%, rgba(235, 228, 220, 0) 62%);
+    --spot-glow: rgba(235, 228, 220, 0.1);
+    --shadow-1: 0 1px 0 rgba(235, 228, 220, 0.08) inset, 0 18px 40px -24px rgba(0, 0, 0, 0.9), 0 10px 30px -24px rgba(107, 35, 22, 0.35);
+    --shadow-2: 0 1px 0 rgba(235, 228, 220, 0.1) inset, 0 28px 60px -26px rgba(0, 0, 0, 0.95), 0 14px 40px -26px rgba(107, 35, 22, 0.45);
+    --cp-bg: radial-gradient(120% 90% at 100% 0%, rgba(140, 58, 38, 0.55), transparent 60%), radial-gradient(90% 90% at 0% 100%, rgba(110, 106, 81, 0.45), transparent 60%), #2a1512;
+    --cp-line: rgba(235, 228, 220, 0.16);
+  }
+}
+:root[data-theme="dark"] {
+  --musgo: #b6c48e; --latao: #e0bd72; --argila: #eb9c86; --nevoa: #b1c0ca; --areia: #3a3836;
+  --chart-3: #e0bd72; --chart-4: #8fa2ae;
+  --rim: linear-gradient(150deg, rgba(235, 228, 220, 0.34), rgba(235, 228, 220, 0) 30%, rgba(235, 228, 220, 0) 64%, rgba(235, 228, 220, 0.14));
+  --sheen: linear-gradient(165deg, rgba(235, 228, 220, 0.09), rgba(235, 228, 220, 0.02) 40%, rgba(235, 228, 220, 0) 62%);
+  --spot-glow: rgba(235, 228, 220, 0.1);
+  --shadow-1: 0 1px 0 rgba(235, 228, 220, 0.08) inset, 0 18px 40px -24px rgba(0, 0, 0, 0.9), 0 10px 30px -24px rgba(107, 35, 22, 0.35);
+  --shadow-2: 0 1px 0 rgba(235, 228, 220, 0.1) inset, 0 28px 60px -26px rgba(0, 0, 0, 0.95), 0 14px 40px -26px rgba(107, 35, 22, 0.45);
+  --cp-bg: radial-gradient(120% 90% at 100% 0%, rgba(140, 58, 38, 0.55), transparent 60%), radial-gradient(90% 90% at 0% 100%, rgba(110, 106, 81, 0.45), transparent 60%), #2a1512;
+  --cp-line: rgba(235, 228, 220, 0.16);
+}
+
+/* ───────── vidro com profundidade: brilho de borda (rim), reflexo e luz que segue o dedo/mouse ───────── */
+.card, .tablewrap, .kpi:not(.hero), .calendar, .item2 { background: var(--sheen), var(--surface); }
+.card { position: relative; isolation: isolate; }
+.card::after, .kpi:not(.hero)::after, .copilot::after {
+  content: ""; display: block; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; z-index: 2;
+  background: var(--rim); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+}
+.card::before, .kpi:not(.hero)::before {
+  content: ""; display: block; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1; opacity: 0; transition: opacity 300ms var(--ease);
+  padding: 0; -webkit-mask: none; mask: none; clip-path: none;
+  background: radial-gradient(260px 180px at var(--mx, 50%) var(--my, 0%), var(--spot-glow), transparent 70%);
+}
+.card:hover::before, .kpi:not(.hero):hover::before { opacity: 1; }
+.kpi:not(.hero) { position: relative; isolation: isolate; }
+
+/* ───────── tipografia em movimento ───────── */
+.pagehead h1 .kw { display: inline-block; margin-right: 0.22em; animation: inkrise 900ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; animation-delay: calc(var(--i, 0) * 90ms + 60ms); }
+.pagehead h1 .kw:last-child { margin-right: 0; }
+.pagehead h1 em.kw { font-style: italic; color: var(--accent); }
+@keyframes inkrise { from { opacity: 0; transform: translateY(0.4em); filter: blur(8px); letter-spacing: 0.06em; } }
+.pagehead p { animation: inkrise 900ms 260ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+
+/* títulos de seção editoriais: 01 — AGORA */
+h2.secline { display: flex; align-items: center; gap: 12px; margin: 26px 0 2px; font-family: var(--label); text-transform: uppercase; letter-spacing: 0.18em; font-size: 11px; font-weight: 600; color: var(--muted); }
+h2.secline i { font-style: italic; font-family: var(--display); font-size: 1.55rem; letter-spacing: 0; font-weight: 500; color: var(--ink); }
+h2.secline::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--line-strong), transparent); }
+
+/* ───────── home: agora (hoje + copiloto) ───────── */
+.nowgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 16px; align-items: start; }
+@media (max-width: 960px) { .nowgrid { grid-template-columns: minmax(0, 1fr); } .nowgrid .copilot { order: -1; } }
+.today > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.today > header h2 { margin: 0; }
+.today .daylist { margin-top: 14px; }
+.today .more { font-size: 13px; color: var(--muted); padding: 4px 2px; }
+
+.copilot { position: relative; border-radius: var(--radius-lg); padding: 20px; color: var(--cp-ink); background: var(--cp-bg); box-shadow: 0 30px 60px -30px rgba(38, 1, 1, 0.7), 0 1px 0 rgba(255, 255, 255, 0.12) inset; overflow: hidden; }
+.copilot::before { content: ""; position: absolute; inset: -40%; background: conic-gradient(from 0deg, transparent, rgba(235, 228, 220, 0.07), transparent 30%); animation: orbit 14s linear infinite; pointer-events: none; }
+@keyframes orbit { to { transform: rotate(1turn); } }
+.copilot > * { position: relative; }
+.copilot header { display: flex; align-items: center; gap: 12px; }
+.copilot header b { display: block; font-family: var(--display); font-style: italic; font-weight: 600; font-size: 1.45rem; line-height: 1; }
+.copilot header small { color: var(--cp-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 600; }
+.cp-mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; background: rgba(235, 228, 220, 0.12); border: 1px solid var(--cp-line); }
+.cp-mark .ic { width: 20px; height: 20px; animation: twinkle 3.2s ease-in-out infinite; }
+@keyframes twinkle { 50% { transform: rotate(45deg) scale(0.86); opacity: 0.7; } }
+.copilot ul { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 2px; }
+.cp { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--cp-line); animation: inkrise 700ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; animation-delay: calc(var(--i, 0) * 90ms + 200ms); }
+.cp-ic { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 11px; background: rgba(235, 228, 220, 0.1); }
+.cp-ic .ic { width: 18px; height: 18px; }
+.cp.alerta .cp-ic { background: rgba(224, 189, 114, 0.2); color: #f0d08c; }
+.cp.acao .cp-ic { background: rgba(235, 156, 134, 0.18); color: #f3b3a0; }
+.cp.bom .cp-ic { background: rgba(182, 196, 142, 0.2); color: #cfdca8; }
+.cp-txt b { display: block; font-weight: 600; font-size: 14.5px; }
+.cp-txt span { display: block; color: var(--cp-muted); font-size: 13px; line-height: 1.4; margin-top: 2px; }
+.cp-act { display: flex; align-items: center; gap: 6px; }
+.copilot .btn.accent { background: #ebe4dc; color: #1c1c1e; border: 0; box-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.6); }
+.cp-x { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--cp-line); background: transparent; color: var(--cp-muted); cursor: pointer; }
+.cp-x:hover { color: var(--cp-ink); background: rgba(235, 228, 220, 0.1); }
+.cp-x .ic { width: 14px; height: 14px; }
+.cp-empty { margin: 14px 0 0; color: var(--cp-muted); font-family: var(--display); font-style: italic; font-size: 1.1rem; }
+@media (max-width: 560px) {
+  .cp { grid-template-columns: 36px minmax(0, 1fr); }
+  .cp-act { grid-column: 2; }
+}
+
+/* ───────── avisos como sinais ───────── */
+.signals { display: grid; gap: 8px; }
+.signal { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: var(--radius-sm); background: var(--sheen), var(--surface); border: 1px solid var(--card-border); box-shadow: var(--shadow-1); color: var(--ink); text-decoration: none; font-size: 14px; font-weight: 500; backdrop-filter: blur(16px); }
+.signal span { flex: 1; min-width: 0; }
+a.signal:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); }
+.sg-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--info); box-shadow: 0 0 0 4px color-mix(in srgb, var(--info) 18%, transparent); }
+.signal.atencao .sg-dot, .signal.warn .sg-dot { background: var(--warn); box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 20%, transparent); }
+.signal.critico .sg-dot, .signal.bad .sg-dot { background: var(--bad); animation: beacon 1.8s ease-out infinite; }
+@keyframes beacon { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--bad) 55%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
+.sg-go { width: 16px; height: 16px; color: var(--muted); }
+
+/* filtro avançado recolhido */
+.filters-d > summary { list-style: none; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 14px; border-radius: var(--pill); background: var(--glass); border: 1px solid var(--card-border); font-size: 13px; font-weight: 500; color: var(--ink-2); box-shadow: var(--shadow-1); }
+.filters-d > summary::-webkit-details-marker { display: none; }
+.filters-d > summary .ic { width: 15px; height: 15px; }
+.filters-d[open] > summary { margin-bottom: 10px; }
+.filters-d .filters { padding: 16px; border-radius: var(--radius); background: var(--sheen), var(--surface); border: 1px solid var(--card-border); }
+
+/* ───────── indicadores em lista estrutural ───────── */
+.ledger { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); column-gap: 28px; border-top: 1px solid var(--line-strong); }
+.kl { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "l d" "v v" "n n"; gap: 4px 10px; padding: 14px 6px 14px 2px; border-bottom: 1px solid var(--line); color: var(--ink); text-decoration: none; transition: background var(--t-micro) var(--ease), padding var(--t-trans) var(--ease); animation: settle 600ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+.kl:hover { background: linear-gradient(90deg, var(--accent-soft), transparent); padding-left: 10px; }
+.kl-l { grid-area: l; font-family: var(--label); text-transform: uppercase; letter-spacing: 0.12em; font-size: 10.5px; font-weight: 600; color: var(--muted); align-self: center; }
+.kl-v { grid-area: v; font-family: var(--label); font-weight: 600; font-size: 1.4rem; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kd { grid-area: d; font-size: 11.5px; font-weight: 600; white-space: nowrap; align-self: center; }
+.kd.up { color: var(--ok); } .kd.down { color: var(--bad); }
+.kl-n { grid-area: n; color: var(--warn); font-size: 12px; }
+
+/* ───────── números médios: sans firme; serifa só nos grandes ───────── */
+.stat .v { font-family: var(--label); font-weight: 600; letter-spacing: -0.025em; font-size: clamp(1.15rem, 12cqi, 1.7rem); }
+.kpi:not(.hero) .value { font-family: var(--label); font-weight: 600; letter-spacing: -0.03em; font-size: clamp(1.3rem, 12cqi, 2rem); }
+.daylist .item .t { font-family: var(--display); font-weight: 600; font-size: 1.45rem; letter-spacing: 0; font-variant-numeric: lining-nums; }
+
+/* estados vazios com ornamento */
+.empty { background: var(--surface-2); border-style: solid; border-color: var(--line); }
+.empty::before { content: ""; display: block; width: 46px; height: 46px; margin: 0 auto 12px; border-radius: 50%; border: 1px solid var(--line-strong); box-shadow: 0 0 0 6px var(--surface-2), 0 0 0 7px var(--line); background: radial-gradient(circle, var(--olive) 0 3px, transparent 4px); }
+.empty b { font-family: var(--display); font-style: italic; font-size: 1.25rem; font-weight: 600; }
+
+/* foco sempre visível e forte (acessibilidade) */
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pagehead h1 .kw, .pagehead p, .cp, .kl, .copilot::before, .cp-mark .ic, .signal.critico .sg-dot { animation: none !important; }
+}
+
+/* Hoje: linha do tempo compacta */
+.today .daylist { gap: 0; }
+.today .daylist .item { grid-template-columns: 62px minmax(0, 1fr) auto; min-height: 0; padding: 11px 4px; gap: 12px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
+.today .daylist .item:last-of-type { border-bottom: 0; }
+.today .daylist .item:hover { transform: none; box-shadow: none; background: linear-gradient(90deg, var(--accent-soft), transparent); }
+.today .daylist .item b, .today .daylist .item small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.today .daylist .item br { display: none; }
+.today .daylist .item .badge { font-size: 11px; padding: 2px 9px; }
+.today .daylist .item .t { font-size: 1.3rem; }
+/* copiloto: ação embaixo do texto, texto com a largura toda */
+.cp { grid-template-columns: 36px minmax(0, 1fr); align-items: start; }
+.cp-act { grid-column: 2; margin-top: 4px; }

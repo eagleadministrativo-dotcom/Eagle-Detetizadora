@@ -7,7 +7,10 @@ import { listAppointments } from "@/server/services/agenda";
 import { listCatalog } from "@/server/services/catalog";
 import { addDays, dayEndUtc, dayStartUtc, fmtTime, fmtYmd, monthEnd, monthStart, addMonths, todayYmd } from "@/lib/dates";
 import { fmtBRL } from "@/lib/money";
-import { ApptBadge, Badge, Empty, Flash, KpiCard, PageHead, Seg } from "@/components/ui";
+import { ApptBadge, Badge, Empty, Flash, KpiCard, KpiLine, PageHead, Seg } from "@/components/ui";
+import { Icon } from "@/components/icons";
+import { Copilot } from "@/components/copilot";
+import { copilotInsights } from "@/server/services/insights";
 import { BarChart, Donut, HBars, Heatmap, LineChart } from "@/components/charts";
 
 export const metadata = { title: "Visão geral" };
@@ -48,16 +51,17 @@ export default async function Home({ searchParams }: { searchParams: Promise<SP>
   const heroes = heroKeys.map((key) => dash.kpis.find((k) => k.key === key)).filter((k): k is NonNullable<typeof k> => !!k);
   const rest = dash.kpis.filter((k) => !heroes.includes(k));
 
+  const insights = await copilotInsights(db, ctx, { kpis: dash.kpis, nextUp, full });
+  const custom = preset === "custom" || !!staffId;
+
   return (
     <>
-      <PageHead eyebrow={full ? "Painel do proprietário" : "Agenda pessoal"} title={`Olá, ${s.user.fullName.trim().split(" ")[0]}`} sub={`${full ? "Aqui está o resumo do studio" : "Este é o seu dia no studio"} · ${fmtYmd(p.start)} a ${fmtYmd(p.end)} · atualizado às ${fmtTime(dash.updatedAt)}`}>
+      <PageHead eyebrow={full ? "Painel do proprietário" : "Seu dia no studio"} title="Olá," accent={s.user.fullName.trim().split(" ")[0]} sub={`${full ? "Aqui está o resumo do studio" : "Este é o seu dia no studio"} · ${fmtYmd(p.start)} a ${fmtYmd(p.end)} · atualizado às ${fmtTime(dash.updatedAt)}`}>
         {full ? (
-          <>
-            <Seg items={[
-              { href: base("hoje"), label: "Hoje", active: preset === "hoje" }, { href: base("7d"), label: "7 dias", active: preset === "7d" },
-              { href: base("mes"), label: "Mês atual", active: preset === "mes" }, { href: base("mes-ant"), label: "Mês anterior", active: preset === "mes-ant" },
-            ]} />
-          </>
+          <Seg items={[
+            { href: base("hoje"), label: "Hoje", active: preset === "hoje" }, { href: base("7d"), label: "7 dias", active: preset === "7d" },
+            { href: base("mes"), label: "Mês atual", active: preset === "mes" }, { href: base("mes-ant"), label: "Mês anterior", active: preset === "mes-ant" },
+          ]} />
         ) : (
           <Seg items={[{ href: "/?r=hoje", label: "Hoje", active: preset === "hoje" }, { href: "/?r=7d", label: "7 dias", active: preset === "7d" }, { href: "/?r=mes", label: "Mês", active: preset === "mes" }]} />
         )}
@@ -65,53 +69,64 @@ export default async function Home({ searchParams }: { searchParams: Promise<SP>
       <Flash ok={sp.ok} erro={sp.erro} />
 
       {full ? (
-        <form className="filters card flat" method="get">
-          <label>De<input type="date" name="de" defaultValue={p.start} /></label>
-          <label>Até<input type="date" name="ate" defaultValue={p.end} /></label>
-          <label>Profissional
-            <select name="s" defaultValue={staffId ?? ""}>
-              <option value="">Todos</option>
-              {catalog?.staff.filter((x) => x.is_active).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-            </select>
-          </label>
-          <button className="btn ghost" type="submit">Aplicar intervalo</button>
-        </form>
+        <details className="filters-d" open={custom}>
+          <summary><Icon name="search" />Período personalizado e profissional{custom ? <span className="badge info">ativo</span> : null}</summary>
+          <form className="filters" method="get">
+            <label>De<input type="date" name="de" defaultValue={p.start} /></label>
+            <label>Até<input type="date" name="ate" defaultValue={p.end} /></label>
+            <label>Profissional
+              <select name="s" defaultValue={staffId ?? ""}>
+                <option value="">Todos</option>
+                {catalog?.staff.filter((x) => x.is_active).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </select>
+            </label>
+            <button className="btn ghost" type="submit">Aplicar</button>
+          </form>
+        </details>
       ) : null}
 
       {dash.alerts.length ? (
-        <div className="stack">
-          {dash.alerts.map((a, i) => (
-            <div className={`alert ${a.severity}`} key={i}>{a.href ? <Link href={a.href}>{a.message}</Link> : a.message}</div>
-          ))}
-        </div>
+        <nav className="signals" aria-label="Avisos">
+          {dash.alerts.map((a, i) => {
+            const inner = <><i className="sg-dot" aria-hidden="true" /><span>{a.message}</span>{a.href ? <Icon name="arrow" className="ic sg-go" /> : null}</>;
+            return a.href ? <Link key={i} className={`signal ${a.severity}`} href={a.href}>{inner}</Link> : <div key={i} className={`signal ${a.severity}`}>{inner}</div>;
+          })}
+        </nav>
       ) : null}
 
-      {!full ? (
-        <section className="card stack">
-          <h2>Próximos atendimentos de hoje</h2>
-          {nextUp.length === 0 ? <Empty title="Nada agendado para hoje">Sem atendimentos pendentes. Use &quot;Agenda&quot; para marcar horários.</Empty> : (
+      <h2 className="secline"><i>01</i>Agora</h2>
+      <div className="nowgrid">
+        <section className="card today" aria-label="Atendimentos de hoje">
+          <header><h2>Hoje</h2><Link className="btn small ghost" href="/agenda">Agenda</Link></header>
+          {nextUp.length === 0 ? <Empty title="Nada pendente para hoje">Sem atendimentos agendados ou em andamento.</Empty> : (
             <div className="daylist">
-              {nextUp.map((a) => (
+              {nextUp.slice(0, 5).map((a) => (
                 <Link key={a.id} className="item" href={`/agenda/${a.id}`}>
                   <span className="t">{fmtTime(a.starts_at)}</span>
                   <span><b>{a.customer_name}</b><br /><small>{a.services}</small></span>
                   <ApptBadge s={a.status} />
                 </Link>
               ))}
+              {nextUp.length > 5 ? <Link className="more" href="/agenda">+ {nextUp.length - 5} no dia</Link> : null}
             </div>
           )}
         </section>
-      ) : null}
+        <Copilot items={insights} />
+      </div>
 
+      <h2 className="secline"><i>02</i>Indicadores</h2>
       {heroes.length ? (
         <section className="heroes" aria-label="Indicadores principais">
           {heroes.map((k, i) => <KpiCard key={k.key} k={k} hero={(["olive", "wine", "stone"] as const)[i]} href={`/relatorios/${k.key}?${qs}`} />)}
         </section>
       ) : null}
-      <section className="kpis" aria-label="Indicadores">
-        {rest.map((k) => <KpiCard key={k.key} k={k} href={`/relatorios/${k.key}?${qs}`} />)}
-      </section>
+      {rest.length ? (
+        <section className="ledger" aria-label="Outros indicadores">
+          {rest.map((k) => <KpiLine key={k.key} k={k} href={`/relatorios/${k.key}?${qs}`} />)}
+        </section>
+      ) : null}
 
+      <h2 className="secline"><i>03</i>Análises</h2>
       {dash.accounts.length ? (
         <section className="card">
           <h2>Saldo por conta</h2>

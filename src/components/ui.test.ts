@@ -27,7 +27,7 @@ describe("componentes de interface", () => {
   it("PageHead exibe eyebrow e título; badges traduzem status", () => {
     const out = html(h(PageHead, { title: "Agenda", eyebrow: "Operação" }));
     expect(out).toContain("Operação");
-    expect(out).toContain("<h1>Agenda</h1>");
+    expect(out).toContain("<h1 aria-label=\"Agenda\">");
     expect(html(h(ApptBadge, { s: "nao_compareceu" }))).toContain("Não compareceu");
     expect(html(h(Badge, { tone: "ok", children: "ok" }))).toContain("badge ok");
   });
