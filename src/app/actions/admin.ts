@@ -2,10 +2,11 @@
 import { getDb } from "@/server/db";
 import { requireSession, run, str, optStr, bool } from "@/server/session";
 import { saveService, saveCategory, savePaymentMethod, saveChair, saveStaff, saveFinancialCategory, saveFinancialAccount, updateSettings, updateBusinessHours } from "@/server/services/catalog";
-import { createUser, resetUserPassword, updateUser } from "@/server/services/bootstrap";
+import { resetUserPassword, updateUser } from "@/server/services/bootstrap";
 import { DomainError } from "@/server/errors";
 import type { Role } from "@/server/permissions";
-import { applyProfile, setUserPermissions } from "@/server/services/access";
+import { createInvite, resendInvite, revokeInvite } from "@/server/services/invites";
+import { appUrl } from "@/server/mail";
 import { atLocal } from "@/lib/dates";
 import { parseBRL } from "@/lib/money";
 
@@ -49,8 +50,12 @@ export async function saveStaffAction(fd: FormData) {
       if (a && b) schedules.push({ day: d, start: a, end: b });
     }
     const id = optStr(fd, "id");
-    await saveStaff(await getDb(), ctx, { id: id ?? undefined, name: str(fd, "name"), phone: optStr(fd, "phone"), contractType: optStr(fd, "contractType"), color: str(fd, "color") || "#8B6B4A", isActive: id ? bool(fd, "isActive") : true, schedules });
-    return "Profissional salvo.";
+    const db = await getDb();
+    const staffId = await saveStaff(db, ctx, { id: id ?? undefined, name: str(fd, "name"), phone: optStr(fd, "phone"), contractType: optStr(fd, "contractType"), color: str(fd, "color") || "#8B6B4A", isActive: id ? bool(fd, "isActive") : true, schedules });
+    const email = optStr(fd, "inviteEmail");
+    if (!email) return "Profissional salvo.";
+    const r = await createInvite(db, ctx, { email, fullName: str(fd, "name"), role: "barbeiro", staffId });
+    return r.sent ? "Profissional salvo e convite enviado por e-mail." : `Profissional salvo e convite criado. O e-mail não foi enviado: passe o link ${appUrl()}/cadastro para a pessoa.`;
   });
 }
 
@@ -126,17 +131,31 @@ export async function updateSettingsAction(fd: FormData) {
   });
 }
 
-export async function createUserAction(fd: FormData) {
+export async function inviteUserAction(fd: FormData) {
   const { ctx } = await requireSession();
   await run("/admin/usuarios", async () => {
-    const db = await getDb();
     const profileId = str(fd, "profileId");
-    const id = await createUser(db, ctx, { email: str(fd, "email"), fullName: str(fd, "name"), role: str(fd, "role") as Role, password: str(fd, "password"), staffId: optStr(fd, "staffId") });
-    if (str(fd, "role") !== "proprietario") {
-      if (profileId === "custom") await setUserPermissions(db, ctx, id, fd.getAll("perm").map(String));
-      else if (profileId) await applyProfile(db, ctx, id, profileId);
-    }
-    return "Usuário criado. Informe a senha inicial por um canal seguro; ela pode ser trocada em Minha conta.";
+    const r = await createInvite(await getDb(), ctx, {
+      email: str(fd, "email"), fullName: str(fd, "name"), role: str(fd, "role") as Role, staffId: optStr(fd, "staffId"),
+      profileId: profileId && profileId !== "custom" ? profileId : null, permissions: profileId === "custom" ? fd.getAll("perm").map(String) : null,
+    });
+    return r.sent ? "Convite enviado por e-mail. A pessoa cria o próprio acesso em Cadastrar." : `Convite criado, mas o e-mail não foi enviado. Passe o link ${appUrl()}/cadastro para a pessoa.`;
+  });
+}
+
+export async function revokeInviteAction(fd: FormData) {
+  const { ctx } = await requireSession();
+  await run("/admin/usuarios", async () => {
+    await revokeInvite(await getDb(), ctx, str(fd, "id"));
+    return "Convite cancelado.";
+  });
+}
+
+export async function resendInviteAction(fd: FormData) {
+  const { ctx } = await requireSession();
+  await run("/admin/usuarios", async () => {
+    const sent = await resendInvite(await getDb(), ctx, str(fd, "id"));
+    return sent ? "Convite reenviado e renovado por 14 dias." : "Convite renovado por 14 dias, mas o e-mail não foi enviado.";
   });
 }
 

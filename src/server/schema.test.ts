@@ -23,7 +23,7 @@ describe("schema", () => {
     await ins("2026-11-23T13:00:00Z", "2026-11-23T14:00:00Z");
   });
   it("toda tabela de negócio tem a trilha do banco e RLS ligado", async () => {
-    const skip = ["row_changes", "audit_logs", "schema_migrations", "sessions", "job_runs", "error_events", "rate_limits", "notifications", "notification_reads", "notification_deliveries", "domain_events", "automation_runs", "copilot_dismissals"];
+    const skip = ["row_changes", "audit_logs", "schema_migrations", "sessions", "job_runs", "error_events", "rate_limits", "notifications", "notification_reads", "notification_deliveries", "domain_events", "automation_runs", "copilot_dismissals", "email_codes"];
     const missing = await db.query<{ t: string }>(
       `select c.relname as t from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and not (c.relname = any($1))
          and not exists (select 1 from pg_trigger g where g.tgrelid=c.oid and g.tgname='zz_row_audit')`, [skip]);

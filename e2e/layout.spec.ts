@@ -7,8 +7,11 @@ import { test, expect, type Page } from "@playwright/test";
  */
 const OWNER = { email: "dono@demo.marfim.local", password: "Demo@Marfim2026" }; // base fictícia criada pelo seed de demonstração
 
-async function login(page: Page) {
+export async function login(page: Page) {
   await page.goto("/login");
+  // primeiro acesso no aparelho: tela de boas-vindas
+  if (new URL(page.url()).pathname === "/bem-vindo") await page.getByRole("button", { name: "Entrar" }).click();
+  await page.waitForURL("**/login");
   await page.getByLabel(/e-?mail/i).fill(OWNER.email);
   await page.getByLabel(/senha/i).fill(OWNER.password);
   await page.getByRole("button", { name: /entrar/i }).click();

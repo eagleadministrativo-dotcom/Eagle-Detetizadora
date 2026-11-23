@@ -6,6 +6,8 @@ import { isDomainError } from "./errors";
 import type { Permission } from "./permissions";
 
 export const COOKIE = "marfim_session";
+/** Falhas de senha neste aparelho (só para a tela destacar "Esqueceu a senha?"; o bloqueio real é no servidor). */
+export const FAILS_COOKIE = "marfim_falhas";
 
 export async function setSessionCookie(token: string) {
   (await cookies()).set(COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 12 * 3600 });

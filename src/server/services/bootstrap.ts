@@ -96,7 +96,7 @@ async function activeOwners(q: Q, unitId: string, excluding?: string): Promise<n
 }
 
 /** Quem recebeu "gerenciar usuários" não cria nem promove alguém acima de si. */
-function assertRoleGrant(ctx: Ctx, role: Role) {
+export function assertRoleGrant(ctx: Ctx, role: Role) {
   if (ctx.role === "proprietario") return;
   if (role === "proprietario" || [...ROLE_PERMISSIONS[role]].some((p) => !ctx.perms.has(p) && p !== "tasks.own" && !p.endsWith(".own") && !p.endsWith("_own"))) throw new ForbiddenError("Você não pode conceder um perfil com mais acesso que o seu.");
 }

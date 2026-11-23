@@ -83,8 +83,13 @@ export interface LoginResult {
   needsMfaSetup: boolean; // precisa cadastrar o autenticador
 }
 
+// Senha: 3 erros bloqueiam por 10 minutos (e a tela oferece "esqueci a senha"). Código do autenticador: 5 erros, 15 minutos.
+export const LOGIN_MAX_FAILS = 3;
+export const LOGIN_LOCK_MINUTES = 10;
 const MAX_FAILS = 5;
 const LOCK_MINUTES = 15;
+export const LOCKED_MSG = `Senha incorreta ${LOGIN_MAX_FAILS} vezes. Por segurança, novas tentativas ficam bloqueadas por ${LOGIN_LOCK_MINUTES} minutos. Você pode redefinir a senha pelo e-mail.`;
+const stillLocked = (min: number) => { const m = Math.max(1, Math.ceil(min)); return `Acesso bloqueado por tentativas erradas. Tente de novo em ${m} minuto${m > 1 ? "s" : ""} ou redefina a senha pelo e-mail.`; };
 
 async function mfaRequiredFor(q: Q, unitId: string, role: Role): Promise<boolean> {
   if (role !== "proprietario" && role !== "gerente") return false;
@@ -101,18 +106,26 @@ export async function login(db: Db, email: string, password: string): Promise<Lo
       "select id,password_hash,is_active,failed_attempts,locked_until,mfa_enabled from users where lower(email)=lower($1) for update",
       [email.trim()],
     );
+    const locked = new DomainError("locked", LOCKED_MSG);
     if (!u) {
       verifyPassword(password, "scrypt$00$00"); // custo aproximadamente constante
-      return { error: generic };
+      // e-mail sem conta se comporta igual a uma conta real (bloqueia na 3ª), para não revelar quem tem acesso
+      const [fl] = await q<{ hits: number; left: number }>(
+        `insert into rate_limits(key, window_start, hits) values ($1, now(), 1)
+         on conflict (key) do update set
+           hits = case when rate_limits.window_start < now() - make_interval(mins => $2) then 1 else rate_limits.hits + 1 end,
+           window_start = case when rate_limits.window_start < now() - make_interval(mins => $2) then now() else rate_limits.window_start end
+         returning hits, extract(epoch from window_start + make_interval(mins => $2) - now())::float / 60 as left`, [`login:email:${email.trim().toLowerCase().slice(0, 190)}`, LOGIN_LOCK_MINUTES]);
+      return { error: fl.hits === LOGIN_MAX_FAILS ? locked : fl.hits > LOGIN_MAX_FAILS ? new DomainError("locked", stillLocked(fl.left)) : generic };
     }
-    if (u.locked_until && u.locked_until.getTime() > Date.now()) return { error: new DomainError("locked", "Muitas tentativas. Tente novamente em alguns minutos.") };
+    if (u.locked_until && u.locked_until.getTime() > Date.now()) return { error: new DomainError("locked", stillLocked((u.locked_until.getTime() - Date.now()) / 60000)) };
     if (!u.is_active || !verifyPassword(password, u.password_hash)) {
       const fails = u.failed_attempts + 1;
-      const lock = fails >= MAX_FAILS ? new Date(Date.now() + LOCK_MINUTES * 60000) : null;
+      const lock = fails >= LOGIN_MAX_FAILS ? new Date(Date.now() + LOGIN_LOCK_MINUTES * 60000) : null;
       await q("update users set failed_attempts=$2, locked_until=$3 where id=$1", [u.id, lock ? 0 : fails, lock]);
       await audit(q, { userId: u.id }, "LOGIN_FALHA", "user", u.id, null, { tentativas: fails, bloqueado: !!lock });
       if (lock) await notifyLock(q, u.id);
-      return { error: generic };
+      return { error: lock ? locked : generic };
     }
     const [uu] = await q<{ unit_id: string; role: Role }>("select unit_id, role from user_units where user_id=$1 order by role limit 1", [u.id]);
     if (!uu) return { error: new DomainError("no_unit", "Usuário sem unidade vinculada.") };

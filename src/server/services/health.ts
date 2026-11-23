@@ -66,6 +66,7 @@ export async function pruneOps(db: Db) {
   const a = await db.query("delete from job_runs where started_at < now() - interval '90 days' returning 1");
   const b = await db.query("delete from error_events where at < now() - interval '90 days' returning 1");
   const c = await db.query("delete from rate_limits where window_start < now() - interval '1 day' returning 1");
+  await db.query("delete from email_codes where created_at < now() - interval '2 days'"); // códigos de e-mail vencidos
   // rotina presa (instância caiu no meio): fecha como erro para não parecer que ainda roda
   await db.query("update job_runs set status='erro', finished_at=now(), error='Interrompida (sem término registrado)' where status='rodando' and started_at < now() - interval '30 minutes'");
   return { jobs: a.length, errors: b.length, limits: c.length };

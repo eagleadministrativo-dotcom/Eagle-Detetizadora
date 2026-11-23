@@ -4,10 +4,10 @@ import { DomainError, ForbiddenError } from "../errors";
 import { PERMISSIONS, ROLE_PERMISSIONS, buildPerms, type Ctx, type Permission, type Role } from "../permissions";
 
 const VALID = new Set<string>(PERMISSIONS);
-const clean = (list: string[]) => [...new Set(list.filter((p) => VALID.has(p)))] as Permission[];
+export const clean = (list: string[]) => [...new Set(list.filter((p) => VALID.has(p)))] as Permission[];
 
 /** Ninguém concede o que não tem; o proprietário tem tudo. */
-function assertGrantable(ctx: Ctx, wanted: Permission[], had: Set<string>) {
+export function assertGrantable(ctx: Ctx, wanted: Permission[], had: Set<string>) {
   const extra = wanted.filter((p) => !had.has(p) && p !== "tasks.own" && !can(ctx, p));
   if (extra.length) throw new ForbiddenError("Você não pode conceder um acesso que você mesmo não tem.");
 }

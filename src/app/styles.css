@@ -355,6 +355,21 @@ details.confirm p.warn { padding: 6px 12px 0; font-size: 13px; color: var(--warn
 .login .brand { padding: 0 0 18px; }
 .login .brand .name { color: var(--ink); }
 .login .card { --ink: #1d1e1b; --ink-2: #44443d; --muted: #5f5e55; --surface: #fffdf8; --line: #ddd0b6; --line-strong: #c9b798; --accent: var(--burgundy-700); --accent-ink: #f6f1e7; --graphite-btn: #222321; --graphite-ink: #f6f1e7; --focus: #1d4f91; --ok: #3d5a35; --warn: #8a5a0b; --bad: #8f2a2a; --info: #4a5d6b; }
+/* telas de acesso: boas-vindas, cadastro por convite, código e senha */
+.login .authactions { display: grid; gap: 10px; }
+.login .authactions form, .login .authactions .btn { width: 100%; }
+.login .authactions .btn { justify-content: center; min-height: 48px; }
+.login .authback { font-size: 14px; color: var(--muted); text-decoration: none; justify-self: start; }
+.login .authback:hover { color: var(--accent); }
+.login .choices { display: grid; gap: 10px; }
+.login .choice { display: flex; gap: 14px; align-items: center; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); text-decoration: none; transition: border-color var(--t-micro), transform var(--t-micro); }
+.login .choice:hover, .login .choice:focus-visible { border-color: var(--accent); box-shadow: var(--shadow-1); }
+.login .choice .ic { flex: none; width: 22px; height: 22px; color: var(--accent); }
+.login .choice b { display: block; font-size: 15px; }
+.login .choice small { display: block; color: var(--muted); margin-top: 2px; }
+.login .codeinput { font: 600 1.6rem/1 var(--sans); letter-spacing: 0.4em; text-align: center; }
+.login .forgot { display: grid; gap: 10px; }
+.login .forgot .btn { justify-self: start; }
 .login .legal { color: color-mix(in srgb, var(--cream-300) 70%, transparent); font-size: 12px; text-align: center; margin-top: 18px; position: relative; }
 /* ───────── impressão e movimento reduzido ───────── */
 @media print { .side, .top, .bottomnav, .btn, details.confirm, .filters { display: none !important; } .shell { display: block; } .content { padding: 0; animation: none; } body { background: #fff; } .kpi.hero { color: #000; background: #fff !important; border: 1px solid #999; } .kpi.hero .label, .kpi.hero .delta { color: #333; } }
@@ -803,7 +818,8 @@ textarea { border-radius: var(--radius-sm); }
 input, select, textarea { background: var(--glass-strong); border-color: var(--line-strong); }
 input[type="checkbox"] { border-radius: 6px; }
 .btn.accent { border: 0; }
-.btn.accent:hover { transform: translateY(-1px); }
+/* realce sem mover: deslocar o botão no hover fazia ele "tremer" com o cursor parado na borda */
+.btn.accent:hover { filter: brightness(1.08); box-shadow: var(--shadow-2); }
 .btn.ghost { background: var(--glass-strong); border-color: var(--card-border); box-shadow: var(--shadow-1); }
 .seg { background: var(--glass); border: 1px solid var(--card-border); box-shadow: var(--shadow-1); padding: 4px; gap: 4px; backdrop-filter: blur(16px); }
 .seg a { padding: 7px 16px; }

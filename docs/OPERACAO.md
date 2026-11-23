@@ -76,3 +76,20 @@ Dados de clientes são opcionais além de nome/telefone. Defina o prazo de reten
 ## Agenda ao vivo e offline
 
 A agenda e a visão geral consultam `/api/agenda/versao` a cada 20–30 s (só com a tela visível) e recarregam quando outro aparelho muda algo. O service worker guarda **só** a última página da agenda e os arquivos do app, para abrir sem internet; nada de financeiro ou clientes. O cache é apagado ao sair da conta.
+
+## Acesso: boas-vindas, cadastro por convite e "esqueci a senha"
+- **Primeiro acesso no aparelho** abre `/bem-vindo` com **Entrar** e **Cadastrar**. Depois de entrar uma vez, o aparelho vai direto para o login.
+- **Cadastrar** só funciona para quem foi convidado. Convide em *Usuários e permissões → Convidar pessoa* ou em *Equipe → profissional → E-mail para convidar*.
+  A pessoa escolhe o perfil (Dono de barbearia = Proprietário; Barbeiro colaborador = Barbeiro; Administrador = Gerente ou Contador), informa o e-mail,
+  recebe um código de 6 dígitos (vale 15 min, 5 tentativas, reenvio a cada 45 s) e cria a própria senha. O convite vale 14 dias.
+- A tela responde igual para e-mails com e sem convite/conta: ninguém descobre quem tem acesso.
+- **Senha errada 3 vezes** bloqueia novas tentativas por 10 minutos e a tela destaca *Esqueci a senha*. Redefinir pelo e-mail troca a senha,
+  desbloqueia e encerra as sessões abertas; a verificação em duas etapas continua valendo. Código do autenticador: 5 erros, 15 minutos.
+
+### E-mail (necessário em produção para convites e códigos)
+Variáveis na Vercel (Production):
+- `SMTP_URL` — servidor de envio. Ex. com Gmail: `smtps://SEU_EMAIL%40gmail.com:SENHA_DE_APP@smtp.gmail.com:465`
+  (a senha de app é criada em myaccount.google.com → Segurança → Senhas de app; exige verificação em duas etapas na conta Google; o `@` do usuário vira `%40`).
+- `MAIL_FROM` — remetente, ex.: `MARFIM Studio <SEU_EMAIL@gmail.com>`.
+Sem `SMTP_URL`, o convite é criado mas o e-mail não sai (a tela mostra o link para passar à pessoa) e o envio de código mostra
+"O envio de e-mails ainda não foi configurado". Em desenvolvimento e nos testes, `MAIL_OUTBOX_DIR` grava os e-mails como arquivos.

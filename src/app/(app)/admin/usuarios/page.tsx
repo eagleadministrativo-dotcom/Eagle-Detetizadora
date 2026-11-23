@@ -8,7 +8,8 @@ import { fmtDateTime } from "@/lib/dates";
 import { Badge, ConfirmAction, Field, Flash, PageHead } from "@/components/ui";
 import { listProfiles } from "@/server/services/access";
 import { deleteProfileAction } from "@/app/actions/access";
-import { createUserAction, resetPasswordAction, updateUserAction } from "@/app/actions/admin";
+import { inviteUserAction, resendInviteAction, resetPasswordAction, revokeInviteAction, updateUserAction } from "@/app/actions/admin";
+import { listInvites } from "@/server/services/invites";
 
 export const metadata = { title: "Usuários e permissões" };
 const ROLES = Object.keys(ROLE_LABEL) as Role[];
@@ -20,8 +21,8 @@ export default async function UsersAdmin({ searchParams }: { searchParams: Promi
   const users = await listUsers(db, ctx);
   const cat = await listCatalog(db, ctx.unitId);
   const profiles = await listProfiles(db, ctx);
-  const freeStaff = cat.staff.filter((s) => s.is_active && !s.user_id);
-  return (
+  const invites = await listInvites(db, ctx);
+  const freeStaff = cat.staff.filter((s) => s.is_active && !s.user_id);  return (
     <>
       <PageHead title="Usuários e permissões" sub="Cada pessoa tem login próprio. As permissões são verificadas no servidor em toda operação." />
       <Flash ok={sp.ok} erro={sp.erro} />
@@ -47,22 +48,39 @@ export default async function UsersAdmin({ searchParams }: { searchParams: Promi
           </details>
         ))}
       </div>
-      <form action={createUserAction} className="card form">
-        <h2>Novo usuário</h2>
+      {invites.length ? (
+        <section className="card stack">
+          <h2>Convites</h2>
+          {invites.map((i) => (
+            <div className="row" key={i.id}>
+              <span className="grow"><b>{i.full_name}</b> · {i.email} <Badge tone="solid">{ROLE_LABEL[i.role]}</Badge> {i.accepted_at ? <Badge tone="ok">acesso criado</Badge> : i.expired ?<Badge tone="warn">vencido</Badge> : <Badge tone="info">aguardando</Badge>}
+                <br /><small>{i.accepted_at ? `Aceito em ${fmtDateTime(i.accepted_at)}` : `Enviado em ${fmtDateTime(i.created_at)}${i.invited_by_name ? ` por ${i.invited_by_name}` : ""}`}{i.staff_name ? ` · profissional: ${i.staff_name}` : ""}</small></span>
+              {!i.accepted_at ? (
+                <>
+                  <form action={resendInviteAction}><input type="hidden" name="id" value={i.id} /><button className="btn small" type="submit">Reenviar</button></form>
+                  <form action={revokeInviteAction}><input type="hidden" name="id" value={i.id} /><button className="btn small ghost" type="submit">Cancelar</button></form>
+                </>
+              ) : null}
+            </div>
+          ))}
+        </section>
+      ) : null}
+      <form action={inviteUserAction} className="card form">
+        <h2>Convidar pessoa</h2>
+        <p className="muted">A pessoa recebe um e-mail, abre o app em <b>Cadastrar</b>, escolhe o perfil, confirma um código e cria a própria senha. Só e-mails convidados conseguem se cadastrar.</p>
         <div className="fields">
           <Field label="Nome"><input name="name" required /></Field>
           <Field label="E-mail"><input name="email" type="email" required autoComplete="off" /></Field>
           <Field label="Perfil"><select name="role" defaultValue="barbeiro">{ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select></Field>
           <Field label="Vincular ao profissional"><select name="staffId" defaultValue=""><option value="">—</option>{freeStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
-          <Field label="Senha inicial (mín. 10, letras e números)"><input name="password" type="password" minLength={10} required autoComplete="new-password" /></Field>
         </div>
         <fieldset>
           <legend>Acesso</legend>
           <Field label="Começar com"><select name="profileId" defaultValue=""><option value="">O padrão do perfil escolhido acima</option>{profiles.map((x) => <option key={x.id} value={x.id}>Perfil salvo: {x.name}</option>)}<option value="custom">Escolher uma a uma (abaixo)</option></select></Field>
           <details style={{ marginTop: 10 }}><summary>Permissões uma a uma</summary><div className="permgrid" style={{ marginTop: 10 }}>{PERMISSION_GROUPS.map((g) => <fieldset key={g.title}><legend>{g.title}</legend>{g.items.map(([k, l]) => <label key={k} className="check"><input type="checkbox" name="perm" value={k} disabled={k === "tasks.own"} defaultChecked={k === "tasks.own"} />{l}</label>)}</fieldset>)}</div></details>
         </fieldset>
-        <small>Barbeiros precisam estar vinculados a um profissional para ter agenda própria. Proprietário e gerente configuram a verificação em duas etapas no primeiro acesso.</small>
-        <div><button className="btn accent" type="submit">Criar usuário</button></div>
+        <small>Na tela de cadastro, Proprietário aparece como “Dono de barbearia”, Barbeiro como “Barbeiro colaborador” e Gerente ou Contador como “Administrador”. Barbeiros precisam estar vinculados a um profissional para ter agenda própria. O convite vale por 14 dias.</small>
+        <div><button className="btn accent" type="submit">Enviar convite</button></div>
       </form>
       {profiles.length ? <section className="card stack"><h2>Perfis salvos</h2>{profiles.map((x) => <div className="row" key={x.id}><span className="grow"><b>{x.name}</b> <small>· {ROLE_LABEL[x.base_role]} · {x.permissions.length} permissões · {x.users} pessoa(s)</small></span><form action={deleteProfileAction}><input type="hidden" name="id" value={x.id} /><button className="btn small ghost" type="submit">Remover</button></form></div>)}</section> : null}
     </>

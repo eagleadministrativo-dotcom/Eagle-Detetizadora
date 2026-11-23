@@ -39,10 +39,16 @@ describe("senha e TOTP", () => {
 });
 
 describe("login, bloqueio, MFA e sessão", () => {
-  it("credenciais erradas devolvem mensagem genérica e bloqueiam após 5 tentativas", async () => {
-    expect(await msg(login(db, "naoexiste@t.com", "qualquer"))).toBe("E-mail ou senha incorretos.");
-    for (let i = 0; i < 5; i++) expect(await msg(login(db, "dono@t.com", "errada" + i))).toBe("E-mail ou senha incorretos.");
-    expect(await msg(login(db, "dono@t.com", "SenhaForte123"))).toMatch(/Muitas tentativas/);
+  it("credenciais erradas devolvem mensagem genérica e bloqueiam por 10 minutos na 3ª tentativa", async () => {
+    for (let i = 0; i < 2; i++) expect(await msg(login(db, "naoexiste@t.com", "qualquer"))).toBe("E-mail ou senha incorretos.");
+    expect(await msg(login(db, "naoexiste@t.com", "qualquer"))).toMatch(/bloqueadas por 10 minutos/); // igual a uma conta real
+    for (let i = 0; i < 2; i++) expect(await msg(login(db, "dono@t.com", "errada" + i))).toBe("E-mail ou senha incorretos.");
+    expect(await msg(login(db, "dono@t.com", "errada3"))).toMatch(/3 vezes.*10 minutos.*redefinir a senha pelo e-mail/);
+    expect(await msg(login(db, "dono@t.com", "SenhaForte123"))).toMatch(/bloqueado.*10 minutos/);
+    expect(await msg(login(db, "naoexiste@t.com", "qualquer"))).toMatch(/bloqueado.*minutos/);
+    const [lk] = await db.query<{ m: number }>("select (extract(epoch from locked_until - now())/60)::float as m from users where id=$1", [ownerId]);
+    expect(lk.m).toBeGreaterThan(9);
+    expect(lk.m).toBeLessThanOrEqual(10);
     const [n] = await db.query<{ n: number }>("select count(*)::bigint as n from notifications where kind='login_bloqueado'");
     expect(n.n).toBe(1);
     await db.query("update users set locked_until=null, failed_attempts=0 where id=$1", [ownerId]);
@@ -79,7 +85,7 @@ describe("login, bloqueio, MFA e sessão", () => {
     for (let i = 0; i < 4; i++) expect(await msg(verifyMfaForSession(db, l.token, "000000"))).toMatch(/incorreto/);
     expect(await msg(verifyMfaForSession(db, l.token, "000000"))).toMatch(/Muitas tentativas/);
     expect(await getSession(db, l.token)).toBeNull();
-    expect(await msg(login(db, "dono@t.com", "SenhaForte123"))).toMatch(/Muitas tentativas/);
+    expect(await msg(login(db, "dono@t.com", "SenhaForte123"))).toMatch(/bloqueado/);
     await db.query("update users set locked_until=null, failed_attempts=0 where id=$1", [ownerId]);
   });
 
