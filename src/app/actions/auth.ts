@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers";
 import { rateLimit } from "@/server/services/health";
 import { getDb } from "@/server/db";
 import { changePassword, beginMfaSetup, completeMfaSetup, generateRecoveryCodes, login, logout, verifyMfaForSession, LOGIN_LOCK_MINUTES, LOGIN_MAX_FAILS } from "@/server/auth";
-import { finishPasswordReset, finishSignup, flowInfo, resendCode, startPasswordReset, startSignup, verifyCode } from "@/server/services/invites";
+import { finishPasswordReset, finishSignup, flowInfo, maskEmail, resendCode, sendAccessLink, setTempPassword, startPasswordReset, startSignup, verifyCode } from "@/server/services/invites";
 import { FAILS_COOKIE } from "@/server/session";
 import { isDomainError } from "@/server/errors";
 import { setupInitial, isSetupDone } from "@/server/services/bootstrap";
@@ -46,6 +46,16 @@ export async function loginAction(fd: FormData) {
     return back("/login", isDomainError(e) ? e.message : "Não foi possível entrar. Tente novamente.");
   }
   jar.delete(FAILS_COOKIE);
+  if (r.emailLink) {
+    // senha provisória: nenhuma sessão é criada; o link do e-mail leva à criação da senha
+    if (!(await rateLimit(db, `link:email:${r.emailLink.email.slice(0, 190)}`, 5, 3600))) return back("/login", TOO_MANY);
+    try {
+      await sendAccessLink(db, r.emailLink);
+    } catch (e) {
+      return back("/login", isDomainError(e) ? e.message : "Não foi possível enviar o e-mail. Tente novamente.");
+    }
+    redirect("/login?ok=" + encodeURIComponent(`Primeiro acesso: enviamos um link para ${maskEmail(r.emailLink.email)}. Abra o e-mail, crie sua senha nova e depois volte aqui para entrar com ela.`));
+  }
   return afterLogin(r);
 }
 
@@ -131,15 +141,28 @@ export async function finishPasswordAction(fd: FormData) {
     jar.delete(FAILS_COOKIE);
     redirect("/login?ok=" + encodeURIComponent("Senha alterada e acesso desbloqueado. Entre com a nova senha."));
   }
-  let r;
   try {
-    const email = await finishSignup(db, flow, { fullName: str(fd, "name"), password: str(fd, "password") });
-    r = await login(db, email, str(fd, "password"));
+    await finishSignup(db, flow, { fullName: str(fd, "name"), password: str(fd, "password") });
   } catch (e) {
     return back("/definir-senha", isDomainError(e) ? e.message : "Não foi possível criar o acesso.");
   }
   jar.delete(FLOW_COOKIE);
-  return afterLogin(r);
+  jar.delete(FAILS_COOKIE);
+  await knownDevice();
+  redirect("/login?ok=" + encodeURIComponent("Senha criada. Agora entre com o seu e-mail e a senha nova."));
+}
+
+/** Configurações → senha provisória dos convidados. */
+export async function tempPasswordAction(fd: FormData) {
+  const s = await currentSession();
+  if (!s?.mfaVerified) redirect("/login");
+  if (str(fd, "password") !== str(fd, "password2")) return back("/admin/usuarios", "As senhas provisórias não conferem.");
+  try {
+    await setTempPassword(await getDb(), s.ctx, str(fd, "password"));
+  } catch (e) {
+    return back("/admin/usuarios", isDomainError(e) ? e.message : "Não foi possível salvar.");
+  }
+  redirect("/admin/usuarios?ok=" + encodeURIComponent("Senha provisória salva. Ela vale para os convites em aberto e os próximos."));
 }
 
 export async function setupAction(fd: FormData) {

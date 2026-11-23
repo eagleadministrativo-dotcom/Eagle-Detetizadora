@@ -95,7 +95,12 @@ test("convite → cadastro com código no e-mail → senha → entra no app", as
   await layoutOk(p2);
   await p2.getByLabel(/^Senha/).fill("SenhaDoBarbeiro1");
   await p2.getByLabel("Repita a senha").fill("SenhaDoBarbeiro1");
-  await p2.getByRole("button", { name: "Criar acesso e entrar" }).click();
+  await p2.getByRole("button", { name: "Criar senha" }).click();
+  await expect(p2).toHaveURL(/\/login/);
+  await expect(p2.locator(".alert.ok")).toContainText("Senha criada");
+  await p2.getByLabel(/e-?mail/i).fill(email);
+  await p2.getByLabel(/senha/i).fill("SenhaDoBarbeiro1");
+  await p2.getByRole("button", { name: "Entrar" }).click();
   await p2.waitForURL((u) => u.pathname === "/");
   await expect(p2.locator("#conteudo h1")).toBeVisible();
   await ctx.close();

@@ -25,7 +25,7 @@ export default async function SetPasswordPage({ searchParams }: { searchParams: 
         {signup ? <label>Seu nome<input name="name" defaultValue={info.fullName ?? ""} autoComplete="name" required /></label> : null}
         <label>Senha (mín. 10 caracteres, com letras e números)<input name="password" type="password" minLength={10} autoComplete="new-password" required autoFocus={!signup} /></label>
         <label>Repita a senha<input name="password2" type="password" minLength={10} autoComplete="new-password" required /></label>
-        <button className="btn accent" type="submit">{signup ? "Criar acesso e entrar" : "Salvar nova senha"}</button>
+        <button className="btn accent" type="submit">{signup ? "Criar senha" : "Salvar nova senha"}</button>
       </form>
     </AuthCard>
   );

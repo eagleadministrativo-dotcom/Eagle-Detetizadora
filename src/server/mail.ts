@@ -36,7 +36,7 @@ export async function sendMail(m: Mail): Promise<void> {
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
 /** Layout simples, legível em qualquer cliente de e-mail, nas cores da marca. */
-export function mailHtml(title: string, paragraphs: string[], code?: string) {
+export function mailHtml(title: string, paragraphs: string[], code?: string, button?: { href: string; label: string }) {
   return `<!doctype html><html><body style="margin:0;background:#ebe4dc;font-family:Inter,Arial,sans-serif;color:#1c1c1e">
 <div style="max-width:480px;margin:0 auto;padding:32px 20px">
 <p style="font-family:Georgia,serif;font-size:22px;letter-spacing:.08em;margin:0 0 24px">MARFIM <span style="font-size:12px;color:#6e6a51">Studio OS</span></p>
@@ -44,6 +44,7 @@ export function mailHtml(title: string, paragraphs: string[], code?: string) {
 <h1 style="font-family:Georgia,serif;font-weight:500;font-size:22px;margin:0 0 12px">${esc(title)}</h1>
 ${paragraphs.map((p) => `<p style="margin:0 0 12px;line-height:1.5">${esc(p)}</p>`).join("")}
 ${code ? `<p style="font-size:34px;letter-spacing:.3em;font-weight:600;margin:20px 0;color:#494527">${esc(code)}</p>` : ""}
+${button ? `<p style="margin:20px 0"><a href="${esc(button.href)}" style="display:inline-block;background:#310804;color:#ebe4dc;padding:14px 22px;border-radius:999px;text-decoration:none;font-weight:600">${esc(button.label)}</a></p><p style="font-size:12px;color:#6e6a51;word-break:break-all">Se o botão não abrir, copie este endereço: ${esc(button.href)}</p>` : ""}
 </div>
 <p style="font-size:12px;color:#6e6a51;margin-top:16px">Se você não pediu isto, ignore este e-mail. Ninguém da MARFIM pede este código por telefone ou mensagem.</p>
 </div></body></html>`;

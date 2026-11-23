@@ -9,7 +9,8 @@ import { Badge, ConfirmAction, Field, Flash, PageHead } from "@/components/ui";
 import { listProfiles } from "@/server/services/access";
 import { deleteProfileAction } from "@/app/actions/access";
 import { inviteUserAction, resendInviteAction, resetPasswordAction, revokeInviteAction, updateUserAction } from "@/app/actions/admin";
-import { listInvites } from "@/server/services/invites";
+import { hasTempPassword, listInvites } from "@/server/services/invites";
+import { tempPasswordAction } from "@/app/actions/auth";
 
 export const metadata = { title: "Usuários e permissões" };
 const ROLES = Object.keys(ROLE_LABEL) as Role[];
@@ -22,6 +23,7 @@ export default async function UsersAdmin({ searchParams }: { searchParams: Promi
   const cat = await listCatalog(db, ctx.unitId);
   const profiles = await listProfiles(db, ctx);
   const invites = await listInvites(db, ctx);
+  const hasTemp = await hasTempPassword(db, ctx.unitId);
   const freeStaff = cat.staff.filter((s) => s.is_active && !s.user_id);  return (
     <>
       <PageHead title="Usuários e permissões" sub="Cada pessoa tem login próprio. As permissões são verificadas no servidor em toda operação." />
@@ -65,9 +67,18 @@ export default async function UsersAdmin({ searchParams }: { searchParams: Promi
           ))}
         </section>
       ) : null}
+      <form action={tempPasswordAction} className="card form">
+        <h2>Senha provisória dos convidados</h2>
+        <p className="muted">{hasTemp ? "Definida." : "Ainda não definida."} Quem foi convidado entra com o próprio e-mail e esta senha. O app não libera o acesso: manda um link ao e-mail da pessoa, ela cria a senha nova e entra com ela. Passe a senha provisória pessoalmente ou por mensagem; ela só é guardada embaralhada.</p>
+        <div className="fields">
+          <Field label="Senha provisória (mín. 10, letras e números)"><input name="password" type="password" minLength={10} required autoComplete="new-password" /></Field>
+          <Field label="Repita"><input name="password2" type="password" minLength={10} required autoComplete="new-password" /></Field>
+        </div>
+        <div><button className="btn" type="submit">{hasTemp ? "Trocar senha provisória" : "Salvar senha provisória"}</button></div>
+      </form>
       <form action={inviteUserAction} className="card form">
         <h2>Convidar pessoa</h2>
-        <p className="muted">A pessoa recebe um e-mail, abre o app em <b>Cadastrar</b>, escolhe o perfil, confirma um código e cria a própria senha. Só e-mails convidados conseguem se cadastrar.</p>
+        <p className="muted">Dois jeitos de a pessoa criar o acesso: entrar com o e-mail e a <b>senha provisória</b> (recebe um link no e-mail para criar a senha), ou tocar em <b>Cadastrar</b>, escolher o perfil e confirmar um código. Só e-mails convidados conseguem.</p>
         <div className="fields">
           <Field label="Nome"><input name="name" required /></Field>
           <Field label="E-mail"><input name="email" type="email" required autoComplete="off" /></Field>

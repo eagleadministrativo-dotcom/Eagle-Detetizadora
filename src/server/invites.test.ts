@@ -114,3 +114,42 @@ describe("esqueci a senha", () => {
     expect(a.n).toBe(1);
   });
 });
+
+describe("senha provisória + link por e-mail", () => {
+  const lastLink = (email: string) => {
+    const f = fs.readdirSync(OUT).filter((x) => x.endsWith(`-${email}.txt`)).sort().pop()!;
+    return /\/acesso\/([A-Za-z0-9_-]+)/.exec(fs.readFileSync(path.join(OUT, f), "utf8"))![1];
+  };
+  it("convidado entra com a provisória, recebe link, cria senha e só então entra", async () => {
+    const { setTempPassword, sendAccessLink, openAccessLink } = await import("./services/invites");
+    await setTempPassword(db, owner(), "Provisoria2026");
+    await createInvite(db, owner(), { email: "prov@conv.com", fullName: "Provisório", role: "barbeiro" });
+    expect(await msg(login(db, "prov@conv.com", "errada123x"))).toMatch(/incorretos/);
+    const r = await login(db, "prov@conv.com", "Provisoria2026");
+    expect(r.token).toBe(""); // nenhuma sessão com a senha provisória
+    expect(r.emailLink).toMatchObject({ purpose: "cadastro" });
+    await sendAccessLink(db, r.emailLink!);
+    const token = lastLink("prov@conv.com");
+    expect(await openAccessLink(db, "x".repeat(40))).toBeNull();
+    const flow = (await openAccessLink(db, token))!;
+    expect((await flowInfo(db, flow))?.verified).toBe(true);
+    expect(await msg(finishSignup(db, flow, { fullName: "Provisório", password: "Provisoria2026" }))).toMatch(/diferente da senha provisória/);
+    await finishSignup(db, flow, { fullName: "Provisório", password: "MinhaPropria2026" });
+    expect(await openAccessLink(db, token)).toBeNull(); // uso único
+    expect(await msg(login(db, "prov@conv.com", "Provisoria2026"))).toMatch(/incorretos/);
+    expect((await login(db, "prov@conv.com", "MinhaPropria2026")).token).toBeTruthy();
+  });
+  it("usuário com troca obrigatória não recebe sessão até criar a senha pelo link", async () => {
+    const { sendAccessLink, openAccessLink } = await import("./services/invites");
+    await db.query("update users set must_change_password=true, password_hash=(select temp_password_hash from unit_settings limit 1) where lower(email)='socio@conv.com'");
+    const r = await login(db, "socio@conv.com", "Provisoria2026");
+    expect(r.token).toBe("");
+    expect(r.emailLink).toMatchObject({ purpose: "senha" });
+    await sendAccessLink(db, r.emailLink!);
+    const flow = (await openAccessLink(db, lastLink("socio@conv.com")))!;
+    await finishPasswordReset(db, flow, "SocioNovo2026");
+    const l = await login(db, "socio@conv.com", "SocioNovo2026");
+    expect(l.token).toBeTruthy();
+    expect(l.emailLink).toBeUndefined();
+  });
+});

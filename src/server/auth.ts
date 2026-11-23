@@ -81,6 +81,8 @@ export interface LoginResult {
   token: string;
   needsMfa: boolean; // precisa informar código
   needsMfaSetup: boolean; // precisa cadastrar o autenticador
+  /** Entrou com senha provisória: não há sessão (token vazio); mandar link ao e-mail para criar a senha. */
+  emailLink?: { purpose: "cadastro" | "senha"; email: string; inviteId?: string; userId?: string };
 }
 
 // Senha: 3 erros bloqueiam por 10 minutos (e a tela oferece "esqueci a senha"). Código do autenticador: 5 erros, 15 minutos.
@@ -102,20 +104,28 @@ export async function login(db: Db, email: string, password: string): Promise<Lo
   // senão o ROLLBACK desfaria o registro da tentativa.
   const out = await db.tx(async (q): Promise<{ error: DomainError } | { result: LoginResult }> => {
     const generic = new DomainError("bad_credentials", "E-mail ou senha incorretos.");
-    const [u] = await q<{ id: string; password_hash: string; is_active: boolean; failed_attempts: number; locked_until: Date | null; mfa_enabled: boolean }>(
-      "select id,password_hash,is_active,failed_attempts,locked_until,mfa_enabled from users where lower(email)=lower($1) for update",
+    const [u] = await q<{ id: string; email: string; password_hash: string; is_active: boolean; failed_attempts: number; locked_until: Date | null; mfa_enabled: boolean; must_change_password: boolean }>(
+      "select id,email,password_hash,is_active,failed_attempts,locked_until,mfa_enabled,must_change_password from users where lower(email)=lower($1) for update",
       [email.trim()],
     );
     const locked = new DomainError("locked", LOCKED_MSG);
     if (!u) {
-      verifyPassword(password, "scrypt$00$00"); // custo aproximadamente constante
+      const key = `login:email:${email.trim().toLowerCase().slice(0, 190)}`;
+      const [cur] = await q<{ hits: number; left: number }>(`select hits, extract(epoch from window_start + make_interval(mins => $2) - now())::float / 60 as left from rate_limits where key=$1 and window_start > now() - make_interval(mins => $2)`, [key, LOGIN_LOCK_MINUTES]);
+      if (cur && cur.hits >= LOGIN_MAX_FAILS) return { error: new DomainError("locked", stillLocked(cur.left)) };
+      // convidado entrando com a senha provisória: sem sessão; o app manda um link ao e-mail para criar a senha
+      const [inv] = await q<{ id: string; temp: string | null }>(
+        `select i.id, s.temp_password_hash as temp from user_invites i join unit_settings s on s.unit_id=i.unit_id
+         where lower(i.email)=lower($1) and i.accepted_at is null and i.revoked_at is null and i.expires_at > now() order by i.created_at desc limit 1`, [email.trim()]);
+      if (inv?.temp && verifyPassword(password, inv.temp)) return { result: { token: "", needsMfa: false, needsMfaSetup: false, emailLink: { purpose: "cadastro", email: email.trim().toLowerCase(), inviteId: inv.id } } };
+      if (!inv?.temp) verifyPassword(password, "scrypt$00$00"); // custo aproximadamente constante
       // e-mail sem conta se comporta igual a uma conta real (bloqueia na 3ª), para não revelar quem tem acesso
       const [fl] = await q<{ hits: number; left: number }>(
         `insert into rate_limits(key, window_start, hits) values ($1, now(), 1)
          on conflict (key) do update set
            hits = case when rate_limits.window_start < now() - make_interval(mins => $2) then 1 else rate_limits.hits + 1 end,
            window_start = case when rate_limits.window_start < now() - make_interval(mins => $2) then now() else rate_limits.window_start end
-         returning hits, extract(epoch from window_start + make_interval(mins => $2) - now())::float / 60 as left`, [`login:email:${email.trim().toLowerCase().slice(0, 190)}`, LOGIN_LOCK_MINUTES]);
+         returning hits, extract(epoch from window_start + make_interval(mins => $2) - now())::float / 60 as left`, [key, LOGIN_LOCK_MINUTES]);
       return { error: fl.hits === LOGIN_MAX_FAILS ? locked : fl.hits > LOGIN_MAX_FAILS ? new DomainError("locked", stillLocked(fl.left)) : generic };
     }
     if (u.locked_until && u.locked_until.getTime() > Date.now()) return { error: new DomainError("locked", stillLocked((u.locked_until.getTime() - Date.now()) / 60000)) };
@@ -129,6 +139,12 @@ export async function login(db: Db, email: string, password: string): Promise<Lo
     }
     const [uu] = await q<{ unit_id: string; role: Role }>("select unit_id, role from user_units where user_id=$1 order by role limit 1", [u.id]);
     if (!uu) return { error: new DomainError("no_unit", "Usuário sem unidade vinculada.") };
+    if (u.must_change_password) {
+      // senha provisória: confirma o e-mail por link antes de liberar o acesso
+      await q("update users set failed_attempts=0, locked_until=null where id=$1", [u.id]);
+      await audit(q, { userId: u.id, unitId: uu.unit_id }, "LOGIN_SENHA_PROVISORIA", "user", u.id);
+      return { result: { token: "", needsMfa: false, needsMfaSetup: false, emailLink: { purpose: "senha", email: u.email, userId: u.id } } };
+    }
     await q("update users set failed_attempts=0, locked_until=null, last_login_at=now() where id=$1", [u.id]);
     const mfaReq = await mfaRequiredFor(q, uu.unit_id, uu.role);
     const needsMfa = u.mfa_enabled;

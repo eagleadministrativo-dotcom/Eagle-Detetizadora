@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import type { Db, Q } from "../db";
 import { audit, need, requireText, requireUuid } from "../core";
-import { checkPasswordStrength, hashPassword } from "../auth";
+import { checkPasswordStrength, hashPassword, verifyPassword } from "../auth";
 import { DomainError } from "../errors";
 import { PERMISSIONS, ROLE_LABEL, ROLE_PERMISSIONS, type Ctx, type Permission, type Role } from "../permissions";
 import { appUrl, mailHtml, sendMail } from "../mail";
@@ -89,8 +89,8 @@ async function sendInviteMail(email: string, name: string, role: Role): Promise<
     await sendMail({
       to: email,
       subject: "Seu convite para o MARFIM Studio OS",
-      text: `Olá, ${name}!\n\nVocê foi convidado(a) para o MARFIM Studio OS como ${ROLE_LABEL[role]}.\n\nPara criar seu acesso, abra ${link}, toque em "${SIGNUP_CHOICES[choice].label}" e use este e-mail. Você vai receber um código para confirmar e depois cria a sua senha.\n\nO convite vale por 14 dias.`,
-      html: mailHtml("Você foi convidado(a)", [`Olá, ${name}!`, `Você foi convidado(a) para o MARFIM Studio OS como ${ROLE_LABEL[role]}.`, `Para criar seu acesso, abra ${link}, toque em "${SIGNUP_CHOICES[choice].label}" e use este e-mail. Você recebe um código para confirmar e depois cria a sua senha.`, "O convite vale por 14 dias."]),
+      text: `Olá, ${name}!\n\nVocê foi convidado(a) para o MARFIM Studio OS como ${ROLE_LABEL[role]}.\n\nAbra ${appUrl()}/login e entre com este e-mail e a senha provisória que a barbearia passou para você. Você vai receber outro e-mail com um link para criar a sua senha.\n\nOutra opção: abra ${link}, toque em "${SIGNUP_CHOICES[choice].label}" e confirme o código que chegar no e-mail.\n\nO convite vale por 14 dias.`,
+      html: mailHtml("Você foi convidado(a)", [`Olá, ${name}!`, `Você foi convidado(a) para o MARFIM Studio OS como ${ROLE_LABEL[role]}.`, "Entre no app com este e-mail e a senha provisória que a barbearia passou para você. Em seguida chega outro e-mail com um link para criar a sua senha.", `Outra opção: em Cadastrar, toque em "${SIGNUP_CHOICES[choice].label}" e confirme o código que chegar no e-mail.`, "O convite vale por 14 dias."], undefined, { href: `${appUrl()}/login`, label: "Abrir o MARFIM" }),
     });
     return true;
   } catch (e) {
@@ -163,6 +163,47 @@ async function openFlow(db: Db, purpose: Purpose, email: string, target: { invit
   return flow;
 }
 
+// ---------- link por e-mail (primeiro acesso com a senha provisória) ----------
+/** Manda o link para criar a senha. Vale 1 hora e uma vez só; abrir o link confirma que o e-mail é da pessoa. */
+export async function sendAccessLink(db: Db, l: { purpose: Purpose; email: string; inviteId?: string; userId?: string }) {
+  const token = crypto.randomBytes(32).toString("base64url");
+  const [r] = await db.query<{ id: string }>(
+    "insert into email_codes(purpose,email,invite_id,user_id,flow_hash,sends,last_sent_at,expires_at) values ($1,$2,$3,$4,$5,1,now(),now() + interval '1 hour') returning id",
+    [l.purpose, l.email, l.inviteId ?? null, l.userId ?? null, sha(token)]);
+  const link = `${appUrl()}/acesso/${token}`;
+  try {
+    await sendMail({
+      to: l.email,
+      subject: "Crie sua senha do MARFIM Studio OS",
+      text: `Você entrou com a senha provisória. Para continuar, abra o link abaixo e crie a sua senha:\n\n${link}\n\nO link vale por 1 hora e só pode ser usado uma vez. Depois, volte ao app e entre com a senha nova.`,
+      html: mailHtml("Crie sua senha", ["Você entrou com a senha provisória. Para continuar, toque no botão abaixo e crie a sua senha.", "O link vale por 1 hora e só pode ser usado uma vez. Depois, volte ao app e entre com a senha nova."], undefined, { href: link, label: "Criar minha senha" }),
+    });
+  } catch (e) {
+    await db.query("delete from email_codes where id=$1", [r.id]);
+    throw e;
+  }
+}
+
+/** Abre o link do e-mail: marca o e-mail como confirmado e devolve o identificador do fluxo (vai para o cookie). */
+export async function openAccessLink(db: Db, token: string): Promise<string | null> {
+  const r = await db.query("update email_codes set verified_at=coalesce(verified_at, now()) where flow_hash=$1 and used_at is null and expires_at > now() and code_hash is null and (invite_id is not null or user_id is not null) returning id", [sha(token)]);
+  return r.length ? token : null;
+}
+
+/** Senha provisória usada pelos convidados (e por quem tiver a troca obrigatória). Só o hash é guardado. */
+export async function setTempPassword(db: Db, ctx: Ctx, password: string) {
+  need(ctx, "users.manage");
+  checkPasswordStrength(password);
+  await db.tx(async (q) => {
+    await q("update unit_settings set temp_password_hash=$2, updated_at=now(), updated_by=$3 where unit_id=$1", [ctx.unitId, hashPassword(password), ctx.userId]);
+    await audit(q, ctx, "SENHA_PROVISORIA_DEFINIDA", "unit_settings", ctx.unitId);
+  });
+}
+export async function hasTempPassword(db: Db, unitId: string) {
+  const [s] = await db.query<{ ok: boolean }>("select temp_password_hash is not null as ok from unit_settings where unit_id=$1", [unitId]);
+  return !!s?.ok;
+}
+
 export async function startSignup(db: Db, choice: string, emailIn: string): Promise<string> {
   if (!isChoice(choice)) throw new DomainError("invalid", "Escolha o tipo de acesso.");
   const email = normEmail(emailIn);
@@ -229,6 +270,11 @@ export async function verifyCode(db: Db, flow: string | undefined, codeIn: strin
   return out;
 }
 
+async function notTempPassword(q: Q, unitId: string, password: string) {
+  const [s] = await q<{ h: string | null }>("select temp_password_hash as h from unit_settings where unit_id=$1", [unitId]);
+  if (s?.h && verifyPassword(password, s.h)) throw new DomainError("weak_password", "Escolha uma senha diferente da senha provisória.");
+}
+
 async function verifiedRow(q: Q, flow: string | undefined, purpose: Purpose) {
   const r = await flowRow(q, flow, true);
   if (!r || r.purpose !== purpose || !r.verified_at) throw new DomainError("expired", "Confirme o código enviado ao seu e-mail primeiro.");
@@ -247,6 +293,7 @@ export async function finishSignup(db: Db, flow: string | undefined, i: { fullNa
     if (!inv) throw new DomainError("expired", "Este convite não está mais válido. Peça um novo convite.");
     const [dup] = await q("select 1 from users where lower(email)=lower($1)", [inv.email]);
     if (dup) throw new DomainError("duplicate", "Já existe um acesso com este e-mail. Use Entrar.");
+    await notTempPassword(q, inv.unit_id, i.password);
     const [u] = await q<{ id: string }>("insert into users(email,full_name,password_hash) values ($1,$2,$3) returning id", [inv.email.toLowerCase(), fullName, hashPassword(i.password)]);
     await q("insert into user_units(user_id,unit_id,role,profile_id) values ($1,$2,$3,$4)", [u.id, inv.unit_id, inv.role, inv.profile_id]);
     if (inv.permissions && inv.role !== "proprietario") {
@@ -272,7 +319,9 @@ export async function finishPasswordReset(db: Db, flow: string | undefined, pass
   checkPasswordStrength(password);
   return db.tx(async (q) => {
     const r = await verifiedRow(q, flow, "senha");
-    const [u] = await q<{ id: string; email: string }>("update users set password_hash=$2, failed_attempts=0, locked_until=null where id=$1 and is_active returning id, email", [r.user_id, hashPassword(password)]);
+    const [uu] = await q<{ unit_id: string }>("select unit_id from user_units where user_id=$1 limit 1", [r.user_id]);
+    if (uu) await notTempPassword(q, uu.unit_id, password);
+    const [u] = await q<{ id: string; email: string }>("update users set password_hash=$2, failed_attempts=0, locked_until=null, must_change_password=false where id=$1 and is_active returning id, email", [r.user_id, hashPassword(password)]);
     if (!u) throw new DomainError("expired", "Conta não encontrada ou inativa.");
     await q("delete from sessions where user_id=$1", [u.id]);
     await q("update email_codes set used_at=now() where id=$1", [r.id]);
