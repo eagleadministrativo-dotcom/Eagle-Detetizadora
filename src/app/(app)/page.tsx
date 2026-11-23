@@ -8,7 +8,7 @@ import { listCatalog } from "@/server/services/catalog";
 import { addDays, dayEndUtc, dayStartUtc, fmtTime, fmtYmd, monthEnd, monthStart, addMonths, todayYmd } from "@/lib/dates";
 import { fmtBRL } from "@/lib/money";
 import { ApptBadge, Badge, Empty, Flash, KpiCard, PageHead, Seg } from "@/components/ui";
-import { BarChart, HBars, Heatmap, LineChart } from "@/components/charts";
+import { BarChart, Donut, HBars, Heatmap, LineChart } from "@/components/charts";
 
 export const metadata = { title: "Visão geral" };
 
@@ -154,7 +154,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<SP>
           </section>
           <section className="card">
             <h2>Pagamentos por modalidade</h2>
-            {dash.byMethod.length ? <HBars rows={dash.byMethod.map((t) => ({ label: t.name, value: Math.max(t.cents, 0), text: fmtBRL(t.cents) }))} /> : <Empty title="Sem pagamentos no período" />}
+            {dash.byMethod.length ? <Donut rows={dash.byMethod.map((t) => ({ label: t.name, value: Math.max(t.cents, 0), text: fmtBRL(t.cents) }))} center={fmtBRL(dash.byMethod.reduce((a, t) => a + t.cents, 0)).replace(",00", "")} /> : <Empty title="Sem pagamentos no período" />}
           </section>
         </div>
       ) : null}

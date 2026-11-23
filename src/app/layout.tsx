@@ -4,6 +4,7 @@ import "@fontsource-variable/inter";
 import "./tokens.css";
 import "./globals.css";
 import "./v4.css";
+import "./v5.css";
 import { cookies } from "next/headers";
 
 export const metadata: Metadata = {

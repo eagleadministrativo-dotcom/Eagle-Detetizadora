@@ -32,61 +32,69 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     await flushPush(db).catch((e) => console.error("[push]", e));
   });
 
+  // menu por tópicos: cada área aparece uma vez, junto das relacionadas
   const groups: NavGroup[] = [];
-  const main: NavItem[] = [];
-  if (can(ctx, "dashboard.full") || can(ctx, "dashboard.own")) main.push({ href: "/", label: can(ctx, "dashboard.full") ? "Visão geral" : "Meu dia", short: "Início" });
-  if (can(ctx, "agenda.view_all") || can(ctx, "agenda.view_own")) main.push({ href: "/agenda", label: "Agenda" });
-  if (can(ctx, "attendance.view_all") || can(ctx, "attendance.view_own")) main.push({ href: "/atendimentos", label: "Atendimentos", short: "Atend." });
-  if (can(ctx, "customers.view")) main.push({ href: "/clientes", label: "Clientes" });
-  main.push({ href: "/tarefas", label: "Tarefas", count: tasks.open });
-  if (seesReturns) main.push({ href: "/retornos", label: "Retornos", count: returns.vencido });
-  groups.push({ items: main });
-  const mine: NavItem[] = [];
-  if (ctx.staffId && can(ctx, "finance.own")) mine.push({ href: "/meu-financeiro", label: "Meu Financeiro" });
-  if (ctx.staffId && can(ctx, "achievements.own")) mine.push({ href: "/conquistas", label: "Conquistas" });
-  if (mine.length) groups.push({ title: "Meu desempenho", items: mine });
-  const op: NavItem[] = [];
-  if (can(ctx, "products.view") || can(ctx, "products.sell") || can(ctx, "products.manage")) op.push({ href: "/produtos", label: "Produtos" });
-  if (can(ctx, "commissions.view_all")) op.push({ href: "/comissoes", label: "Comissões" });
-  if (can(ctx, "team.view")) op.push({ href: "/equipe", label: "Painel da equipe" });
-  if (op.length) groups.push({ title: "Gestão", items: op });
-  const fin: NavItem[] = [];
-  if (!can(ctx, "finance.view")) {
-    if (can(ctx, "finance.payables_view")) fin.push({ href: "/financeiro/pagar", label: "Contas a pagar" });
-    if (can(ctx, "finance.receivables_view")) fin.push({ href: "/financeiro/receber", label: "Contas a receber" });
-    if (can(ctx, "finance.dre_view")) fin.push({ href: "/financeiro/dre", label: "DRE gerencial" });
-    if (fin.length && !can(ctx, "cash.manage")) groups.push({ title: "Financeiro", items: fin });
-  }
-  if (can(ctx, "finance.view") || can(ctx, "cash.manage")) {
-    fin.unshift({ href: "/financeiro", label: "Resumo" }, { href: "/financeiro/caixa", label: "Caixa" });
-    if (can(ctx, "finance.view")) fin.push(
-      { href: "/financeiro/pagar", label: "Contas a pagar" }, { href: "/financeiro/receber", label: "Contas a receber" },
-      { href: "/financeiro/conciliacao", label: "Conciliação" }, { href: "/financeiro/dre", label: "DRE gerencial" },
-      { href: "/financeiro/fluxo", label: "Fluxo de caixa" }, { href: "/financeiro/metas", label: "Metas e reservas" }, { href: "/financeiro/fechamento", label: "Fechamento mensal" },
-    );
-    groups.push({ title: "Financeiro", items: fin });
-  }
-  if (can(ctx, "reports.view")) groups.push({ title: "Relatórios", items: [{ href: "/relatorios", label: "Indicadores e relatórios" }] });
-  const adm: NavItem[] = [];
-  if (can(ctx, "admin.catalog")) adm.push({ href: "/admin/servicos", label: "Serviços e preços" }, { href: "/admin/equipe", label: "Equipe" });
-  if (can(ctx, "admin.schedules")) adm.push({ href: "/admin/cadeiras", label: "Cadeiras e horários" });
-  if (can(ctx, "admin.settings")) adm.push({ href: "/admin/financeiro", label: "Pagamentos e plano de contas" }, { href: "/admin/configuracoes", label: "Configurações" });
-  if (can(ctx, "users.manage")) adm.push({ href: "/admin/usuarios", label: "Usuários e permissões" });
-  if (can(ctx, "audit.view")) adm.push({ href: "/admin/auditoria", label: "Auditoria" });
-  if (can(ctx, "data.export")) adm.push({ href: "/admin/dados", label: "Dados e backup" });
-  if (adm.length) groups.push({ title: "Administração", items: adm });
+  const add = (title: string | undefined, items: (NavItem | false | null | undefined)[]) => { const list = items.filter((x): x is NavItem => !!x); if (list.length) groups.push({ title, items: list }); };
+  add(undefined, [(can(ctx, "dashboard.full") || can(ctx, "dashboard.own")) && { href: "/", label: can(ctx, "dashboard.full") ? "Visão geral" : "Meu dia", short: "Início" }]);
+  add("Atendimento", [
+    (can(ctx, "agenda.view_all") || can(ctx, "agenda.view_own")) && { href: "/agenda", label: "Agenda" },
+    (can(ctx, "attendance.view_all") || can(ctx, "attendance.view_own")) && { href: "/atendimentos", label: "Atendimentos", short: "Atend." },
+    can(ctx, "customers.view") && { href: "/clientes", label: "Clientes" },
+    seesReturns && { href: "/retornos", label: "Retornos", count: returns.vencido },
+  ]);
+  add("Equipe", [
+    { href: "/tarefas", label: "Tarefas", count: tasks.open },
+    can(ctx, "team.view") && { href: "/equipe", label: "Painel da equipe" },
+    can(ctx, "commissions.view_all") && { href: "/comissoes", label: "Comissões" },
+  ]);
+  add("Meu desempenho", [
+    !!ctx.staffId && can(ctx, "finance.own") && { href: "/meu-financeiro", label: "Meu Financeiro" },
+    !!ctx.staffId && can(ctx, "achievements.own") && { href: "/conquistas", label: "Conquistas" },
+  ]);
+  add("Estoque e compras", [
+    (can(ctx, "products.view") || can(ctx, "products.sell") || can(ctx, "products.manage")) && { href: "/produtos", label: "Produtos" },
+    can(ctx, "purchases.manage") && { href: "/compras", label: "Compras" },
+  ]);
+  const fv = can(ctx, "finance.view"), cash = can(ctx, "cash.manage");
+  add("Financeiro", [
+    (fv || cash) && { href: "/financeiro", label: "Resumo" },
+    (fv || cash) && { href: "/financeiro/caixa", label: "Caixa" },
+    (fv || can(ctx, "finance.payables_view")) && { href: "/financeiro/pagar", label: "Contas a pagar" },
+    (fv || can(ctx, "finance.receivables_view")) && { href: "/financeiro/receber", label: "Contas a receber" },
+    fv && { href: "/financeiro/conciliacao", label: "Conciliação" },
+    fv && { href: "/financeiro/fluxo", label: "Fluxo de caixa" },
+  ]);
+  add("Resultados", [
+    (fv || can(ctx, "finance.dre_view")) && { href: "/financeiro/dre", label: "DRE gerencial" },
+    fv && { href: "/financeiro/metas", label: "Metas e reservas" },
+    fv && { href: "/financeiro/fechamento", label: "Fechamento mensal" },
+    can(ctx, "reports.view") && { href: "/relatorios", label: "Indicadores" },
+  ]);
+  add("Cadastros", [
+    can(ctx, "admin.catalog") && { href: "/admin/servicos", label: "Serviços e preços" },
+    can(ctx, "admin.catalog") && { href: "/admin/equipe", label: "Profissionais" },
+    can(ctx, "admin.schedules") && { href: "/admin/cadeiras", label: "Cadeiras e horários" },
+    can(ctx, "admin.settings") && { href: "/admin/financeiro", label: "Pagamentos e contas" },
+  ]);
+  add("Sistema", [
+    can(ctx, "users.manage") && { href: "/admin/usuarios", label: "Usuários e permissões" },
+    can(ctx, "admin.settings") && { href: "/admin/configuracoes", label: "Configurações" },
+    can(ctx, "audit.view") && { href: "/admin/auditoria", label: "Auditoria" },
+    can(ctx, "data.export") && { href: "/admin/dados", label: "Dados e backup" },
+    { href: "/notificacoes", label: "Avisos", count: unread },
+  ]);
 
   const all = groups.flatMap((g) => g.items);
   // no celular: agenda, atendimentos, tarefas e retornos primeiro
   const order = ["/agenda", "/atendimentos", "/tarefas", "/retornos", "/", "/clientes"];
-  const primary = order.map((h) => main.find((i) => i.href === h)).filter((i): i is NavItem => !!i).slice(0, 4);
-  const more = all.filter((i) => !primary.includes(i));
+  const primary = order.map((h) => all.find((i) => i.href === h)).filter((i): i is NavItem => !!i).slice(0, 4);
 
   const quick = [
     can(ctx, "agenda.create") && (can(ctx, "agenda.manage") || can(ctx, "agenda.manage_own")) && { title: "Novo agendamento", href: "/agenda/novo" },
     can(ctx, "customers.manage") && { title: "Novo cliente", href: "/clientes/novo" },
     can(ctx, "products.sell") && { title: "Registrar venda", href: "/produtos/vender" },
     can(ctx, "tasks.create") && { title: "Nova tarefa", href: "/tarefas/nova" },
+    can(ctx, "purchases.manage") && { title: "Adicionar à lista de compras", href: "/compras#nova" },
     seesReturns && { title: "Consultar retornos", href: "/retornos" },
     can(ctx, "commissions.view_all") && { title: "Consultar comissões", href: "/comissoes" },
     ctx.staffId && can(ctx, "finance.own") && { title: "Meu financeiro", href: "/meu-financeiro" },
@@ -111,7 +119,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </header>
         <main className="content" id="conteudo">{children}</main>
       </div>
-      <BottomNav primary={primary} more={more} />
+      <BottomNav primary={primary} groups={groups} account={{ name: s.user.fullName, role: ROLE_LABEL[ctx.role] }} />
       <Spotlight />
     </div>
   );

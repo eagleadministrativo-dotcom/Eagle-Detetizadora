@@ -25,6 +25,19 @@ const P: Record<string, ReactElement> = {
   coins: <path d="M9 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10ZM15.5 8.2A6 6 0 1 1 9 17" />,
   trophy: <path d="M7 4h10v5a5 5 0 0 1-10 0zM7 6H4c0 3 1 5 3.5 5M17 6h3c0 3-1 5-3.5 5M12 14v4M8 21h8M10 18h4" />,
   team: <path d="M12 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM5 21a7 7 0 0 1 14 0M4 13a2.5 2.5 0 1 0 0-5M20 13a2.5 2.5 0 1 1 0-5" />,
+  cash: <path d="M3 7h18v10H3zM7 12h.01M17 12h.01M12 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />,
+  out: <path d="M12 4v12M7 11l5 5 5-5M5 20h14" />,
+  in: <path d="M12 20V8M7 13l5-5 5 5M5 4h14" />,
+  scale: <path d="M12 4v16M6 20h12M5 8h14M7 8l-3 6a3 3 0 0 0 6 0zM17 8l-3 6a3 3 0 0 0 6 0z" />,
+  target: <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-4a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0-4a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" />,
+  lock: <path d="M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3" />,
+  flow: <path d="M3 17l5-5 4 3 8-8M15 7h5v5" />,
+  chair: <path d="M7 4h10v7H7zM5 11h14v3H5zM7 14v6M17 14v6" />,
+  cart: <path d="M3 4h2l2.4 11.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L21 8H6.2M9.5 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm8 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" />,
+  grid: <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" />,
+  close: <path d="M6 6l12 12M18 6 6 18" />,
+  chevron: <path d="m6 9 6 6 6-6" />,
+  spark: <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6" />,
   shield: <path d="M12 3 4 6v6c0 4.5 3.2 7.8 8 9 4.8-1.2 8-4.5 8-9V6z" />,
 };
 export type IconName = keyof typeof P;
@@ -46,11 +59,22 @@ export function iconFor(href: string): IconName {
   if (href.startsWith("/tarefas")) return "check";
   if (href.startsWith("/retornos")) return "repeat";
   if (href.startsWith("/produtos")) return "box";
+  if (href.startsWith("/compras")) return "cart";
   if (href.startsWith("/comissoes") || href.startsWith("/meu-financeiro")) return "coins";
   if (href.startsWith("/conquistas")) return "trophy";
   if (href.startsWith("/equipe")) return "team";
   if (href.startsWith("/notificacoes")) return "bell";
+  if (href.startsWith("/financeiro/caixa")) return "cash";
+  if (href.startsWith("/financeiro/pagar")) return "out";
+  if (href.startsWith("/financeiro/receber")) return "in";
+  if (href.startsWith("/financeiro/conciliacao")) return "scale";
+  if (href.startsWith("/financeiro/dre")) return "chart";
+  if (href.startsWith("/financeiro/fluxo")) return "flow";
+  if (href.startsWith("/financeiro/metas")) return "target";
+  if (href.startsWith("/financeiro/fechamento")) return "lock";
   if (href.startsWith("/financeiro")) return "wallet";
+  if (href.startsWith("/admin/cadeiras")) return "chair";
+  if (href.startsWith("/admin/equipe")) return "team";
   if (href.startsWith("/relatorios")) return "chart";
   if (href.startsWith("/admin/auditoria") || href.startsWith("/admin/usuarios")) return "shield";
   if (href.startsWith("/admin")) return "gear";

@@ -80,3 +80,40 @@
   --spot: rgba(184, 159, 120, 0.16); --grain-o: 0.05;
   color-scheme: dark;
 }
+
+/* V5: formas mais retas, navegação que acompanha o tema, brilho e bordas em degradê */
+:root {
+  --radius-sm: 6px; --radius: 10px; --radius-lg: 14px; --cut: 14px;
+  --chart-1-hi: #8a9060; --chart-2-hi: #a0505c;
+  --nav-bg: linear-gradient(180deg, rgba(255, 253, 248, 0.92), rgba(243, 235, 221, 0.9));
+  --nav-ink: #2a2b26; --nav-muted: #6a675d; --nav-line: rgba(89, 29, 39, 0.12); --nav-hover: rgba(104, 109, 71, 0.1);
+  --nav-active: linear-gradient(100deg, rgba(89, 29, 39, 0.12), rgba(156, 104, 69, 0.06)); --nav-active-ink: #591d27; --nav-rail: #9c6845;
+  --nav-glow: 0 18px 40px -22px rgba(89, 29, 39, 0.45), 0 1px 0 #fff inset;
+  --edge-grad: linear-gradient(140deg, rgba(156, 104, 69, 0.55), rgba(255, 255, 255, 0.4) 30%, rgba(104, 109, 71, 0.18) 70%, rgba(89, 29, 39, 0.35));
+  --glow: 0 0 0 1px rgba(156, 104, 69, 0.14), 0 14px 32px -18px rgba(89, 29, 39, 0.35);
+  --grid-line: rgba(69, 72, 45, 0.055);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  --radius-sm: 6px; --radius: 10px; --radius-lg: 14px; --cut: 14px;
+  --chart-1-hi: #c9cf96; --chart-2-hi: #e0899a;
+  --nav-bg: linear-gradient(180deg, rgba(30, 31, 27, 0.92), rgba(15, 16, 14, 0.94));
+  --nav-ink: #f1e8d6; --nav-muted: #a59e8e; --nav-line: rgba(231, 216, 188, 0.1); --nav-hover: rgba(231, 216, 188, 0.07);
+  --nav-active: linear-gradient(100deg, rgba(231, 216, 188, 0.16), rgba(156, 104, 69, 0.08)); --nav-active-ink: #fbf6ec; --nav-rail: #c89b6f;
+  --nav-glow: 0 24px 50px -26px rgba(0, 0, 0, 0.9), 0 1px 0 rgba(255, 246, 228, 0.08) inset;
+  --edge-grad: linear-gradient(140deg, rgba(200, 155, 111, 0.5), rgba(231, 216, 188, 0.06) 30%, rgba(127, 133, 86, 0.2) 70%, rgba(169, 82, 95, 0.4));
+  --glow: 0 0 0 1px rgba(200, 155, 111, 0.12), 0 18px 40px -20px rgba(0, 0, 0, 0.9), 0 0 32px -12px rgba(169, 82, 95, 0.25);
+  --grid-line: rgba(231, 216, 188, 0.035);
+  }
+}
+:root[data-theme="dark"] {
+  --radius-sm: 6px; --radius: 10px; --radius-lg: 14px; --cut: 14px;
+  --chart-1-hi: #c9cf96; --chart-2-hi: #e0899a;
+  --nav-bg: linear-gradient(180deg, rgba(30, 31, 27, 0.92), rgba(15, 16, 14, 0.94));
+  --nav-ink: #f1e8d6; --nav-muted: #a59e8e; --nav-line: rgba(231, 216, 188, 0.1); --nav-hover: rgba(231, 216, 188, 0.07);
+  --nav-active: linear-gradient(100deg, rgba(231, 216, 188, 0.16), rgba(156, 104, 69, 0.08)); --nav-active-ink: #fbf6ec; --nav-rail: #c89b6f;
+  --nav-glow: 0 24px 50px -26px rgba(0, 0, 0, 0.9), 0 1px 0 rgba(255, 246, 228, 0.08) inset;
+  --edge-grad: linear-gradient(140deg, rgba(200, 155, 111, 0.5), rgba(231, 216, 188, 0.06) 30%, rgba(127, 133, 86, 0.2) 70%, rgba(169, 82, 95, 0.4));
+  --glow: 0 0 0 1px rgba(200, 155, 111, 0.12), 0 18px 40px -20px rgba(0, 0, 0, 0.9), 0 0 32px -12px rgba(169, 82, 95, 0.25);
+  --grid-line: rgba(231, 216, 188, 0.035);
+}

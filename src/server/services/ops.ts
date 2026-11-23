@@ -125,7 +125,7 @@ export async function exportDataset(db: Db, ctx: Ctx, name: Dataset): Promise<{ 
 /** Tabelas da V4, na ordem de dependência. */
 const V4_TABLES = ["permission_overrides", "user_preferences", "notification_reads", "notification_deliveries", "domain_events", "task_recurrence_rules", "tasks", "task_assignees", "task_comments", "task_attachments",
   "appointment_series_occurrences", "customer_return_rules", "customer_return_status", "customer_contact_attempts", "products", "product_sales", "product_sale_items", "product_returns", "stock_movements",
-  "commission_rules", "commission_settlements", "commission_entries", "commission_adjustments", "staff_goals", "employee_records", "employee_achievements"];
+  "commission_rules", "commission_settlements", "commission_entries", "commission_adjustments", "staff_goals", "employee_records", "employee_achievements", "purchase_items"];
 
 /** Backup lógico completo da unidade em JSON (para migração/restauração manual). */
 export async function exportBackup(db: Db, ctx: Ctx) {

@@ -18,7 +18,7 @@ export const PERMISSIONS = [
   "customers.history", "returns.own", "returns.view_all", "returns.contact", "returns.rules",
   "products.view", "products.sell", "products.stock_view", "products.stock", "products.manage", "products.prices", "products.return",
   "tasks.own", "tasks.create", "tasks.delegate", "tasks.edit", "tasks.view_team", "tasks.approve",
-  "achievements.own", "team.view", "team.goals",
+  "achievements.own", "team.view", "team.goals", "purchases.manage",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -79,6 +79,7 @@ export const PERMISSION_GROUPS: { title: string; items: [Permission, string][] }
   { title: "Retornos", items: [["returns.own", "Ver os próprios retornos"], ["returns.view_all", "Ver retornos da equipe"], ["returns.contact", "Registrar contato"], ["returns.rules", "Definir regras de retorno"]] },
   { title: "Financeiro", items: [["finance.own", "Ver o próprio financeiro"], ["finance.view", "Ver o financeiro geral"], ["finance.payables_view", "Ver contas a pagar"], ["finance.receivables_view", "Ver contas a receber"], ["finance.dre_view", "Ver a DRE"], ["finance.manage", "Lançar e pagar contas"], ["finance.close_period", "Fechar período"], ["finance.goals", "Metas da empresa"], ["cash.manage", "Operar o caixa"], ["payments.register", "Registrar pagamentos"], ["payments.confirm", "Conciliar pagamentos"], ["payments.reverse", "Estornar pagamentos"]] },
   { title: "Comissões", items: [["commissions.view_all", "Ver comissões da equipe"], ["commissions.rules", "Alterar regras de comissão"], ["commissions.approve", "Aprovar repasses"], ["commissions.pay", "Registrar pagamento de repasse"]] },
+  { title: "Compras", items: [["purchases.manage", "Lista de compras (gera despesas ao marcar comprado)"]] },
   { title: "Produtos", items: [["products.view", "Ver catálogo"], ["products.sell", "Registrar vendas"], ["products.return", "Registrar devolução"], ["products.stock_view", "Consultar estoque"], ["products.stock", "Alterar estoque"], ["products.manage", "Cadastrar produtos"], ["products.prices", "Alterar preços"]] },
   { title: "Tarefas", items: [["tasks.own", "Ver as próprias tarefas (sempre ativo)"], ["tasks.create", "Criar tarefas"], ["tasks.delegate", "Delegar a outras pessoas"], ["tasks.edit", "Editar tarefas que criou"], ["tasks.view_team", "Acompanhar a equipe"], ["tasks.approve", "Aprovar conclusão"]] },
   { title: "Equipe e conquistas", items: [["achievements.own", "Ver as próprias conquistas"], ["team.view", "Painel da equipe"], ["team.goals", "Metas individuais"]] },
