@@ -12,7 +12,7 @@ import { getPrefs } from "@/server/services/access";
 import { taskCounts } from "@/server/services/tasks";
 import { returnCounts } from "@/server/services/returns";
 import { processEvents } from "@/server/services/events";
-import { CommandPalette, Spotlight, ThemePicker } from "@/components/client";
+import { CommandPalette, CountUp, Spotlight, ThemePicker } from "@/components/client";
 import { logoutAction } from "@/app/actions/auth";
 import { Icon } from "@/components/icons";
 import { BottomNav, SideNav, SideToggle, type NavGroup, type NavItem } from "@/components/nav";
@@ -121,6 +121,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </div>
       <BottomNav primary={primary} groups={groups} account={{ name: s.user.fullName, role: ROLE_LABEL[ctx.role] }} />
       <Spotlight />
+      <CountUp />
     </div>
   );
 }

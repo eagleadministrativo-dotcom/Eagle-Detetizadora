@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./icons";
 import { saveThemeAction } from "@/app/actions/account";
@@ -207,4 +207,37 @@ export function ProductPicker({ products, initial, discount = 0, reason = "", se
       ) : <small>Nenhum produto selecionado.</small>}
     </div>
   );
+}
+
+/** Números dos cartões sobem de zero ao valor real ao abrir a tela (respeita "reduzir movimento"). */
+export function CountUp() {
+  const path = usePathname();
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const jobs: { node: Text; pre: string; post: string; value: number; dec: number }[] = [];
+    document.querySelectorAll<HTMLElement>(".kpi .value, .stat .v, .medal .val").forEach((el) => {
+      const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let n = w.nextNode() as Text | null; n; n = w.nextNode() as Text | null) {
+        const m = n.data.match(/-?d{1,3}(?:.d{3})*(?:,d+)?|-?d+(?:,d+)?/);
+        if (!m) continue;
+        const raw = m[0], dec = raw.includes(",") ? raw.split(",")[1].length : 0;
+        const value = Number(raw.replace(/./g, "").replace(",", "."));
+        if (!Number.isFinite(value) || value === 0) break;
+        jobs.push({ node: n, pre: n.data.slice(0, m.index), post: n.data.slice((m.index ?? 0) + raw.length), value, dec });
+        break;
+      }
+    });
+    if (!jobs.length) return;
+    const fmt = (v: number, dec: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+    const t0 = performance.now(), dur = 1100;
+    let raf = 0;
+    const step = (t: number) => {
+      const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 4);
+      for (const j of jobs) j.node.data = j.pre + fmt(j.value * e, j.dec) + j.post;
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => { cancelAnimationFrame(raf); for (const j of jobs) j.node.data = j.pre + fmt(j.value, j.dec) + j.post; };
+  }, [path]);
+  return null;
 }

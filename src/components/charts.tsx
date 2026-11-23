@@ -13,10 +13,10 @@ function niceMax(v: number) {
   const p = 10 ** Math.floor(Math.log10(v)), n = v / p;
   return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p;
 }
-/** Barra com o topo arredondado e a base reta. */
+/** Barra em cápsula: topo totalmente arredondado, base com cantos suaves. */
 const bar = (x: number, y: number, w: number, h: number) => {
   if (h <= 0) return "";
-  const r = Math.min(w / 2, 5, h);
+  const r = Math.min(w / 2, h);
   return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
 };
 
@@ -51,9 +51,11 @@ export function BarChart({ data, labelEvery, labels, money = true }: { data: { d
             <rect className="hit" x={x} y={pt} width={bw} height={H - pb - pt} />
             <title>{`${labels?.[i] ?? dd(d.date)} · ${f(d.a)}${two ? ` · despesas ${f(d.b ?? 0)}` : ""}`}</title>
             {i === best && d.a > 0 ? <path d={bar(xa, H - pb - hA, w, hA)} fill={`url(#a${id})`} filter={`url(#g${id})`} opacity="0.55" /> : null}
-            <path className="bA" d={bar(xa, H - pb - hA, w, hA)} fill={`url(#a${id})`} />
-            {two ? <path className="bB" d={bar(x + bw * 0.52, H - pb - hB, w, hB)} fill={`url(#b${id})`} /> : null}
-            {d.a > 0 ? <text className="val" x={xa + w / 2} y={H - pb - hA - 5} textAnchor="middle">{money ? fmtShort(d.a) : d.a}</text> : null}
+            <path className="bA" d={bar(xa, H - pb - hA, w, hA)} fill={`url(#a${id})`} style={{ ["--i" as string]: i }} />
+            {i === best && d.a > 0 && w >= 6 ? <circle className="cap" cx={xa + w / 2} cy={H - pb - hA + Math.min(w / 2, hA / 2)} r={Math.min(3, w / 4)} /> : null}
+            {two ? <path className="bB" d={bar(x + bw * 0.52, H - pb - hB, w, hB)} fill={`url(#b${id})`} style={{ ["--i" as string]: i }} /> : null}
+            {i === best && d.a > 0 ? <g className="tip" transform={`translate(${Math.min(Math.max(xa + w / 2, pl + 34), W - 34)},${Math.max(H - pb - hA - 16, 12)})`}><rect x="-32" y="-11" width="64" height="19" rx="9.5" /><text x="0" y="3" textAnchor="middle">{money ? fmtShort(d.a) : d.a}</text></g> : null}
+            {d.a > 0 && i !== best ? <text className="val" x={xa + w / 2} y={H - pb - hA - 5} textAnchor="middle">{money ? fmtShort(d.a) : d.a}</text> : null}
             {i % every === 0 ? <text x={x + bw / 2} y={H - 6} textAnchor="middle">{labels?.[i] ?? dd(d.date)}</text> : null}
           </g>
         );
@@ -103,13 +105,14 @@ export function LineChart({ data, estimateFrom }: { data: { date: string; v: num
       {min < 0 ? <line x1={pl} x2={W} y1={y(0)} y2={y(0)} className="zero" /> : null}
       {real.length > 1 ? <path d={`${smooth(real)} L${real[real.length - 1][0].toFixed(1)},${base.toFixed(1)} L${real[0][0].toFixed(1)},${base.toFixed(1)} Z`} fill={`url(#ar${id})`} /> : null}
       {real.length > 1 ? <path d={smooth(real)} fill="none" stroke={`url(#ln${id})`} strokeWidth="6" opacity="0.35" filter={`url(#gl${id})`} /> : null}
-      {real.length > 1 ? <path className="line" d={smooth(real)} stroke={`url(#ln${id})`} /> : null}
+      {real.length > 1 ? <path className="line" d={smooth(real)} stroke={`url(#ln${id})`} pathLength={1} /> : null}
       {est.length > 1 ? <path className="line2" d={smooth(est)} /> : null}
       {data.map((d, i) => (
         <g key={d.date} className="pt"><rect className="hit" x={x(i) - (W - pl) / data.length / 2} y={pt} width={(W - pl) / data.length} height={H - pb - pt} /><title>{`${dd(d.date)} · ${fmtBRL(d.v)}`}</title><circle cx={x(i)} cy={y(d.v)} r="3.5" /></g>
       ))}
+      {real.map((p, i) => (i % Math.max(1, Math.ceil(real.length / 6)) === 0 && i < real.length - 1 ? <circle key={"m" + i} className="mk" cx={p[0]} cy={p[1]} r="4.5" style={{ ["--i" as string]: i }} /> : null))}
       <circle className="now" cx={last[0]} cy={last[1]} r="5" />
-      <g transform={`translate(${Math.min(last[0], W - 60)},${Math.max(last[1] - 14, 10)})`}><rect className="tag" x="-36" y="-11" width="72" height="18" rx="4" /><text className="tagt" x="0" y="2" textAnchor="middle">{fmtShort(lastV)}</text></g>
+      <g transform={`translate(${Math.min(last[0], W - 60)},${Math.max(last[1] - 14, 10)})`}><rect className="tag" x="-36" y="-11" width="72" height="18" rx="9" /><text className="tagt" x="0" y="2" textAnchor="middle">{fmtShort(lastV)}</text></g>
       {data.map((d, i) => (i % every === 0 ? <text key={d.date + "l"} x={x(i)} y={H - 6} textAnchor="middle">{dd(d.date)}</text> : null))}
     </svg>
   );

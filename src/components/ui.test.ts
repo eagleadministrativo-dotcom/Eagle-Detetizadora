@@ -11,7 +11,7 @@ describe("componentes de interface", () => {
     const out = html(h(KpiCard, { k: kpi, href: "/relatorios/revenue", hero: "olive" }));
     expect(out).toContain("R$");
     expect(out).toContain("7.720,00");
-    expect(out).toContain("vs período anterior");
+    expect(out).toContain("vs anterior");
     expect(out).toContain('href="/relatorios/revenue"');
     expect(out).toContain("kpi hero olive");
   });

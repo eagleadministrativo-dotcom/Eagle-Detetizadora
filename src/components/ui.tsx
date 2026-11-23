@@ -101,7 +101,7 @@ export function KpiCard({ k, href, hero }: { k: Kpi; href: string; hero?: "olive
   let delta: ReactNode = null;
   if (k.previous != null && k.value != null && k.previous !== 0) {
     const d = ((k.value - k.previous) / Math.abs(k.previous)) * 100;
-    delta = <div className={`delta ${d >= 0 ? "up" : "down"}`}>{d >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(d), 0)} vs período anterior</div>;
+    delta = <div className={`delta ${d >= 0 ? "up" : "down"}`}>{d >= 0 ? "▲" : "▼"} {fmtPct(Math.abs(d), 0)} vs anterior</div>;
   } else if (k.previous != null) delta = <div className="delta">Anterior: {unitFmt(k, k.previous)}</div>;
   return (
     <Link className={`kpi${hero ? ` hero ${hero}` : ""}`} href={href} title={k.definition}>
