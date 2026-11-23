@@ -10,6 +10,12 @@ export const COOKIE = "marfim_session";
 export async function setSessionCookie(token: string) {
   (await cookies()).set(COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 12 * 3600 });
 }
+/** Tema em cookie: o servidor já entrega a página no tema certo, sem clarão. */
+export const THEME_COOKIE = "marfim_theme";
+export async function setThemeCookie(theme: "auto" | "claro" | "escuro") {
+  const v = theme === "claro" ? "light" : theme === "escuro" ? "dark" : "auto";
+  (await cookies()).set(THEME_COOKIE, v, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 365 * 86400 });
+}
 export async function clearSessionCookie() {
   (await cookies()).delete(COOKIE);
 }

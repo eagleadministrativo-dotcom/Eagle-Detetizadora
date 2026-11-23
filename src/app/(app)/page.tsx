@@ -128,7 +128,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<SP>
           {dash.revenueByDay.some((d) => d.cents || d.expenses) ? (
             <>
               <BarChart data={dash.revenueByDay.map((d) => ({ date: d.date, a: d.cents, b: full ? d.expenses : undefined }))} />
-              {full ? <div className="legend"><span><i style={{ background: "var(--chart-1)" }} />Receita operacional</span><span><i style={{ background: "var(--chart-2)", opacity: 0.7 }} />Custos e despesas (competência)</span></div> : null}
+              {full ? <div className="legend"><span><i style={{ background: "var(--chart-1)" }} />Receita de serviços</span><span><i style={{ background: "var(--chart-2)", opacity: 0.7 }} />Custos e despesas (competência)</span></div> : null}
             </>
           ) : <Empty title="Sem movimento no período">Nenhum atendimento concluído nem lançamento neste intervalo.</Empty>}
         </section>
@@ -136,7 +136,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<SP>
           <section className="card editorial">
             <h2>Evolução do resultado (acumulado)</h2>
             {dash.resultSeries.length > 1 ? <LineChart data={dash.resultSeries.map((d) => ({ date: d.date, v: d.cents }))} /> : <Empty title="Período curto demais para a evolução" />}
-            <small>Receita operacional − custos e despesas lançados por competência.</small>
+            <small>Receita de serviços e produtos − custos e despesas lançados por competência.</small>
           </section>
         ) : (
           <section className="card">

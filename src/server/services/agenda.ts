@@ -3,18 +3,21 @@ import { audit, can, getSettings, need, requireText, requireUuid } from "../core
 import { DomainError, ForbiddenError } from "../errors";
 import type { Ctx } from "../permissions";
 import { priceAt } from "./catalog";
+import { emit } from "./events";
+import { refreshReturn } from "./returns";
 import { dayOfWeek, toYmd, atLocal } from "@/lib/dates";
 
 export interface AppointmentRow {
   id: string; customer_id: string; customer_name: string; customer_phone: string | null; customer_notes: string | null;
   staff_id: string; staff_name: string; staff_color: string; chair_id: string; chair_name: string;
   starts_at: Date; ends_at: Date; status: string; notes: string | null; cancellation_reason: string | null;
-  services: string; total_cents: number; attendance_id: string | null;
+  services: string; total_cents: number; attendance_id: string | null; series_id: string | null;
 }
 
 const ACTIVE = "('agendado','em_atendimento','concluido')";
 
-function assertManage(ctx: Ctx, staffId: string) {
+export function assertManage(ctx: Ctx, staffId: string, action: "agenda.create" | "agenda.edit" | "agenda.cancel" = "agenda.edit") {
+  if (!can(ctx, action)) throw new ForbiddenError("Seu acesso não permite esta ação na agenda.");
   if (can(ctx, "agenda.manage")) return;
   if (can(ctx, "agenda.manage_own") && ctx.staffId && ctx.staffId === staffId) return;
   throw new ForbiddenError("Você só pode alterar a sua própria agenda.");
@@ -92,8 +95,8 @@ async function resolveServices(q: Q, unitId: string, staffId: string, serviceIds
 
 export interface CreateAppointmentInput { customerId: string; staffId: string; chairId?: string | null; startsAt: Date; serviceIds: string[]; notes?: string | null }
 
-export async function createAppointmentTx(q: Q, ctx: Ctx, input: CreateAppointmentInput): Promise<string> {
-  assertManage(ctx, input.staffId);
+export async function createAppointmentTx(q: Q, ctx: Ctx, input: CreateAppointmentInput, opts: { silent?: boolean; seriesId?: string } = {}): Promise<string> {
+  assertManage(ctx, input.staffId, "agenda.create");
   requireUuid(input.customerId, "Cliente");
   requireUuid(input.staffId, "Profissional");
   const [cust] = await q<{ is_active: boolean }>("select is_active from customers where id=$1 and unit_id=$2", [input.customerId, ctx.unitId]);
@@ -121,14 +124,14 @@ export async function createAppointmentTx(q: Q, ctx: Ctx, input: CreateAppointme
     if (!chairId) throw lastErr;
   }
   const [a] = await q<{ id: string }>(
-    "insert into appointments(unit_id,customer_id,staff_id,chair_id,starts_at,ends_at,notes,created_by,updated_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$8) returning id",
-    [ctx.unitId, input.customerId, input.staffId, chairId, input.startsAt, endsAt, input.notes ?? null, ctx.userId],
+    "insert into appointments(unit_id,customer_id,staff_id,chair_id,starts_at,ends_at,notes,created_by,updated_by,series_id) values ($1,$2,$3,$4,$5,$6,$7,$8,$8,$9) returning id",
+    [ctx.unitId, input.customerId, input.staffId, chairId, input.startsAt, endsAt, input.notes ?? null, ctx.userId, opts.seriesId ?? null],
   );
   for (const s of svcs) {
     await q("insert into appointment_services(appointment_id,service_id,name_snapshot,price_cents,duration_minutes) values ($1,$2,$3,$4,$5)", [a.id, s.id, s.name, s.price, s.minutes]);
   }
   await audit(q, ctx, "AGENDAMENTO_CRIADO", "appointment", a.id, null, { customer: input.customerId, staff: input.staffId, chair: chairId, starts_at: input.startsAt, ends_at: endsAt, services: svcs.map((s) => s.name) });
-  await notifyAppointment(q, ctx, a.id, "novo_agendamento", "Novo agendamento", svcs.map((s) => s.name).join(", "));
+  if (!opts.silent) await notifyAppointment(q, ctx, a.id, "novo_agendamento", "Novo agendamento", svcs.map((s) => s.name).join(", "));
   return a.id;
 }
 
@@ -142,9 +145,9 @@ async function notifyAppointment(q: Q, ctx: Ctx, id: string, kind: "novo_agendam
   const when = r.starts_at.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   const msg = `${verb}: ${r.cname} com ${r.sname} em ${when}${extra ? ` (${extra})` : ""}.`;
   const key = `${kind}:${id}:${Date.now()}`;
-  await q("insert into notifications(unit_id,kind,severity,message,ref_entity,ref_id,dedupe_key) values ($1,$2,$3,$4,'appointment',$5,$6)", [ctx.unitId, kind, kind === "agendamento_cancelado" ? "atencao" : "info", msg, id, key]);
+  await q("insert into notifications(unit_id,kind,severity,message,ref_entity,ref_id,dedupe_key,url) values ($1,$2,$3,$4,'appointment',$5,$6,'/agenda/' || $5)", [ctx.unitId, kind, kind === "agendamento_cancelado" ? "atencao" : "info", msg, id, key]);
   if (r.user_id && r.user_id !== ctx.userId) {
-    await q("insert into notifications(unit_id,user_id,kind,severity,message,ref_entity,ref_id,dedupe_key) values ($1,$2,$3,$4,$5,'appointment',$6,$7)", [ctx.unitId, r.user_id, kind, kind === "agendamento_cancelado" ? "atencao" : "info", msg, id, key + ":staff"]);
+    await q("insert into notifications(unit_id,user_id,kind,severity,message,ref_entity,ref_id,dedupe_key,url) values ($1,$2,$3,$4,$5,'appointment',$6,$7,'/agenda/' || $6)", [ctx.unitId, r.user_id, kind, kind === "agendamento_cancelado" ? "atencao" : "info", msg, id, key + ":staff"]);
   }
 }
 
@@ -158,24 +161,35 @@ export async function createAppointment(db: Db, ctx: Ctx, input: CreateAppointme
   }
 }
 
-export async function rescheduleAppointment(db: Db, ctx: Ctx, id: string, input: { startsAt: Date; staffId?: string; chairId?: string; reason?: string }) {
+export interface RescheduleInput { startsAt: Date; staffId?: string; chairId?: string; reason?: string; minutes?: number }
+
+export async function rescheduleTx(q: Q, ctx: Ctx, id: string, input: RescheduleInput, silent = false) {
+  const [a] = await q<{ staff_id: string; chair_id: string; starts_at: Date; ends_at: Date; status: string }>("select staff_id,chair_id,starts_at,ends_at,status from appointments where id=$1 and unit_id=$2 for update", [id, ctx.unitId]);
+  if (!a) throw new DomainError("not_found", "Agendamento não encontrado.");
+  if (a.status !== "agendado") throw new DomainError("bad_status", "Só é possível reagendar atendimentos com status Agendado.");
+  const staffId = input.staffId ?? a.staff_id;
+  assertManage(ctx, a.staff_id);
+  assertManage(ctx, staffId);
+  if (Number.isNaN(input.startsAt.getTime())) throw new DomainError("invalid", "Data inválida.");
+  await checkRetroactive(q, ctx, input.startsAt);
+  if (input.minutes != null && (!Number.isInteger(input.minutes) || input.minutes < 5 || input.minutes > 720)) throw new DomainError("invalid", "Duração inválida.");
+  const duration = input.minutes != null ? input.minutes * 60000 : a.ends_at.getTime() - a.starts_at.getTime();
+  const endsAt = new Date(input.startsAt.getTime() + duration);
+  const chairId = input.chairId ?? a.chair_id;
+  if (staffId !== a.staff_id) {
+    // o novo profissional precisa realizar todos os serviços reservados
+    const [no] = await q<{ name: string }>("select s.name from appointment_services x join services s on s.id=x.service_id where x.appointment_id=$1 and exists (select 1 from service_staff ss where ss.service_id=s.id) and not exists (select 1 from service_staff ss where ss.service_id=s.id and ss.staff_id=$2) limit 1", [id, staffId]);
+    if (no) throw new DomainError("staff_not_allowed", `Este profissional não realiza "${no.name}".`);
+  }
+  await validateSlot(q, { unitId: ctx.unitId, staffId, chairId, startsAt: input.startsAt, endsAt, excludeId: id });
+  await q("update appointments set staff_id=$2, chair_id=$3, starts_at=$4, ends_at=$5, updated_at=now(), updated_by=$6, reminder_sent_at=case when starts_at=$4 then reminder_sent_at end, reminder_channel=case when starts_at=$4 then reminder_channel end where id=$1", [id, staffId, chairId, input.startsAt, endsAt, ctx.userId]);
+  await audit(q, ctx, "AGENDAMENTO_REAGENDADO", "appointment", id, { staff_id: a.staff_id, chair_id: a.chair_id, starts_at: a.starts_at, ends_at: a.ends_at }, { staff_id: staffId, chair_id: chairId, starts_at: input.startsAt, ends_at: endsAt }, input.reason);
+  if (!silent) await notifyAppointment(q, ctx, id, "agendamento_reagendado", "Agendamento reagendado");
+}
+
+export async function rescheduleAppointment(db: Db, ctx: Ctx, id: string, input: RescheduleInput) {
   try {
-    await db.tx(async (q) => {
-      const [a] = await q<{ staff_id: string; chair_id: string; starts_at: Date; ends_at: Date; status: string }>("select staff_id,chair_id,starts_at,ends_at,status from appointments where id=$1 and unit_id=$2 for update", [id, ctx.unitId]);
-      if (!a) throw new DomainError("not_found", "Agendamento não encontrado.");
-      if (a.status !== "agendado") throw new DomainError("bad_status", "Só é possível reagendar atendimentos com status Agendado.");
-      const staffId = input.staffId ?? a.staff_id;
-      assertManage(ctx, a.staff_id);
-      assertManage(ctx, staffId);
-      await checkRetroactive(q, ctx, input.startsAt);
-      const duration = a.ends_at.getTime() - a.starts_at.getTime();
-      const endsAt = new Date(input.startsAt.getTime() + duration);
-      const chairId = input.chairId ?? a.chair_id;
-      await validateSlot(q, { unitId: ctx.unitId, staffId, chairId, startsAt: input.startsAt, endsAt, excludeId: id });
-      await q("update appointments set staff_id=$2, chair_id=$3, starts_at=$4, ends_at=$5, updated_at=now(), updated_by=$6 where id=$1", [id, staffId, chairId, input.startsAt, endsAt, ctx.userId]);
-      await audit(q, ctx, "AGENDAMENTO_REAGENDADO", "appointment", id, { staff_id: a.staff_id, chair_id: a.chair_id, starts_at: a.starts_at }, { staff_id: staffId, chair_id: chairId, starts_at: input.startsAt }, input.reason);
-      await notifyAppointment(q, ctx, id, "agendamento_reagendado", "Agendamento reagendado");
-    });
+    await db.tx((q) => rescheduleTx(q, ctx, id, input));
   } catch (e) {
     if ((e as { code?: string }).code === "23P01") throw new DomainError("conflict", "Esse horário acabou de ser ocupado por outro operador. Escolha outro.");
     throw e;
@@ -187,11 +201,14 @@ export async function cancelAppointment(db: Db, ctx: Ctx, id: string, reason: st
   await db.tx(async (q) => {
     const [a] = await q<{ staff_id: string; status: string; starts_at: Date }>("select staff_id,status,starts_at from appointments where id=$1 and unit_id=$2 for update", [id, ctx.unitId]);
     if (!a) throw new DomainError("not_found", "Agendamento não encontrado.");
-    assertManage(ctx, a.staff_id);
+    assertManage(ctx, a.staff_id, "agenda.cancel");
     if (a.status !== "agendado") throw new DomainError("bad_status", "Só é possível cancelar agendamentos com status Agendado.");
     await q("update appointments set status='cancelado', cancellation_reason=$2, cancelled_by=$3, cancelled_at=now(), updated_at=now(), updated_by=$3 where id=$1", [id, why, ctx.userId]);
     await audit(q, ctx, "AGENDAMENTO_CANCELADO", "appointment", id, { status: a.status }, { status: "cancelado" }, why);
     await notifyAppointment(q, ctx, id, "agendamento_cancelado", "Agendamento cancelado", why);
+    const [cu] = await q<{ customer_id: string }>("select customer_id from appointments where id=$1", [id]);
+    await emit(q, ctx, "appointment.cancelled", "appointment", id, { customerId: cu.customer_id, staffId: a.staff_id }, `appointment.cancelled:${id}`);
+    await refreshReturn(q, ctx.unitId, cu.customer_id);
   });
 }
 
@@ -218,8 +235,9 @@ export async function listAppointments(db: Db, ctx: Ctx, range: { from: Date; to
     if (!ctx.staffId) return [];
     staffId = ctx.staffId;
   }
+  const contact = can(ctx, "customers.view");
   return db.query<AppointmentRow>(
-    `select a.id, a.customer_id, c.name as customer_name, c.phone as customer_phone, c.notes as customer_notes,
+    `select a.id, a.series_id, a.customer_id, c.name as customer_name, ${contact ? "c.phone" : "null::text"} as customer_phone, ${contact ? "c.notes" : "null::text"} as customer_notes,
        a.staff_id, s.name as staff_name, s.color as staff_color, a.chair_id, ch.name as chair_name,
        a.starts_at, a.ends_at, a.status, a.notes, a.cancellation_reason,
        coalesce((select string_agg(x.name_snapshot, ' + ' order by x.name_snapshot) from appointment_services x where x.appointment_id=a.id),'') as services,

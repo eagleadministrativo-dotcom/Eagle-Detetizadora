@@ -14,7 +14,7 @@ const SIZE = 50;
 
 export default async function PayablesPage({ searchParams }: { searchParams: Promise<{ f?: string; p?: string; ok?: string; erro?: string; nova?: string }> }) {
   const sp = await searchParams;
-  const { ctx } = await requirePerm("finance.view");
+  const { ctx } = await requirePerm("finance.view", "finance.payables_view");
   const db = await getDb();
   const filter = sp.f === "pagas" ? "pagas" : sp.f === "todas" ? "todas" : "abertas";
   const page = Math.max(1, Number(sp.p) || 1);

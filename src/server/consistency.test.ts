@@ -66,7 +66,9 @@ describe("consistência do mês simulado", () => {
     const dash = await getDashboard(db, owner, P);
     const k = (key: string) => dash.kpis.find((x) => x.key === key)!;
     const drill = await indicatorRecords(db, owner, "revenue", P);
-    expect(dre.netRevenue - dre.otherRevenue).toBe(k("revenue").value);
+    // a DRE soma serviços e produtos; cada painel mostra os dois separados
+    expect(dre.netRevenue - dre.otherRevenue).toBe(k("revenue").value! + k("products").value!);
+    expect((await indicatorRecords(db, owner, "products", P)).total).toBe(k("products").value);
     expect(drill.total).toBe(k("revenue").value);
     expect(drill.rows.length).toBe(k("attendances").value);
     const bySeries = dash.revenueByDay.reduce((a, d) => a + d.cents, 0);

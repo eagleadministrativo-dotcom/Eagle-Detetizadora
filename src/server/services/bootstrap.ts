@@ -1,8 +1,8 @@
 import type { Db, Q } from "../db";
 import { audit, need, requireText } from "../core";
 import { checkPasswordStrength, hashPassword } from "../auth";
-import { DomainError } from "../errors";
-import { GRANTABLE, type Ctx, type Role } from "../permissions";
+import { DomainError, ForbiddenError } from "../errors";
+import { GRANTABLE, ROLE_PERMISSIONS, type Ctx, type Role } from "../permissions";
 
 export async function isSetupDone(db: Db): Promise<boolean> {
   const [r] = await db.query<{ n: number }>("select count(*) as n from users");
@@ -95,12 +95,19 @@ async function activeOwners(q: Q, unitId: string, excluding?: string): Promise<n
   return r.n;
 }
 
+/** Quem recebeu "gerenciar usuários" não cria nem promove alguém acima de si. */
+function assertRoleGrant(ctx: Ctx, role: Role) {
+  if (ctx.role === "proprietario") return;
+  if (role === "proprietario" || [...ROLE_PERMISSIONS[role]].some((p) => !ctx.perms.has(p) && p !== "tasks.own" && !p.endsWith(".own") && !p.endsWith("_own"))) throw new ForbiddenError("Você não pode conceder um perfil com mais acesso que o seu.");
+}
+
 export async function createUser(db: Db, ctx: Ctx, input: { email: string; fullName: string; role: Role; password: string; staffId?: string | null }) {
   need(ctx, "users.manage");
   const email = requireText(input.email, "E-mail").toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new DomainError("invalid", "E-mail inválido.");
   const fullName = requireText(input.fullName, "Nome");
   if (!["proprietario", "gerente", "barbeiro", "contador"].includes(input.role)) throw new DomainError("invalid", "Perfil inválido.");
+  assertRoleGrant(ctx, input.role);
   checkPasswordStrength(input.password);
   return db.tx(async (q) => {
     const [dup] = await q("select 1 from users where lower(email)=$1", [email]);
@@ -118,6 +125,13 @@ export async function updateUser(db: Db, ctx: Ctx, userId: string, patch: { role
   await db.tx(async (q) => {
     const [cur] = await q<{ role: Role; is_active: boolean }>("select uu.role, u.is_active from users u join user_units uu on uu.user_id=u.id where u.id=$1 and uu.unit_id=$2 for update of u", [userId, ctx.unitId]);
     if (!cur) throw new DomainError("not_found", "Usuário não encontrado.");
+    if (ctx.role !== "proprietario" && (cur.role === "proprietario" || userId === ctx.userId)) throw new ForbiddenError("Só o proprietário pode alterar este acesso.");
+    if (patch.role && patch.role !== cur.role) {
+      assertRoleGrant(ctx, patch.role);
+      // trocar o perfil base recomeça do padrão: exceções do perfil antigo não vazam para o novo
+      if (!patch.overrides) await q("delete from permission_overrides where user_id=$1 and unit_id=$2", [userId, ctx.unitId]);
+      await q("update user_units set profile_id=null where user_id=$1 and unit_id=$2", [userId, ctx.unitId]);
+    }
     const newRole = patch.role ?? cur.role;
     const newActive = patch.isActive ?? cur.is_active;
     if ((cur.role === "proprietario" && cur.is_active) && (newRole !== "proprietario" || !newActive)) {
@@ -144,8 +158,9 @@ export async function resetUserPassword(db: Db, ctx: Ctx, userId: string, newPas
   need(ctx, "users.manage");
   checkPasswordStrength(newPassword);
   await db.tx(async (q) => {
-    const [u] = await q("select 1 from user_units where user_id=$1 and unit_id=$2", [userId, ctx.unitId]);
+    const [u] = await q<{ role: Role }>("select role from user_units where user_id=$1 and unit_id=$2", [userId, ctx.unitId]);
     if (!u) throw new DomainError("not_found", "Usuário não encontrado.");
+    if (ctx.role !== "proprietario" && u.role === "proprietario") throw new ForbiddenError("Só o proprietário redefine a senha do proprietário.");
     await q("update users set password_hash=$2, failed_attempts=0, locked_until=null, mfa_enabled=false, mfa_secret=null where id=$1", [userId, hashPassword(newPassword)]);
     await q("delete from sessions where user_id=$1", [userId]);
     await audit(q, ctx, "SENHA_REDEFINIDA", "user", userId);

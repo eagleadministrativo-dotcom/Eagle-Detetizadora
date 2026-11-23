@@ -6,10 +6,11 @@ import { listCustomers } from "@/server/services/customers";
 import { fmtBRL } from "@/lib/money";
 import { todayYmd } from "@/lib/dates";
 import { Empty, Field, Flash, PageHead, Seg } from "@/components/ui";
+import { ReturnPlan } from "@/components/client";
 import { createAppointmentAction, createBlockAction, quickAttendanceAction } from "@/app/actions/agenda";
 
 export const metadata = { title: "Novo agendamento" };
-type SP = { d?: string; t?: string; s?: string; c?: string; cust?: string; svc?: string; imediato?: string; bloqueio?: string; ok?: string; erro?: string };
+type SP = { d?: string; t?: string; te?: string; s?: string; c?: string; cust?: string; svc?: string; imediato?: string; bloqueio?: string; ok?: string; erro?: string };
 
 export default async function NewAppointment({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
@@ -91,6 +92,7 @@ export default async function NewAppointment({ searchParams }: { searchParams: P
             <Field label="Hora"><input type="time" name="time" step={900} defaultValue={sp.t ?? ""} required /></Field>
           </div>
           <Field label="Observações (opcional)"><textarea name="notes" /></Field>
+          <ReturnPlan />
           <small>O sistema impede conflito de cadeira e de profissional, respeita a escala e os bloqueios e calcula o término pela duração dos serviços.</small>
           <div className="sticky-actions"><button className="btn accent" type="submit">Confirmar agendamento</button></div>
         </form>
@@ -110,15 +112,15 @@ export default async function NewAppointment({ searchParams }: { searchParams: P
         <form action={createBlockAction} className="card form">
           <div className="fields">
             <Field label="Data"><input type="date" name="date" defaultValue={d} required /></Field>
-            <Field label="De"><input type="time" name="from" step={900} required /></Field>
-            <Field label="Até (mesma data)"><input type="time" name="to" step={900} required /></Field>
+            <Field label="De"><input type="time" name="from" step={900} defaultValue={sp.t ?? ""} required /></Field>
+            <Field label="Até (mesma data)"><input type="time" name="to" step={900} defaultValue={sp.te ?? ""} required /></Field>
           </div>
           <div className="fields">
             <Field label="Cadeira (opcional)">
-              <select name="chairId" defaultValue=""><option value="">Todas</option>{chairs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+              <select name="chairId" defaultValue={sp.c ?? ""}><option value="">Todas</option>{chairs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
             </Field>
             <Field label="Profissional (opcional)">
-              <select name="staffId" defaultValue=""><option value="">Todos</option>{cat.staff.filter((s) => s.is_active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+              <select name="staffId" defaultValue={sp.s ?? ""}><option value="">Todos</option>{cat.staff.filter((s) => s.is_active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
             </Field>
           </div>
           <Field label="Motivo"><input name="reason" placeholder="Ex.: almoço, manutenção, folga" required /></Field>

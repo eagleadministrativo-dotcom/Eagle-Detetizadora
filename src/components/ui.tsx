@@ -55,11 +55,11 @@ const APPT: Record<string, [Tone, string]> = {
 };
 export const ApptBadge = ({ s }: { s: string }) => <Badge tone={APPT[s]?.[0]}>{APPT[s]?.[1] ?? s}</Badge>;
 
-export function Seg({ items }: { items: { href: string; label: string; active: boolean }[] }) {
+export function Seg({ items }: { items: { href: string; label: string; active: boolean; n?: number }[] }) {
   return (
     <div className="seg">
       {items.map((i) => (
-        <Link key={i.href + i.label} href={i.href} aria-current={i.active ? "true" : undefined}>{i.label}</Link>
+        <Link key={i.href + i.label} href={i.href} aria-current={i.active ? "true" : undefined}>{i.label}{i.n != null ? <span className="n">{i.n}</span> : null}</Link>
       ))}
     </div>
   );
@@ -123,6 +123,26 @@ export function Field({ label, children }: { label: string; children: ReactNode 
       {label}
       {children}
     </label>
+  );
+}
+
+export function Stat({ label, value, hint, tone = "" }: { label: string; value: ReactNode; hint?: ReactNode; tone?: "" | "hi" | "ol" }) {
+  return <div className={`stat ${tone}`} data-spot="">{<span className="l">{label}</span>}<span className="v">{value}</span>{hint ? <span className="h">{hint}</span> : null}</div>;
+}
+
+/** Escolha de período: atalhos + intervalo livre. `keep` preserva outros filtros. */
+export function PeriodBar({ base, preset, presets, p, keep = {} }: { base: string; preset: string; presets: readonly (readonly [string, string])[]; p: { start: string; end: string }; keep?: Record<string, string> }) {
+  const qs = (o: Record<string, string>) => `${base}?${new URLSearchParams({ ...keep, ...o }).toString()}`;
+  return (
+    <div className="calbar">
+      <Seg items={presets.map(([k, label]) => ({ href: qs({ r: k }), label, active: preset === k }))} />
+      <form className="filters" method="get" action={base}>
+        {Object.entries(keep).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
+        <label>De<input type="date" name="de" defaultValue={p.start} /></label>
+        <label>Até<input type="date" name="ate" defaultValue={p.end} /></label>
+        <button className="btn ghost" type="submit">Aplicar</button>
+      </form>
+    </div>
   );
 }
 

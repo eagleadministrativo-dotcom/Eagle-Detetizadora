@@ -6,7 +6,13 @@ import { getDb } from "@/server/db";
 import { requireSession } from "@/server/session";
 import { can } from "@/server/core";
 import { ROLE_LABEL } from "@/server/permissions";
-import { runDailyJobs, unreadCount } from "@/server/services/ops";
+import { runDailyJobs } from "@/server/services/ops";
+import { unreadCount } from "@/server/services/notify";
+import { getPrefs } from "@/server/services/access";
+import { taskCounts } from "@/server/services/tasks";
+import { returnCounts } from "@/server/services/returns";
+import { processEvents } from "@/server/services/events";
+import { CommandPalette, Spotlight, ThemePicker } from "@/components/client";
 import { logoutAction } from "@/app/actions/auth";
 import { Icon } from "@/components/icons";
 import { BottomNav, SideNav, SideToggle, type NavGroup, type NavItem } from "@/components/nav";
@@ -17,9 +23,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { ctx } = s;
   const db = await getDb();
   if (can(ctx, "finance.view")) await runDailyJobs(db, ctx.unitId).catch((e) => console.error("[rotina diaria]", e));
-  const unread = await unreadCount(db, ctx);
+  const seesReturns = can(ctx, "returns.view_all") || can(ctx, "returns.own");
+  const [unread, tasks, returns, prefs] = await Promise.all([unreadCount(db, ctx), taskCounts(db, ctx), seesReturns ? returnCounts(db, ctx) : Promise.resolve({} as Record<string, number>), getPrefs(db, ctx.userId)]);
   // Envia por push os avisos novos, depois que a página já respondeu (não atrasa a tela).
   after(async () => {
+    await processEvents(db).catch((e) => console.error("[eventos]", e));
     await runReminders(db).catch((e) => console.error("[lembretes]", e));
     await flushPush(db).catch((e) => console.error("[push]", e));
   });
@@ -30,10 +38,27 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (can(ctx, "agenda.view_all") || can(ctx, "agenda.view_own")) main.push({ href: "/agenda", label: "Agenda" });
   if (can(ctx, "attendance.view_all") || can(ctx, "attendance.view_own")) main.push({ href: "/atendimentos", label: "Atendimentos", short: "Atend." });
   if (can(ctx, "customers.view")) main.push({ href: "/clientes", label: "Clientes" });
+  main.push({ href: "/tarefas", label: "Tarefas", count: tasks.open });
+  if (seesReturns) main.push({ href: "/retornos", label: "Retornos", count: returns.vencido });
   groups.push({ items: main });
+  const mine: NavItem[] = [];
+  if (ctx.staffId && can(ctx, "finance.own")) mine.push({ href: "/meu-financeiro", label: "Meu Financeiro" });
+  if (ctx.staffId && can(ctx, "achievements.own")) mine.push({ href: "/conquistas", label: "Conquistas" });
+  if (mine.length) groups.push({ title: "Meu desempenho", items: mine });
+  const op: NavItem[] = [];
+  if (can(ctx, "products.view") || can(ctx, "products.sell") || can(ctx, "products.manage")) op.push({ href: "/produtos", label: "Produtos" });
+  if (can(ctx, "commissions.view_all")) op.push({ href: "/comissoes", label: "Comissões" });
+  if (can(ctx, "team.view")) op.push({ href: "/equipe", label: "Painel da equipe" });
+  if (op.length) groups.push({ title: "Gestão", items: op });
   const fin: NavItem[] = [];
+  if (!can(ctx, "finance.view")) {
+    if (can(ctx, "finance.payables_view")) fin.push({ href: "/financeiro/pagar", label: "Contas a pagar" });
+    if (can(ctx, "finance.receivables_view")) fin.push({ href: "/financeiro/receber", label: "Contas a receber" });
+    if (can(ctx, "finance.dre_view")) fin.push({ href: "/financeiro/dre", label: "DRE gerencial" });
+    if (fin.length && !can(ctx, "cash.manage")) groups.push({ title: "Financeiro", items: fin });
+  }
   if (can(ctx, "finance.view") || can(ctx, "cash.manage")) {
-    fin.push({ href: "/financeiro", label: "Resumo" }, { href: "/financeiro/caixa", label: "Caixa" });
+    fin.unshift({ href: "/financeiro", label: "Resumo" }, { href: "/financeiro/caixa", label: "Caixa" });
     if (can(ctx, "finance.view")) fin.push(
       { href: "/financeiro/pagar", label: "Contas a pagar" }, { href: "/financeiro/receber", label: "Contas a receber" },
       { href: "/financeiro/conciliacao", label: "Conciliação" }, { href: "/financeiro/dre", label: "DRE gerencial" },
@@ -52,8 +77,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (adm.length) groups.push({ title: "Administração", items: adm });
 
   const all = groups.flatMap((g) => g.items);
-  const primary = main.slice(0, 4);
+  // no celular: agenda, atendimentos, tarefas e retornos primeiro
+  const order = ["/agenda", "/atendimentos", "/tarefas", "/retornos", "/", "/clientes"];
+  const primary = order.map((h) => main.find((i) => i.href === h)).filter((i): i is NavItem => !!i).slice(0, 4);
   const more = all.filter((i) => !primary.includes(i));
+
+  const quick = [
+    can(ctx, "agenda.create") && (can(ctx, "agenda.manage") || can(ctx, "agenda.manage_own")) && { title: "Novo agendamento", href: "/agenda/novo" },
+    can(ctx, "customers.manage") && { title: "Novo cliente", href: "/clientes/novo" },
+    can(ctx, "products.sell") && { title: "Registrar venda", href: "/produtos/vender" },
+    can(ctx, "tasks.create") && { title: "Nova tarefa", href: "/tarefas/nova" },
+    seesReturns && { title: "Consultar retornos", href: "/retornos" },
+    can(ctx, "commissions.view_all") && { title: "Consultar comissões", href: "/comissoes" },
+    ctx.staffId && can(ctx, "finance.own") && { title: "Meu financeiro", href: "/meu-financeiro" },
+  ].filter((x): x is { title: string; href: string } => !!x).map((x) => ({ type: "Ações rápidas", sub: "", ...x }));
 
   return (
     <div className="shell">
@@ -65,16 +102,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </aside>
       <div className="main">
         <header className="top">
+          <CommandPalette actions={quick} />
           <span className="grow" />
-          {can(ctx, "finance.view") || can(ctx, "dashboard.full") ? (
-            <Link className={`bell ${unread > 0 ? "has" : ""}`} href="/notificacoes" aria-label={unread > 0 ? `${unread} alerta(s) não lido(s)` : "Alertas"}><Icon name="bell" />{unread > 0 ? `${unread}` : "Alertas"}</Link>
-          ) : null}
+          <span className="only-desktop"><ThemePicker initial={prefs.theme} /></span>
+          <Link className={`bell ${unread > 0 ? "has" : ""}`} href="/notificacoes" aria-label={unread > 0 ? `${unread} aviso(s) não lido(s)` : "Avisos"}><Icon name="bell" />{unread > 0 ? `${unread}` : ""}</Link>
           <Link className="who" href="/conta"><span className="avatar" aria-hidden="true">{s.user.fullName.trim().slice(0, 1).toUpperCase()}</span><span className="nm">{s.user.fullName} · {ROLE_LABEL[ctx.role]}</span></Link>
           <form action={logoutAction}><button className="btn small ghost" type="submit">Sair</button></form>
         </header>
         <main className="content" id="conteudo">{children}</main>
       </div>
       <BottomNav primary={primary} more={more} />
+      <Spotlight />
     </div>
   );
 }

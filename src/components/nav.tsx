@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { Icon, iconFor } from "./icons";
 
-export interface NavItem { href: string; label: string; short?: string }
+export interface NavItem { href: string; label: string; short?: string; count?: number }
 export interface NavGroup { title?: string; items: NavItem[] }
 
 const matches = (path: string, href: string) => (href === "/" ? path === "/" : path === href || path.startsWith(href + "/"));
@@ -23,6 +23,7 @@ export function SideNav({ groups }: { groups: NavGroup[] }) {
             <Link key={it.href} href={it.href} title={it.label} aria-current={best === it.href ? "page" : undefined}>
               <Icon name={iconFor(it.href)} />
               <span className="lbl">{it.label}</span>
+              {it.count ? <span className="count" aria-label={`${it.count} pendente(s)`}>{it.count > 99 ? "99+" : it.count}</span> : null}
             </Link>
           ))}
         </div>
@@ -69,7 +70,7 @@ export function BottomNav({ primary, more }: { primary: NavItem[]; more: NavItem
       <details>
         <summary><Icon name="more" />Mais</summary>
         <div>
-          {more.map((it) => <Link key={it.href} href={it.href}><Icon name={iconFor(it.href)} />{it.label}</Link>)}
+          {more.map((it) => <Link key={it.href} href={it.href} onClick={(e) => e.currentTarget.closest("details")?.removeAttribute("open")}><Icon name={iconFor(it.href)} />{it.label}</Link>)}
           <Link href="/conta"><Icon name="users" />Minha conta</Link>
         </div>
       </details>

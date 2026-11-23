@@ -15,6 +15,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@electric-sql/pglite", "pg"],
   outputFileTracingIncludes: { "/**": ["./db/migrations/**/*"] },
   poweredByHeader: false,
+  experimental: { serverActions: { bodySizeLimit: "11mb" } }, // anexos: até 5 arquivos de 2 MB (validado no servidor)
   async headers() {
     return [
       { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }, { key: "Service-Worker-Allowed", value: "/" }] },

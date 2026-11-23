@@ -5,11 +5,28 @@ import type { Ctx } from "../permissions";
 import { priceAt } from "./catalog";
 import { createAppointmentTx } from "./agenda";
 import { registerPaymentTx, type RegisterPaymentInput } from "./payments";
+import { generateCommissionsTx } from "./commissions";
+import { finishSaleTx } from "./products";
+import { refreshReturn } from "./returns";
+import { emit } from "./events";
 
-function assertRun(ctx: Ctx, staffId: string) {
+export function assertRun(ctx: Ctx, staffId: string) {
   if (can(ctx, "attendance.run")) return;
   if (can(ctx, "attendance.run_own") && ctx.staffId && ctx.staffId === staffId) return;
   throw new ForbiddenError("Você só pode operar os seus próprios atendimentos.");
+}
+
+/** Mesma política para serviços e produtos: irrestrito, ou dentro do limite da unidade. */
+export async function assertDiscountAllowed(q: Q, ctx: Ctx, subtotalCents: number, discountCents: number) {
+  if (discountCents <= 0) return;
+  const st = await getSettings(q, ctx.unitId);
+  const unrestricted = can(ctx, "attendance.discount");
+  const limited = can(ctx, "attendance.discount_limited") && !st.discount_owner_only && st.discount_limit_bps != null && discountCents * 10000 <= subtotalCents * st.discount_limit_bps;
+  if (!unrestricted && !limited) {
+    throw new DomainError("discount_not_allowed", st.discount_owner_only || !can(ctx, "attendance.discount_limited")
+      ? "Descontos precisam ser autorizados pelo proprietário."
+      : "Desconto acima do limite autorizado. Peça a aprovação do proprietário.");
+  }
 }
 
 async function recompute(q: Q, attendanceId: string) {
@@ -90,16 +107,7 @@ export async function applyDiscount(db: Db, ctx: Ctx, attendanceId: string, inpu
     assertRun(ctx, a.staff_id);
     if (a.status !== "iniciado") throw new DomainError("bad_status", "Só é possível dar desconto em atendimentos em andamento.");
     if (input.discountCents > a.subtotal_cents) throw new DomainError("invalid", "O desconto não pode ser maior que o total.");
-    if (input.discountCents > 0) {
-      const st = await getSettings(q, ctx.unitId);
-      const unrestricted = can(ctx, "attendance.discount");
-      const limited = can(ctx, "attendance.discount_limited") && !st.discount_owner_only && st.discount_limit_bps != null && input.discountCents * 10000 <= a.subtotal_cents * st.discount_limit_bps;
-      if (!unrestricted && !limited) {
-        throw new DomainError("discount_not_allowed", st.discount_owner_only || !can(ctx, "attendance.discount_limited")
-          ? "Descontos precisam ser autorizados pelo proprietário."
-          : "Desconto acima do limite autorizado. Peça a aprovação do proprietário.");
-      }
-    }
+    await assertDiscountAllowed(q, ctx, a.subtotal_cents, input.discountCents);
     await q("update attendances set discount_cents=$2, discount_reason=$3, discount_authorized_by=$4 where id=$1", [attendanceId, input.discountCents, input.discountCents > 0 ? reason : null, input.discountCents > 0 ? ctx.userId : null]);
     await recompute(q, attendanceId);
     await audit(q, ctx, "DESCONTO_APLICADO", "attendance", attendanceId, { discount: a.discount_cents }, { discount: input.discountCents }, reason);
@@ -122,23 +130,31 @@ export async function completeAttendance(db: Db, ctx: Ctx, attendanceId: string,
     await q("update attendances set status='concluido', finished_at=now(), updated_at=now() where id=$1", [attendanceId]);
     // ao concluir, o horário real termina agora: libera o restante da janela reservada
     await q("update appointments set status='concluido', ends_at=greatest(least(ends_at, now()), starts_at + interval '1 minute'), updated_at=now(), updated_by=$2 where id=$1", [a.appointment_id, ctx.userId]);
+    const [sale] = await q<{ id: string; total_cents: number; n: number }>("select s.id, s.total_cents, (select count(*) from product_sale_items i where i.sale_id=s.id)::bigint as n from product_sales s where s.attendance_id=$1 and s.status='aberta' for update of s", [attendanceId]);
+    const hasSale = Boolean(sale && sale.n > 0);
+    if (sale && !hasSale) await q("update product_sales set status='cancelada' where id=$1", [sale.id]);
+    const due = a.total_cents + (hasSale ? sale.total_cents : 0);
     const [existing] = await q<{ id: string }>("select id from receivables where attendance_id=$1", [attendanceId]);
     let receivableId = existing?.id;
     if (!receivableId) {
       const run = await startAutomation(q, "A03", ctx.unitId, `att:${attendanceId}`, "ATENDIMENTO_CONCLUIDO");
       const [r] = await q<{ id: string }>(
         "insert into receivables(unit_id,attendance_id,customer_id,description,amount_due_cents,created_by) values ($1,$2,$3,$4,$5,$6) returning id",
-        [ctx.unitId, attendanceId, a.customer_id, "Atendimento", a.total_cents, ctx.userId],
+        [ctx.unitId, attendanceId, a.customer_id, hasSale ? "Atendimento e produtos" : "Atendimento", due, ctx.userId],
       );
       receivableId = r.id;
-      if (run) await finishAutomation(q, "A03", ctx.unitId, `att:${attendanceId}`, "ATENDIMENTO_CONCLUIDO", { attendanceId }, { receivableId, amount: a.total_cents });
+      if (run) await finishAutomation(q, "A03", ctx.unitId, `att:${attendanceId}`, "ATENDIMENTO_CONCLUIDO", { attendanceId }, { receivableId, amount: due });
     }
+    if (hasSale) await finishSaleTx(q, ctx, sale.id, receivableId);
+    await generateCommissionsTx(q, ctx, { attendanceId, saleId: hasSale ? sale.id : null, receivableId });
+    await emit(q, ctx, "appointment.completed", "attendance", attendanceId, { customerId: a.customer_id, staffId: a.staff_id }, `appointment.completed:${attendanceId}`);
+    await refreshReturn(q, ctx.unitId, a.customer_id);
     const paymentIds: string[] = [];
     for (const p of input.payments ?? []) {
       const res = await registerPaymentTx(q, ctx, { ...p, receivableId });
       paymentIds.push(res.id);
     }
-    await audit(q, ctx, "ATENDIMENTO_CONCLUIDO", "attendance", attendanceId, null, { total: a.total_cents, receivable: receivableId, payments: paymentIds.length });
+    await audit(q, ctx, "ATENDIMENTO_CONCLUIDO", "attendance", attendanceId, null, { total: a.total_cents, products: hasSale ? sale.total_cents : 0, receivable: receivableId, payments: paymentIds.length });
     return { receivableId, paymentIds };
   });
 }
@@ -151,6 +167,7 @@ export async function cancelAttendance(db: Db, ctx: Ctx, attendanceId: string, r
     assertRun(ctx, a.staff_id);
     if (a.status !== "iniciado") throw new DomainError("bad_status", "Só é possível cancelar atendimentos em andamento.");
     await q("update attendances set status='cancelado', updated_at=now() where id=$1", [attendanceId]);
+    await q("update product_sales set status='cancelada' where attendance_id=$1 and status='aberta'", [attendanceId]);
     await q("update appointments set status='cancelado', cancellation_reason=$2, cancelled_by=$3, cancelled_at=now(), updated_at=now() where id=$1", [a.appointment_id, why, ctx.userId]);
     await audit(q, ctx, "ATENDIMENTO_CANCELADO", "attendance", attendanceId, null, null, why);
   });

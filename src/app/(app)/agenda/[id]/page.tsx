@@ -8,6 +8,8 @@ import { listCatalog } from "@/server/services/catalog";
 import { dayEndUtc, dayStartUtc, fmtDate, fmtDateTime, fmtTime, toYmd } from "@/lib/dates";
 import { fmtBRL } from "@/lib/money";
 import { ApptBadge, ConfirmAction, Field, Flash, PageHead } from "@/components/ui";
+import { seriesOf } from "@/server/services/series";
+import { seriesAction } from "@/app/actions/agenda";
 import { cancelAppointmentAction, noShowAction, rescheduleAction, startAttendanceAction } from "@/app/actions/agenda";
 
 export const metadata = { title: "Agendamento" };
@@ -22,6 +24,8 @@ export default async function AppointmentPage({ params, searchParams }: { params
   const ymd = toYmd(row.starts_at);
   const a = (await listAppointments(db, ctx, { from: dayStartUtc(ymd), to: dayEndUtc(ymd) }, { includeCancelled: true })).find((x) => x.id === id);
   if (!a) notFound();
+  const [sid] = await db.query<{ series_id: string | null }>("select series_id from appointments where id=$1", [id]);
+  const series = sid?.series_id ? await seriesOf(db, ctx, sid.series_id) : null;
   const cat = await listCatalog(db, ctx.unitId);
   const mine = can(ctx, "agenda.manage") || (can(ctx, "agenda.manage_own") && ctx.staffId === a.staff_id);
   const canRun = can(ctx, "attendance.run") || (can(ctx, "attendance.run_own") && ctx.staffId === a.staff_id);
@@ -48,7 +52,7 @@ export default async function AppointmentPage({ params, searchParams }: { params
           <section className="card stack">
             <h2>Ações</h2>
             {canRun ? <form action={startAttendanceAction}><input type="hidden" name="id" value={a.id} /><button className="btn accent" type="submit">Iniciar atendimento</button></form> : null}
-            <ConfirmAction label="Reagendar" tone="neutral" action={rescheduleAction} submit="Reagendar">
+            <ConfirmAction label={series ? "Reagendar só este" : "Reagendar"} tone="neutral" action={rescheduleAction} submit="Reagendar">
               <input type="hidden" name="id" value={a.id} />
               <div className="fields">
                 <Field label="Data"><input type="date" name="date" defaultValue={ymd} required /></Field>
@@ -62,10 +66,29 @@ export default async function AppointmentPage({ params, searchParams }: { params
               </div>
               <Field label="Motivo (opcional)"><input name="reason" /></Field>
             </ConfirmAction>
+            {series ? (
+              <>
+                <small>Parte de uma série: {series.label} às {series.time_hhmm}, {series.future} horário(s) à frente.{series.conflicts.length ? ` Sem vaga em ${series.conflicts.map((c) => c.d.slice(8) + "/" + c.d.slice(5, 7)).join(", ")}.` : ""}</small>
+                <ConfirmAction label="Alterar a série" tone="neutral" action={seriesAction} submit="Alterar série" warn="Horários já realizados não mudam. Se um horário novo estiver ocupado, nada é alterado.">
+                  <input type="hidden" name="id" value={a.id} /><input type="hidden" name="op" value="alterar" />
+                  <div className="fields">
+                    <Field label="Aplicar a"><select name="scope"><option value="seguintes">Este e os seguintes</option><option value="todas">Todos os futuros</option></select></Field>
+                    <Field label="Nova data deste"><input type="date" name="date" defaultValue={ymd} required /></Field>
+                    <Field label="Novo horário"><input type="time" name="time" step={900} defaultValue={fmtTime(a.starts_at)} required /></Field>
+                    {can(ctx, "agenda.manage") ? <Field label="Profissional"><select name="staffId" defaultValue={a.staff_id}>{cat.staff.filter((s) => s.is_active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field> : null}
+                  </div>
+                </ConfirmAction>
+                {can(ctx, "agenda.cancel") ? <ConfirmAction label="Cancelar a série" action={seriesAction} submit="Cancelar série">
+                  <input type="hidden" name="id" value={a.id} /><input type="hidden" name="op" value="cancelar" />
+                  <Field label="Cancelar"><select name="scope"><option value="seguintes">Este e os seguintes</option><option value="todas">Todos os futuros</option></select></Field>
+                  <Field label="Motivo"><input name="reason" minLength={3} required /></Field>
+                </ConfirmAction> : null}
+              </>
+            ) : null}
             <ConfirmAction label="Cliente não compareceu" action={noShowAction} submit="Confirmar ausência" warn="Só é possível depois do horário marcado. Dependendo da configuração, pode gerar cobrança de taxa.">
               <input type="hidden" name="id" value={a.id} />
             </ConfirmAction>
-            <ConfirmAction label="Cancelar agendamento" action={cancelAppointmentAction} submit="Cancelar agendamento" warn="O horário será liberado. Informe o motivo.">
+            <ConfirmAction label={series ? "Cancelar só este" : "Cancelar agendamento"} action={cancelAppointmentAction} submit="Cancelar agendamento" warn="O horário será liberado. Informe o motivo.">
               <input type="hidden" name="id" value={a.id} />
               <Field label="Motivo do cancelamento"><input name="reason" minLength={3} required /></Field>
             </ConfirmAction>

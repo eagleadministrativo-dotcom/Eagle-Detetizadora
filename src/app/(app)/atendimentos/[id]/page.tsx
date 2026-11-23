@@ -11,6 +11,9 @@ import { listCatalog, listServices } from "@/server/services/catalog";
 import { fmtBRL } from "@/lib/money";
 import { fmtDateTime, fmtTime } from "@/lib/dates";
 import { ApptBadge, ConcBadge, ConfirmAction, Empty, Field, Flash, PageHead, PayBadge, PaymentStatusBadge, money, newKey } from "@/components/ui";
+import { listProducts, saleOfAttendance } from "@/server/services/products";
+import { attendanceProductsAction } from "@/app/actions/products";
+import { ProductPicker } from "@/components/client";
 import { cancelAttendanceAction, completeAction, completeLaterAction, discountAction, registerPaymentAction, setServicesAction } from "@/app/actions/attendance";
 
 export const metadata = { title: "Atendimento" };
@@ -36,6 +39,11 @@ export default async function AttendancePage({ params, searchParams }: { params:
   const methods = cat.methods.filter((m) => m.is_active);
   const canPay = can(ctx, "payments.register");
   const session = await findOpenSession(db.query, ctx.unitId);
+  const sale = await saleOfAttendance(db, a.id);
+  const saleOn = sale && sale.status !== "cancelada" && sale.items.length > 0 ? sale : null;
+  const canSell = can(ctx, "products.sell");
+  const products = inProgress && canSell ? (await listProducts(db, ctx, { activeOnly: true })).map((p) => ({ id: p.id, name: p.name, price: p.price_cents, stock: p.track_stock ? p.stock_qty : null })) : [];
+  const grand = a.total_cents + (saleOn?.total_cents ?? 0);
   const rec = a.receivable_id ? await getReceivable(db, ctx, a.receivable_id) : null;
   const selected = new Set(items.map((i) => i.service_id));
   const balance = rec ? rec.receivable.amount_due_cents - rec.receivable.registered_cents : 0;
@@ -66,6 +74,18 @@ export default async function AttendancePage({ params, searchParams }: { params:
               </tbody>
             </table>
           </div>
+          {saleOn ? (
+            <>
+              <h3>Produtos</h3>
+              <div className="tablewrap"><table><tbody>
+                {saleOn.items.map((i) => <tr key={i.id}><td>{i.quantity}× {i.name_snapshot}{i.returned_qty ? <small> · {i.returned_qty} devolvido(s)</small> : null}</td><td className="n">{money(i.gross_cents)}</td></tr>)}
+                {saleOn.discount_cents > 0 ? <tr><td>Desconto <small>({saleOn.discount_reason})</small></td><td className="n">− {fmtBRL(saleOn.discount_cents)}</td></tr> : null}
+                <tr className="total"><td>Total de produtos</td><td className="n">{money(saleOn.total_cents)}</td></tr>
+              </tbody></table></div>
+              <div className="sumrow big"><span>Total final</span>{money(grand)}</div>
+              {done ? <Link className="btn small ghost" href={`/produtos/vendas/${saleOn.id}`}>Ver venda</Link> : null}
+            </>
+          ) : null}
           {inProgress ? (
             <>
               <ConfirmAction label="Alterar serviços" tone="neutral" action={setServicesAction} submit="Salvar serviços">
@@ -93,6 +113,14 @@ export default async function AttendancePage({ params, searchParams }: { params:
             <h2>Concluir atendimento</h2>
             <form action={completeAction} className="form">
               <input type="hidden" name="id" value={a.id} />
+              {canSell && products.length ? (
+                <fieldset>
+                  <legend>Produto(s) vendido(s)</legend>
+                  <input type="hidden" name="withProducts" value="1" />
+                  <ProductPicker key={saleOn?.total_cents ?? 0} products={products} initial={(saleOn?.items ?? []).map((i) => ({ id: i.product_id, qty: i.quantity }))} discount={saleOn?.discount_cents ?? 0} reason={saleOn?.discount_reason ?? ""} serviceCents={a.total_cents} syncField={canPay ? "amount0" : undefined} />
+                  <div style={{ marginTop: 10 }}><button className="btn small ghost" type="submit" formAction={attendanceProductsAction} formNoValidate>Salvar produtos e continuar atendendo</button></div>
+                </fieldset>
+              ) : null}
               {canPay ? (
                 <>
                   {!session ? <div className="alert warn">Caixa fechado: recebimento em dinheiro só depois de <Link href="/financeiro/caixa">abrir o caixa</Link>. Pix e cartão podem ser registrados.</div> : null}
@@ -103,7 +131,7 @@ export default async function AttendancePage({ params, searchParams }: { params:
                       <input type="hidden" name={`key${i}`} value={keys[i]} />
                       <div className="fields">
                         <Field label="Forma"><select name={`method${i}`} defaultValue={methods[0]?.id}>{methods.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></Field>
-                        <Field label="Valor (R$)"><input name={`amount${i}`} inputMode="decimal" defaultValue={i === 0 ? brl(a.total_cents) : ""} placeholder="0,00" /></Field>
+                        <Field label="Valor (R$)"><input name={`amount${i}`} inputMode="decimal" key={grand} defaultValue={i === 0 ? brl(grand) : ""} placeholder="0,00" /></Field>
                         <Field label="Referência (opcional)"><input name={`ref${i}`} placeholder="Ex.: ID do Pix, final do cartão" /></Field>
                       </div>
                     </fieldset>

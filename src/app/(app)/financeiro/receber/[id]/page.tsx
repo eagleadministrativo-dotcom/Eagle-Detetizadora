@@ -17,7 +17,7 @@ const brl = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 export default async function ReceivablePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; erro?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
-  const { ctx } = await requirePerm("finance.view");
+  const { ctx } = await requirePerm("finance.view", "finance.receivables_view");
   const db = await getDb();
   let d;
   try {

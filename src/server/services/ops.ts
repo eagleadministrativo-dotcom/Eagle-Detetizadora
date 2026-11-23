@@ -1,5 +1,5 @@
 import type { Db, Q } from "../db";
-import { audit, can, finishAutomation, need, startAutomation } from "../core";
+import { audit, finishAutomation, need, startAutomation } from "../core";
 import { DomainError } from "../errors";
 import { buildPerms, type Ctx } from "../permissions";
 import { addDays, fmtYmd, monthEnd, todayYmd } from "@/lib/dates";
@@ -7,6 +7,11 @@ import { fmtBRL } from "@/lib/money";
 import { alertDueDates, generateRecurringPayables } from "./finance";
 import { computeDre, getCashFlow, goalsProgress } from "./reports";
 import { dayEndUtc, dayStartUtc } from "@/lib/dates";
+import { runTaskJobs } from "./tasks";
+import { runReturnJobs } from "./returns";
+import { runSeriesJobs } from "./series";
+import { runRecordJobs } from "./achievements";
+import { processEvents } from "./events";
 
 const SYSTEM_USER = "00000000-0000-0000-0000-000000000000";
 export const systemCtx = (unitId: string): Ctx => ({ userId: SYSTEM_USER, unitId, role: "proprietario", perms: buildPerms("proprietario", []) });
@@ -58,28 +63,18 @@ export async function runDailyJobs(db: Db, unitId: string, today = todayYmd()) {
     if (s.n > 0) await notify(db, unitId, "resumo_diario", "info", `Resumo de ${fmtYmd(y)}: ${s.n} atendimento(s), receita operacional de ${fmtBRL(s.rev)}.`, `summary:${y}`);
     out.A14 = { yesterday: y, attendances: s.n };
 
+    out.A15 = await runTaskJobs(db, unitId);
+    out.A16 = await runSeriesJobs(db, unitId, ctx);
+    out.A17 = await runReturnJobs(db, unitId, today);
+    out.A18 = await runRecordJobs(db, unitId);
+    out.events = await processEvents(db);
+
     await db.tx((q) => finishAutomation(q, "DAILY", unitId, key, "ROTINA_DIARIA", { today }, out));
     return { skipped: false, out };
   } catch (e) {
     await db.query("insert into automation_runs(automation_id,unit_id,status,trigger_event,error) values ('DAILY',$1,'erro','ROTINA_DIARIA',$2)", [unitId, (e as Error).message]);
     throw e;
   }
-}
-
-// ---------- notificações ----------
-export async function listNotifications(db: Db, ctx: Ctx, limit = 50) {
-  need(ctx, "finance.view", "dashboard.full");
-  return db.query<{ id: string; kind: string; severity: string; message: string; is_read: boolean; created_at: Date; ref_entity: string | null; ref_id: string | null }>(
-    "select id, kind, severity, message, is_read, created_at, ref_entity, ref_id from notifications where unit_id=$1 order by created_at desc limit $2", [ctx.unitId, limit]);
-}
-export async function markNotificationsRead(db: Db, ctx: Ctx, ids?: string[]) {
-  need(ctx, "finance.view", "dashboard.full");
-  await db.query("update notifications set is_read=true where unit_id=$1 and ($2::uuid[] is null or id = any($2::uuid[]))", [ctx.unitId, ids ?? null]);
-}
-export async function unreadCount(db: Db, ctx: Ctx) {
-  if (!can(ctx, "finance.view") && !can(ctx, "dashboard.full")) return 0;
-  const [r] = await db.query<{ n: number }>("select count(*)::bigint as n from notifications where unit_id=$1 and not is_read", [ctx.unitId]);
-  return r.n;
 }
 
 // ---------- auditoria ----------
@@ -127,12 +122,17 @@ export async function exportDataset(db: Db, ctx: Ctx, name: Dataset): Promise<{ 
   return { filename: `marfim-${name}-${todayYmd()}.csv`, csv: toCsv(rows) };
 }
 
+/** Tabelas da V4, na ordem de dependência. */
+const V4_TABLES = ["permission_overrides", "user_preferences", "notification_reads", "notification_deliveries", "domain_events", "task_recurrence_rules", "tasks", "task_assignees", "task_comments", "task_attachments",
+  "appointment_series_occurrences", "customer_return_rules", "customer_return_status", "customer_contact_attempts", "products", "product_sales", "product_sale_items", "product_returns", "stock_movements",
+  "commission_rules", "commission_settlements", "commission_entries", "commission_adjustments", "staff_goals", "employee_records", "employee_achievements"];
+
 /** Backup lógico completo da unidade em JSON (para migração/restauração manual). */
 export async function exportBackup(db: Db, ctx: Ctx) {
   need(ctx, "data.export");
   const tables = ["organizations", "units", "unit_settings", "chairs", "staff", "staff_schedules", "schedule_blocks", "customers", "service_categories", "services", "service_staff", "service_prices", "service_custom_fields",
     "financial_accounts", "payment_methods", "financial_categories", "appointments", "appointment_services", "attendances", "attendance_items", "receivables", "cash_sessions", "payments", "cash_movements",
-    "payables", "payable_payments", "capital_entries", "financial_goals", "period_closures", "audit_logs", "automation_runs", "notifications"];
+    "payables", "payable_payments", "capital_entries", "financial_goals", "period_closures", "audit_logs", "automation_runs", "notifications", ...V4_TABLES, "access_profiles", "appointment_series"];
   const data: Record<string, unknown[]> = {};
   for (const t of tables) data[t] = await db.query(`select * from ${t}`);
   data.users = await db.query("select id, email, full_name, is_active, created_at from users");
@@ -142,9 +142,9 @@ export async function exportBackup(db: Db, ctx: Ctx) {
 }
 
 
-const RESTORE_ORDER = ["organizations", "units", "unit_settings", "chairs", "staff", "staff_schedules", "schedule_blocks", "customers", "service_categories", "services", "service_staff", "service_prices",
-  "service_custom_fields", "financial_accounts", "payment_methods", "financial_categories", "appointments", "appointment_services", "attendances", "attendance_items", "receivables", "cash_sessions",
-  "payments", "cash_movements", "payables", "payable_payments", "capital_entries", "financial_goals", "period_closures", "audit_logs", "automation_runs", "notifications"];
+const RESTORE_ORDER = ["organizations", "units", "unit_settings", "access_profiles", "chairs", "staff", "staff_schedules", "schedule_blocks", "customers", "service_categories", "services", "service_staff", "service_prices",
+  "service_custom_fields", "financial_accounts", "payment_methods", "financial_categories", "appointment_series", "appointments", "appointment_services", "attendances", "attendance_items", "receivables", "cash_sessions",
+  "payments", "cash_movements", "payables", "payable_payments", "capital_entries", "financial_goals", "period_closures", "audit_logs", "automation_runs", "notifications", ...V4_TABLES];
 
 /**
  * Restaura um backup lógico (exportBackup) em um banco VAZIO (somente com as migrações aplicadas).
@@ -158,13 +158,13 @@ export async function restoreBackup(db: Db, backupJson: string, ownerEmail: stri
   await db.tx(async (q) => {
     const [n] = await q<{ n: number }>("select (select count(*) from users) + (select count(*) from organizations) as n");
     if (n.n > 0) throw new DomainError("not_empty", "O banco de destino precisa estar vazio.");
-    for (const t of ["organizations", "units", "unit_settings"]) await insertTable(q, t, backup.data[t]);
+    for (const t of ["organizations", "units", "unit_settings", "access_profiles"]) await insertTable(q, t, backup.data[t]);
     await q(
       "insert into users(id,email,full_name,is_active,created_at,password_hash) select id,email,full_name,is_active,created_at,'!' from jsonb_to_recordset($1::jsonb) as x(id uuid,email text,full_name text,is_active boolean,created_at timestamptz)",
       [JSON.stringify(backup.data.users ?? [])],
     );
-    await q("insert into user_units select * from jsonb_populate_recordset(null::user_units, $1::jsonb)", [JSON.stringify(backup.data.user_units ?? [])]);
-    for (const t of RESTORE_ORDER.slice(3)) await insertTable(q, t, backup.data[t]);
+    await insertTable(q, "user_units", backup.data.user_units);
+    for (const t of RESTORE_ORDER.slice(4)) await insertTable(q, t, backup.data[t]);
     await q("select setval(pg_get_serial_sequence('audit_logs','id'), greatest((select coalesce(max(id),1) from audit_logs),1))");
     const r = await q("update users set password_hash=$2 where lower(email)=lower($1) and id in (select user_id from user_units where role='proprietario') returning id", [ownerEmail, hashPassword(ownerPassword)]);
     if (!r.length) throw new DomainError("no_owner", "Nenhum proprietário com esse e-mail no backup.");
@@ -174,5 +174,8 @@ export async function restoreBackup(db: Db, backupJson: string, ownerEmail: stri
 
 async function insertTable(q: Q, table: string, rows: Record<string, unknown>[] | undefined) {
   if (!rows?.length) return;
-  await q(`insert into ${table} select * from jsonb_populate_recordset(null::${table}, $1::jsonb)`, [JSON.stringify(rows)]);
+  // só as colunas presentes no arquivo: backups antigos (sem as colunas novas) usam os valores padrão
+  const known = new Set((await q<{ c: string }>("select column_name as c from information_schema.columns where table_schema='public' and table_name=$1", [table])).map((r) => r.c));
+  const cols = Object.keys(rows[0]).filter((c) => known.has(c)).map((c) => `"${c}"`).join(",");
+  await q(`insert into ${table}(${cols}) select ${cols} from jsonb_populate_recordset(null::${table}, $1::jsonb)`, [JSON.stringify(rows)]);
 }

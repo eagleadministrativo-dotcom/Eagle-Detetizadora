@@ -33,6 +33,16 @@ async function revenueStats(q: Q, unitId: string, p: Period, staffId: string | n
   return r;
 }
 
+/** Receita de produtos por competência: venda na data da conclusão, devolução na data em que ocorreu. */
+export async function productStats(q: Q, unitId: string, p: Period, staffId: string | null) {
+  const { from, to } = range(p);
+  const [s] = await q<{ gross: number; discounts: number; units: number }>(
+    "select coalesce(sum(s.gross_cents),0)::bigint as gross, coalesce(sum(s.discount_cents),0)::bigint as discounts, coalesce(sum((select sum(i.quantity) from product_sale_items i where i.sale_id=s.id)),0)::bigint as units from product_sales s where s.unit_id=$1 and s.status='concluida' and s.finished_at >= $2 and s.finished_at < $3 and ($4::uuid is null or s.seller_staff_id=$4)", [unitId, from, to, staffId]);
+  const [r] = await q<{ returned: number }>(
+    "select coalesce(sum(r.amount_cents),0)::bigint as returned from product_returns r join product_sale_items i on i.id=r.sale_item_id join product_sales s on s.id=i.sale_id where r.unit_id=$1 and r.created_at >= $2 and r.created_at < $3 and ($4::uuid is null or s.seller_staff_id=$4)", [unitId, from, to, staffId]);
+  return { ...s, returned: r.returned, net: s.gross - s.discounts - r.returned };
+}
+
 // ---------- recebimentos ----------
 async function receiptStats(q: Q, unitId: string, p: Period, staffId: string | null) {
   const { from, to } = range(p);
@@ -62,7 +72,9 @@ export async function computeDre(q: Q, unitId: string, p: Period): Promise<Dre> 
   const { from, to } = range(p);
   const rev = await revenueStats(q, unitId, p, null);
   const [oth] = await q<{ v: number }>(
-    `select coalesce(sum(amount_due_cents),0)::bigint as v from receivables where unit_id=$1 and attendance_id is null and status='ativo' and created_at >= $2 and created_at < $3`, [unitId, from, to]);
+    `select coalesce(sum(amount_due_cents),0)::bigint as v from receivables where unit_id=$1 and attendance_id is null and status='ativo' and created_at >= $2 and created_at < $3
+       and not exists (select 1 from product_sales ps where ps.receivable_id=receivables.id)`, [unitId, from, to]);
+  const prod = await productStats(q, unitId, p, null);
   const rec = await receiptStats(q, unitId, p, null);
   const cats = await q<{ id: string; name: string; kind: string; cents: number }>(
     `select c.id, c.name, c.kind, coalesce(sum(b.amount_cents),0)::bigint as cents
@@ -76,7 +88,7 @@ export async function computeDre(q: Q, unitId: string, p: Period): Promise<Dre> 
   const taxes = sumKind("imposto");
   const nonOperating = sumKind("nao_operacional");
   const profitDistribution = sumKind("distribuicao_lucros");
-  const netRevenue = rev.revenue + oth.v;
+  const netRevenue = rev.revenue + oth.v + prod.net;
   const contributionMargin = netRevenue - rec.fees - variableCosts;
   const operatingResult = contributionMargin - expenses - taxes;
   const netResult = operatingResult - nonOperating;
@@ -85,6 +97,9 @@ export async function computeDre(q: Q, unitId: string, p: Period): Promise<Dre> 
   const lines: DreLine[] = [
     { key: "gross", label: "Receita bruta de serviços", cents: rev.gross },
     { key: "discounts", label: "(−) Descontos concedidos", cents: -rev.discounts },
+    ...(prod.gross ? [{ key: "products_gross", label: "Receita bruta de produtos", cents: prod.gross }] : []),
+    ...(prod.discounts ? [{ key: "products_discounts", label: "(−) Descontos em produtos", cents: -prod.discounts }] : []),
+    ...(prod.returned ? [{ key: "products_returned", label: "(−) Devoluções de produtos", cents: -prod.returned }] : []),
     ...(oth.v ? [{ key: "other_revenue", label: "Outras receitas (cobranças avulsas)", cents: oth.v }] : []),
     { key: "net_revenue", label: "Receita líquida", cents: netRevenue, group: "total" },
     { key: "fees", label: "(−) Taxas de meios de pagamento", cents: -rec.fees },
@@ -111,7 +126,7 @@ export async function computeDre(q: Q, unitId: string, p: Period): Promise<Dre> 
 }
 
 export async function getDre(db: Db, ctx: Ctx, p: Period) {
-  need(ctx, "finance.view");
+  need(ctx, "finance.view", "finance.dre_view");
   const cur = await computeDre(db.query, ctx.unitId, p);
   const prev = await computeDre(db.query, ctx.unitId, previousPeriod(p));
   return { current: cur, previous: prev };
@@ -190,7 +205,7 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
   const kpis: Kpi[] = [];
   const base = { updatedAt: now };
   kpis.push({
-    key: "revenue", label: "Receita operacional", value: rev.revenue, unit: "brl", previous: revPrev.revenue,
+    key: "revenue", label: "Receita de serviços", value: rev.revenue, unit: "brl", previous: revPrev.revenue,
     definition: "Valor dos atendimentos concluídos no período, já descontados os descontos concedidos. Não é dinheiro recebido.",
     formula: "Σ total do atendimento (subtotal − desconto)", source: "attendances (status concluído), por data de conclusão", exclusions: "Atendimentos cancelados, em andamento e agendados.", ...base,
   });
@@ -203,6 +218,12 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
     previous: revPrev.eligible ? Math.round(revPrev.eligible_revenue / revPrev.eligible) : null,
     definition: "Receita média por atendimento concluído com valor.", formula: "receita elegível ÷ nº de atendimentos elegíveis",
     source: "attendances", exclusions: "Atendimentos sem valor (cortesia) e cancelados.", warning: rev.eligible === 0 ? "Sem atendimentos no período." : undefined, ...base,
+  });
+  const [prod, prodPrev] = await Promise.all([productStats(q, ctx.unitId, p, staffId), productStats(q, ctx.unitId, prevP, staffId)]);
+  if (prod.gross || prodPrev.gross) kpis.push({
+    key: "products", label: "Receita de produtos", value: prod.net, unit: "brl", previous: prodPrev.net,
+    definition: "Produtos vendidos no período, menos descontos e devoluções. É separada da receita de serviços.",
+    formula: "Σ vendas − descontos − devoluções", source: "product_sales e product_returns", exclusions: "Vendas em aberto ou canceladas.", ...base,
   });
   if (full && rec && recPrev) {
     kpis.push({
@@ -258,7 +279,7 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
   });
   kpis.push({
     key: "revenue_per_hour", label: "Receita por hora disponível", value: occ.configured && occ.availableMin > 0 ? Math.round(rev.revenue / (occ.availableMin / 60)) : null, unit: "brl",
-    definition: "Receita operacional dividida pelas horas disponibilizadas para atendimento.", formula: "receita operacional ÷ horas disponíveis", source: "attendances, unit_settings.business_hours",
+    definition: "Receita de serviços dividida pelas horas disponibilizadas para atendimento.", formula: "receita de serviços ÷ horas disponíveis", source: "attendances, unit_settings.business_hours",
     exclusions: "—", warning: occ.configured ? undefined : "Cadastre o horário de funcionamento.", ...base,
   });
 
@@ -266,6 +287,11 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
   const { from, to } = range(p);
   const byDay = await q<{ d: string; cents: number }>(
     `select to_char(${LD("finished_at")},'YYYY-MM-DD') as d, sum(total_cents)::bigint as cents from attendances where unit_id=$1 and status='concluido' and finished_at >= $2 and finished_at < $3 and ($4::uuid is null or staff_id=$4) group by 1`, [ctx.unitId, from, to, staffId]);
+  // produtos entram no resultado acumulado, para fechar com a DRE
+  const prodDay = await q<{ d: string; cents: number }>(
+    `select d, sum(c)::bigint as cents from (
+       select to_char(${LD("s.finished_at")},'YYYY-MM-DD') as d, s.total_cents as c from product_sales s where s.unit_id=$1 and s.status='concluida' and s.finished_at >= $2 and s.finished_at < $3 and ($4::uuid is null or s.seller_staff_id=$4)
+       union all select to_char(${LD("r.created_at")},'YYYY-MM-DD'), -r.amount_cents from product_returns r join product_sale_items i on i.id=r.sale_item_id join product_sales s on s.id=i.sale_id where r.unit_id=$1 and r.created_at >= $2 and r.created_at < $3 and ($4::uuid is null or s.seller_staff_id=$4)) x group by d`, [ctx.unitId, from, to, staffId]);
   const expDay = full && can(ctx, "finance.view")
     ? await q<{ d: string; cents: number }>(
         `select to_char(coalesce(b.competence_date,b.due_date),'YYYY-MM-DD') as d, sum(b.amount_cents)::bigint as cents from payables b join financial_categories c on c.id=b.category_id
@@ -278,7 +304,7 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
     const r = byDay.find((x) => x.d === d)?.cents ?? 0;
     const e = expDay.find((x) => x.d === d)?.cents ?? 0;
     revenueByDay.push({ date: d, cents: r, expenses: e });
-    acc += r - e;
+    acc += r + (prodDay.find((x) => x.d === d)?.cents ?? 0) - e;
     resultSeries.push({ date: d, cents: acc });
   }
   const topServices = await q<{ name: string; qty: number; cents: number }>(
@@ -299,7 +325,8 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
     if (od.n) alerts.push({ severity: "critico", message: `${od.n} conta(s) a pagar vencida(s)`, href: "/financeiro/pagar?f=abertas" });
     const [stale] = await q<{ n: number }>("select count(*)::bigint as n from cash_sessions where unit_id=$1 and status='aberto' and opened_at < now() - interval '16 hours'", [ctx.unitId]);
     if (stale.n) alerts.push({ severity: "atencao", message: "Há um caixa aberto há mais de 16 horas", href: "/financeiro/caixa" });
-    const notes = await q<{ severity: string; message: string; ref_entity: string | null }>("select severity, message, ref_entity from notifications where unit_id=$1 and not is_read order by created_at desc limit 5", [ctx.unitId]);
+    const notes = await q<{ severity: string; message: string; ref_entity: string | null }>(
+      "select n.severity, n.message from notifications n where n.unit_id=$1 and n.user_id is null and n.severity<>'info' and not exists (select 1 from notification_reads r where r.notification_id=n.id and r.user_id=$2) order by n.created_at desc limit 2", [ctx.unitId, ctx.userId]);
     for (const n of notes) if (!alerts.some((a) => a.message === n.message)) alerts.push({ severity: n.severity, message: n.message });
   }
   return { period: p, kpis, accounts, revenueByDay, resultSeries, topServices, byMethod, heat, alerts, warnings: dreWarnings, updatedAt: now };
@@ -321,6 +348,16 @@ export async function indicatorRecords(db: Db, ctx: Ctx, key: string, p: Period,
            '/atendimentos/' || a.id as href from attendances a join customers c on c.id=a.customer_id join staff s on s.id=a.staff_id
          where a.unit_id=$1 and a.status='concluido' and a.finished_at >= $2 and a.finished_at < $3 and ($4::uuid is null or a.staff_id=$4) order by a.finished_at desc limit 500`, [ctx.unitId, from, to, staffId]);
       return { rows, total: rows.reduce((a, r) => a + (r.cents ?? 0), 0) };
+    }
+    case "products": {
+      const rows = await q<RecordRow>(
+        `select s.id, s.finished_at as date, coalesce(c.name,'Venda avulsa') as title, (f.name || ' · ' || coalesce((select string_agg(i.quantity || '× ' || i.name_snapshot, ', ') from product_sale_items i where i.sale_id=s.id),'')) as detail, s.total_cents as cents, '/produtos/vendas/' || s.id as href
+         from product_sales s join staff f on f.id=s.seller_staff_id left join customers c on c.id=s.customer_id where s.unit_id=$1 and s.status='concluida' and s.finished_at >= $2 and s.finished_at < $3 and ($4::uuid is null or s.seller_staff_id=$4)
+         union all
+         select r.id, r.created_at, 'Devolução', r.quantity || '× ' || i.name_snapshot, -r.amount_cents, '/produtos/vendas/' || s.id
+         from product_returns r join product_sale_items i on i.id=r.sale_item_id join product_sales s on s.id=i.sale_id where r.unit_id=$1 and r.created_at >= $2 and r.created_at < $3 and ($4::uuid is null or s.seller_staff_id=$4)
+         order by 2 desc limit 500`, [ctx.unitId, from, to, staffId]);
+      return { rows, total: rows.reduce((x, r) => x + (r.cents ?? 0), 0) };
     }
     case "receipts_registered": case "receipts_confirmed": case "receipts_settled": {
       if (!financial) throw new DomainError("forbidden", "Sem permissão.");

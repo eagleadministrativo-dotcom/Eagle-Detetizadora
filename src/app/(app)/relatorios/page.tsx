@@ -12,7 +12,7 @@ export default async function Reports() {
   const mes = `de=${monthStart(today)}&ate=${today}`;
   const ant = `de=${monthStart(addMonths(today, -1))}&ate=${monthEnd(addMonths(today, -1))}`;
   const items = [
-    { k: "revenue", t: "Receita operacional", d: "Atendimentos concluídos, com cliente, profissional e valor." },
+    { k: "revenue", t: "Receita de serviços", d: "Atendimentos concluídos, com cliente, profissional e valor." },
     { k: "attendances", t: "Atendimentos concluídos", d: "Lista completa do período." },
     { k: "ticket", t: "Ticket médio", d: "Receita elegível ÷ atendimentos elegíveis." },
     { k: "occupancy", t: "Ocupação", d: "Agendamentos considerados no cálculo de ocupação." },

@@ -10,7 +10,7 @@ export const metadata = { title: "DRE gerencial" };
 
 export default async function DrePage({ searchParams }: { searchParams: Promise<{ m?: string; de?: string; ate?: string }> }) {
   const sp = await searchParams;
-  const { ctx } = await requirePerm("finance.view");
+  const { ctx } = await requirePerm("finance.view", "finance.dre_view");
   const today = todayYmd();
   const custom = /^\d{4}-\d{2}-\d{2}$/.test(sp.de ?? "") && /^\d{4}-\d{2}-\d{2}$/.test(sp.ate ?? "") && sp.de! <= sp.ate!;
   const m = /^\d{4}-\d{2}$/.test(sp.m ?? "") ? `${sp.m}-01` : monthStart(today);
