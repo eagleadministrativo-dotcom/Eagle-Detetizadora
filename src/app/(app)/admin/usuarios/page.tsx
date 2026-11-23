@@ -1,10 +1,13 @@
+import Link from "next/link";
 import { getDb } from "@/server/db";
 import { requirePerm } from "@/server/session";
 import { listUsers } from "@/server/services/bootstrap";
 import { listCatalog } from "@/server/services/catalog";
-import { GRANTABLE, PERMISSION_LABEL, ROLE_LABEL, type Role } from "@/server/permissions";
+import { PERMISSION_GROUPS, ROLE_LABEL, type Role } from "@/server/permissions";
 import { fmtDateTime } from "@/lib/dates";
 import { Badge, ConfirmAction, Field, Flash, PageHead } from "@/components/ui";
+import { listProfiles } from "@/server/services/access";
+import { deleteProfileAction } from "@/app/actions/access";
 import { createUserAction, resetPasswordAction, updateUserAction } from "@/app/actions/admin";
 
 export const metadata = { title: "Usuários e permissões" };
@@ -16,6 +19,7 @@ export default async function UsersAdmin({ searchParams }: { searchParams: Promi
   const db = await getDb();
   const users = await listUsers(db, ctx);
   const cat = await listCatalog(db, ctx.unitId);
+  const profiles = await listProfiles(db, ctx);
   const freeStaff = cat.staff.filter((s) => s.is_active && !s.user_id);
   return (
     <>
@@ -33,13 +37,7 @@ export default async function UsersAdmin({ searchParams }: { searchParams: Promi
                   <Field label="Perfil"><select name="role" defaultValue={u.role}>{ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select></Field>
                   <label className="check"><input type="checkbox" name="isActive" defaultChecked={u.is_active} />Acesso ativo</label>
                 </div>
-                <fieldset>
-                  <legend>Permissões adicionais (além do perfil)</legend>
-                  <div className="stack">
-                    {GRANTABLE.map((p) => <label className="check" key={p}><input type="checkbox" name={`perm_${p}`} defaultChecked={u.overrides.includes(p)} />{PERMISSION_LABEL[p] ?? p}</label>)}
-                  </div>
-                </fieldset>
-                <div><button className="btn accent" type="submit">Salvar</button></div>
+                <div className="row"><button className="btn" type="submit">Salvar</button><Link className="btn accent" href={`/admin/usuarios/${u.id}`}>Permissões individuais</Link></div>
               </form>
               <ConfirmAction label="Redefinir senha e 2FA" action={resetPasswordAction} submit="Redefinir" warn="Encerra todas as sessões do usuário e reinicia o autenticador.">
                 <input type="hidden" name="id" value={u.id} />
@@ -58,9 +56,15 @@ export default async function UsersAdmin({ searchParams }: { searchParams: Promi
           <Field label="Vincular ao profissional"><select name="staffId" defaultValue=""><option value="">—</option>{freeStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
           <Field label="Senha inicial (mín. 10, letras e números)"><input name="password" type="password" minLength={10} required autoComplete="new-password" /></Field>
         </div>
+        <fieldset>
+          <legend>Acesso</legend>
+          <Field label="Começar com"><select name="profileId" defaultValue=""><option value="">O padrão do perfil escolhido acima</option>{profiles.map((x) => <option key={x.id} value={x.id}>Perfil salvo: {x.name}</option>)}<option value="custom">Escolher uma a uma (abaixo)</option></select></Field>
+          <details style={{ marginTop: 10 }}><summary>Permissões uma a uma</summary><div className="permgrid" style={{ marginTop: 10 }}>{PERMISSION_GROUPS.map((g) => <fieldset key={g.title}><legend>{g.title}</legend>{g.items.map(([k, l]) => <label key={k} className="check"><input type="checkbox" name="perm" value={k} disabled={k === "tasks.own"} defaultChecked={k === "tasks.own"} />{l}</label>)}</fieldset>)}</div></details>
+        </fieldset>
         <small>Barbeiros precisam estar vinculados a um profissional para ter agenda própria. Proprietário e gerente configuram a verificação em duas etapas no primeiro acesso.</small>
         <div><button className="btn accent" type="submit">Criar usuário</button></div>
       </form>
+      {profiles.length ? <section className="card stack"><h2>Perfis salvos</h2>{profiles.map((x) => <div className="row" key={x.id}><span className="grow"><b>{x.name}</b> <small>· {ROLE_LABEL[x.base_role]} · {x.permissions.length} permissões · {x.users} pessoa(s)</small></span><form action={deleteProfileAction}><input type="hidden" name="id" value={x.id} /><button className="btn small ghost" type="submit">Remover</button></form></div>)}</section> : null}
     </>
   );
 }

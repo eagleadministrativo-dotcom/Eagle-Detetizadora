@@ -2,160 +2,137 @@ import Link from "next/link";
 import { getDb } from "@/server/db";
 import { requirePerm } from "@/server/session";
 import { can, getSettings } from "@/server/core";
-import { listAppointments, listBlocks, type AppointmentRow } from "@/server/services/agenda";
+import { listAppointments, listBlocks } from "@/server/services/agenda";
 import { listCatalog } from "@/server/services/catalog";
-import { addDays, dayEndUtc, dayOfWeek, dayStartUtc, fmtTime, fmtYmd, todayYmd } from "@/lib/dates";
-import { ApptBadge, Empty, Flash, PageHead, Seg } from "@/components/ui";
+import { getPrefs } from "@/server/services/access";
+import { addDays, addMonths, dayEndUtc, dayOfWeek, dayStartUtc, fmtTime, fmtYmd, monthEnd, monthStart, todayYmd, toYmd } from "@/lib/dates";
+import { Empty, Flash, PageHead, Seg } from "@/components/ui";
+import { Calendar, type CalBlock, type CalCol, type CalEvent } from "@/components/calendar";
 import { removeBlockAction } from "@/app/actions/agenda";
 
 export const metadata = { title: "Agenda" };
 type SP = { d?: string; v?: string; g?: string; s?: string; ok?: string; erro?: string };
 const DOW = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
-const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+const MON = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 
 export default async function AgendaPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const { ctx } = await requirePerm("agenda.view_all", "agenda.view_own");
   const db = await getDb();
-  const d = /^\d{4}-\d{2}-\d{2}$/.test(sp.d ?? "") ? sp.d! : todayYmd();
-  const view = sp.v === "semana" ? "semana" : "dia";
-  const group = sp.g === "prof" ? "prof" : "cadeira";
+  const today = todayYmd();
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(sp.d ?? "") && !Number.isNaN(Date.parse(sp.d!)) ? sp.d! : today;
+  const prefs = await getPrefs(db, ctx.userId);
+  const view = sp.v === "dia" || sp.v === "semana" || sp.v === "mes" ? sp.v : prefs.agenda_view;
   const all = can(ctx, "agenda.view_all");
-  const staffFilter = all ? sp.s || null : ctx.staffId ?? null;
+  const group = sp.g === "cadeira" ? "cadeira" : "prof";
+  const staffFilter = all ? (/^[0-9a-f-]{36}$/.test(sp.s ?? "") ? sp.s! : null) : ctx.staffId ?? null;
   const cat = await listCatalog(db, ctx.unitId);
   const settings = await getSettings(db.query, ctx.unitId);
-  const canBook = can(ctx, "agenda.manage") || can(ctx, "agenda.manage_own");
-  const q = (o: Partial<SP>) => {
-    const p = new URLSearchParams({ d, v: view, g: group, ...(staffFilter && all ? { s: staffFilter } : {}), ...(o as Record<string, string>) });
-    return `/agenda?${p.toString()}`;
-  };
-  const step = view === "semana" ? 7 : 1;
+  const manageAll = can(ctx, "agenda.manage"), manageOwn = can(ctx, "agenda.manage_own");
+  const canBook = can(ctx, "agenda.create") && (manageAll || manageOwn);
+  const href = (o: Partial<SP>) => `/agenda?${new URLSearchParams({ d, v: view, g: group, ...(staffFilter && all ? { s: staffFilter } : {}), ...(o as Record<string, string>) }).toString()}`;
 
   const weekStart = addDays(d, -((dayOfWeek(d) + 6) % 7));
-  const rangeStart = view === "semana" ? weekStart : d;
-  const rangeEnd = view === "semana" ? addDays(weekStart, 6) : d;
-  const range = { from: dayStartUtc(rangeStart), to: dayEndUtc(rangeEnd) };
-  const appts = await listAppointments(db, ctx, range, { staffId: staffFilter, includeCancelled: false });
+  const gridStart = view === "mes" ? addDays(monthStart(d), -((dayOfWeek(monthStart(d)) + 6) % 7)) : view === "semana" ? weekStart : d;
+  const gridEnd = view === "mes" ? addDays(monthEnd(d), (7 - dayOfWeek(monthEnd(d))) % 7) : view === "semana" ? addDays(weekStart, 6) : d;
+  const range = { from: dayStartUtc(gridStart), to: dayEndUtc(gridEnd) };
+  const appts = await listAppointments(db, ctx, range, { staffId: staffFilter });
   const blocks = await listBlocks(db, ctx, range);
+  const prev = view === "mes" ? addMonths(monthStart(d), -1) : addDays(d, view === "semana" ? -7 : -1);
+  const next = view === "mes" ? addMonths(monthStart(d), 1) : addDays(d, view === "semana" ? 7 : 1);
+  const title = view === "mes" ? `${MON[Number(d.slice(5, 7)) - 1]} de ${d.slice(0, 4)}` : view === "semana" ? `${fmtYmd(weekStart).slice(0, 5)} a ${fmtYmd(addDays(weekStart, 6)).slice(0, 5)}` : `${DOW[dayOfWeek(d)]}, ${fmtYmd(d).slice(0, 5)}`;
 
-  const title = view === "semana" ? `Semana de ${fmtYmd(weekStart)}` : `${DOW[dayOfWeek(d)]}, ${fmtYmd(d)}`;
-  const newLink = (extra: Record<string, string> = {}) => `/agenda/novo?${new URLSearchParams({ d, ...extra }).toString()}`;
+  const staff = cat.staff.filter((s) => s.is_active && (!staffFilter || s.id === staffFilter));
+  const chairs = cat.chairs.filter((c) => c.is_active);
+  const days = Array.from({ length: view === "semana" ? 7 : 1 }, (_, i) => addDays(view === "semana" ? weekStart : d, i));
+  const scheds = view === "mes" ? [] : await db.query<{ staff_id: string; day_of_week: number; a: string; b: string }>("select ss.staff_id, ss.day_of_week, to_char(ss.start_time,'HH24:MI') as a, to_char(ss.end_time,'HH24:MI') as b from staff_schedules ss join staff s on s.id=ss.staff_id where s.unit_id=$1 order by ss.start_time", [ctx.unitId]);
+  const hours = (ymd: string) => (settings.business_hours[String(dayOfWeek(ymd))] ?? []).map(([a, b]) => [toMin(a), toMin(b)] as [number, number]);
 
-  // geometria do calendário (dia)
-  const dayBH = settings.business_hours[String(dayOfWeek(d))] ?? [];
-  let startMin = dayBH.length ? Math.min(...dayBH.map(([a]) => Number(a.slice(0, 2)) * 60 + Number(a.slice(3)))) : 8 * 60;
-  let endMin = dayBH.length ? Math.max(...dayBH.map(([, b]) => Number(b.slice(0, 2)) * 60 + Number(b.slice(3)))) : 20 * 60;
-  const dayStart = dayStartUtc(d).getTime();
-  const mins = (t: Date) => Math.round((t.getTime() - dayStart) / 60000);
-  if (view === "dia") for (const a of appts) { startMin = Math.min(startMin, Math.floor(mins(a.starts_at) / 60) * 60); endMin = Math.max(endMin, Math.ceil(mins(a.ends_at) / 60) * 60); }
-  startMin = Math.max(0, startMin); endMin = Math.min(24 * 60, Math.max(endMin, startMin + 60));
-  const rows = (endMin - startMin) / 15;
-  const cols = group === "cadeira" ? cat.chairs.filter((c) => c.is_active).map((c) => ({ id: c.id, name: c.name })) : cat.staff.filter((s) => s.is_active && (!staffFilter || s.id === staffFilter)).map((s) => ({ id: s.id, name: s.name }));
-  const colOf = (a: AppointmentRow) => cols.findIndex((c) => c.id === (group === "cadeira" ? a.chair_id : a.staff_id));
-
-  const apptLink = (a: AppointmentRow) => `/agenda/${a.id}`;
-  const apptText = (a: AppointmentRow) => (
-    <>
-      <b>{fmtTime(a.starts_at)}</b> {a.customer_name}
-      <br /><small>{a.services}</small>
-    </>
-  );
+  // faixa visível: funcionamento do período, ampliada por agendamentos fora dele
+  const mins = (t: Date, ymd: string) => Math.round((t.getTime() - dayStartUtc(ymd).getTime()) / 60000);
+  const spans = [...days.flatMap(hours), ...scheds.filter((s) => days.some((x) => dayOfWeek(x) === s.day_of_week)).map((s) => [toMin(s.a), toMin(s.b)] as [number, number]), ...appts.map((a) => { const y = toYmd(a.starts_at); return [mins(a.starts_at, y), mins(a.ends_at, y)] as [number, number]; })];
+  const start = Math.max(0, Math.floor(Math.min(8 * 60, ...spans.map((s) => s[0])) / 60) * 60);
+  const end = Math.min(24 * 60, Math.ceil(Math.max(20 * 60, ...spans.map((s) => s[1])) / 60) * 60);
+  const offOf = (open: [number, number][]): [number, number][] => {
+    if (!open.length) return [];
+    const out: [number, number][] = [];
+    let at = start;
+    for (const [a, b] of [...open].sort((x, y) => x[0] - y[0])) { if (a > at) out.push([at, a]); at = Math.max(at, b); }
+    if (at < end) out.push([at, end]);
+    return out;
+  };
+  const work = (staffId: string, ymd: string) => {
+    const mine = scheds.filter((s) => s.staff_id === staffId);
+    if (!mine.length) return hours(ymd);
+    const t = mine.filter((s) => s.day_of_week === dayOfWeek(ymd)).map((s) => [toMin(s.a), toMin(s.b)] as [number, number]);
+    return t.length ? t : [[end, end] as [number, number]]; // folga: o dia inteiro fora da escala
+  };
+  const cols: CalCol[] = view === "semana"
+    ? days.map((y) => ({ key: y, date: y, staffId: staffFilter ?? undefined, label: DOW[dayOfWeek(y)].slice(0, 3), num: String(Number(y.slice(8))), href: href({ d: y, v: "dia" }), today: y === today, off: offOf(staffFilter ? work(staffFilter, y) : hours(y)) }))
+    : group === "cadeira" && all ? chairs.map((c) => ({ key: c.id, date: d, chairId: c.id, label: c.name, today: d === today, off: offOf(hours(d)) }))
+    : staff.map((s) => ({ key: s.id, date: d, staffId: s.id, label: s.name, color: s.color, today: d === today, off: offOf(work(s.id, d)) }));
+  const colKey = (a: { starts_at: Date; staff_id: string; chair_id: string }) => (view === "semana" ? toYmd(a.starts_at) : group === "cadeira" && all ? a.chair_id : a.staff_id);
+  const events: CalEvent[] = appts.map((a) => { const y = toYmd(a.starts_at); return {
+    id: a.id, col: colKey(a), s: mins(a.starts_at, y), e: mins(a.ends_at, y), title: a.customer_name, sub: [a.services, view === "semana" && !staffFilter ? a.staff_name : group === "cadeira" ? a.staff_name : a.chair_name].join(" · "), status: a.status, color: a.staff_color,
+    movable: a.status === "agendado" && can(ctx, "agenda.edit") && (manageAll || (manageOwn && a.staff_id === ctx.staffId)), rec: !!a.series_id,
+  }; });
+  const calBlocks: CalBlock[] = view === "mes" ? [] : blocks.flatMap((b) => cols.filter((c) => (view === "semana" ? (!b.staff_id || b.staff_id === staffFilter) && !b.chair_id : group === "cadeira" && all ? (b.chair_id ? b.chair_id === c.chairId : !b.staff_id) : (b.staff_id ? b.staff_id === c.staffId : !b.chair_id))).flatMap((c) => {
+    const s = Math.max(0, mins(b.starts_at, c.date)), e = Math.min(1440, mins(b.ends_at, c.date));
+    return e > s && s < 1440 ? [{ id: b.id, col: c.key, s, e, reason: b.reason }] : [];
+  }));
 
   return (
     <>
-      <PageHead title="Agenda" sub={title}>
-        <Seg items={[{ href: q({ v: "dia" }), label: "Dia", active: view === "dia" }, { href: q({ v: "semana" }), label: "Semana", active: view === "semana" }]} />
-        <Link className="btn ghost" href={q({ d: addDays(d, -step) })}>‹</Link>
-        <Link className="btn ghost" href={q({ d: todayYmd() })}>Hoje</Link>
-        <Link className="btn ghost" href={q({ d: addDays(d, step) })}>›</Link>
-        {canBook ? <Link className="btn accent" href={newLink()}>+ Agendar</Link> : null}
+      <PageHead title="Agenda">
         {canBook ? <Link className="btn ghost" href="/agenda/novo?imediato=1">Sem hora marcada</Link> : null}
+        {canBook ? <Link className="btn accent" href={`/agenda/novo?d=${d}`}>Agendar</Link> : null}
       </PageHead>
       <Flash ok={sp.ok} erro={sp.erro} />
-
-      {all ? (
-        <form className="filters" method="get">
-          <input type="hidden" name="d" value={d} /><input type="hidden" name="v" value={view} />
-          <label>Visão por<select name="g" defaultValue={group}><option value="cadeira">Cadeira</option><option value="prof">Profissional</option></select></label>
-          <label>Profissional<select name="s" defaultValue={staffFilter ?? ""}><option value="">Todos</option>{cat.staff.filter((s) => s.is_active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-          <button className="btn ghost" type="submit">Filtrar</button>
-        </form>
+      <div className="calbar">
+        <div className="calnav">
+          <Link className="btn icon ghost" href={href({ d: prev })} aria-label="Anterior">‹</Link>
+          <Link className="btn icon ghost" href={href({ d: next })} aria-label="Próximo">›</Link>
+          <Link className="btn ghost small" href={href({ d: today })}>Hoje</Link>
+          <h2>{title}</h2>
+        </div>
+        <div className="row">
+          <form method="get" className="row"><input type="hidden" name="v" value={view} /><input type="hidden" name="g" value={group} />{staffFilter && all ? <input type="hidden" name="s" value={staffFilter} /> : null}<input type="date" name="d" defaultValue={d} aria-label="Ir para a data" style={{ width: 150 }} /><button className="btn small ghost" type="submit">Ir</button></form>
+          <Seg items={[{ href: href({ v: "dia" }), label: "Dia", active: view === "dia" }, { href: href({ v: "semana" }), label: "Semana", active: view === "semana" }, { href: href({ v: "mes" }), label: "Mês", active: view === "mes" }]} />
+          {all && view === "dia" ? <Seg items={[{ href: href({ g: "prof" }), label: "Barbeiros", active: group === "prof" }, { href: href({ g: "cadeira" }), label: "Cadeiras", active: group === "cadeira" }]} /> : null}
+        </div>
+      </div>
+      {all && cat.staff.filter((s) => s.is_active).length > 1 ? (
+        <div className="chips">
+          <Link className="chip" style={{ textDecoration: "none", ...(staffFilter ? {} : { background: "var(--olive-soft)", borderColor: "var(--olive)" }) }} href={`/agenda?${new URLSearchParams({ d, v: view, g: group }).toString()}`}>Todos</Link>
+          {cat.staff.filter((s) => s.is_active).map((s) => <Link key={s.id} className="chip" style={{ textDecoration: "none", ...(staffFilter === s.id ? { background: "var(--olive-soft)", borderColor: "var(--olive)" } : {}) }} href={href({ s: s.id })}><span className="pri" style={{ background: s.color }} />{s.name}</Link>)}
+        </div>
       ) : null}
-
-      {view === "dia" ? (
-        <>
-          {cat.chairs.filter((c) => c.is_active).length === 0 ? <Empty title="Nenhuma cadeira cadastrada">Cadastre em Administração → Cadeiras e horários.</Empty> : (
-            <div className="only-desktop">
-              <div className="cal" style={{ gridTemplateColumns: `52px repeat(${Math.max(cols.length, 1)}, minmax(150px, 1fr))`, gridTemplateRows: `34px repeat(${rows}, 20px)` }}>
-                <div className="ch" style={{ borderLeft: 0 }} />
-                {cols.map((c, i) => <div key={c.id} className="ch" style={{ gridColumn: i + 2, gridRow: 1 }}>{c.name}</div>)}
-                {Array.from({ length: rows / 2 }, (_, i) => {
-                  const m = startMin + i * 30;
-                  return <div key={m} className="tl" style={{ gridColumn: 1, gridRow: `${2 + i * 2} / span 2` }}>{m % 60 === 0 ? hhmm(m) : ""}</div>;
-                })}
-                {canBook ? cols.flatMap((c, ci) => Array.from({ length: rows / 2 }, (_, i) => {
-                  const m = startMin + i * 30;
-                  const extra: Record<string, string> = { t: hhmm(m), ...(group === "cadeira" ? { c: c.id } : { s: c.id }) };
-                  return <Link key={`${c.id}-${m}`} className="fs" href={newLink(extra)} style={{ gridColumn: ci + 2, gridRow: `${2 + i * 2} / span 2` }} aria-label={`Agendar ${hhmm(m)} em ${c.name}`}>+</Link>;
-                })) : null}
-                {blocks.filter((b) => mins(b.starts_at) < endMin && mins(b.ends_at) > startMin).flatMap((b) => {
-                  const targets = group === "cadeira" ? (b.chair_id ? [b.chair_id] : b.staff_id ? [] : cols.map((c) => c.id)) : (b.staff_id ? [b.staff_id] : b.chair_id ? [] : cols.map((c) => c.id));
-                  return targets.map((tid) => {
-                    const ci = cols.findIndex((c) => c.id === tid);
-                    if (ci < 0) return null;
-                    const r1 = Math.max(0, (Math.max(mins(b.starts_at), startMin) - startMin) / 15), r2 = (Math.min(mins(b.ends_at), endMin) - startMin) / 15;
-                    return <div key={`${b.id}-${tid}`} className="appt block ev" style={{ gridColumn: ci + 2, gridRow: `${2 + r1} / ${2 + r2}` }}><b>Bloqueado</b> {b.reason}</div>;
-                  });
-                })}
-                {appts.map((a) => {
-                  const ci = colOf(a);
-                  if (ci < 0) return null;
-                  const r1 = Math.max(0, (mins(a.starts_at) - startMin) / 15), r2 = Math.max(r1 + 1, (mins(a.ends_at) - startMin) / 15);
-                  return (
-                    <Link key={a.id} href={apptLink(a)} className={`appt ev ${a.status}`} style={{ gridColumn: ci + 2, gridRow: `${2 + Math.floor(r1)} / ${2 + Math.ceil(r2)}`, borderLeftColor: a.staff_color }}>
-                      {apptText(a)}{group === "cadeira" ? <small> · {a.staff_name}</small> : null}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          <div className="only-mobile">
-            {appts.length === 0 && blocks.length === 0 ? <Empty title="Dia livre">Nenhum agendamento. Toque em &quot;+ Agendar&quot;.</Empty> : (
-              <div className="daylist">
-                {[...appts.map((a) => ({ t: a.starts_at, node: (
-                  <Link key={a.id} className="item" href={apptLink(a)}>
-                    <span className="t">{fmtTime(a.starts_at)}</span>
-                    <span><b>{a.customer_name}</b><br /><small>{a.services} · {a.staff_name} · {a.chair_name}</small></span>
-                    <ApptBadge s={a.status} />
-                  </Link>) })),
-                ...blocks.map((b) => ({ t: b.starts_at, node: <div key={b.id} className="item"><span className="t">{fmtTime(b.starts_at)}</span><span><b>Bloqueado</b><br /><small>{b.reason}</small></span><span /></div> }))]
-                  .sort((x, y) => x.t.getTime() - y.t.getTime()).map((x) => x.node)}
-              </div>
-            )}
-          </div>
-        </>
-      ) : (
-        <div className="week">
-          {Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).map((day) => {
-            const list = appts.filter((a) => a.starts_at >= dayStartUtc(day) && a.starts_at < dayEndUtc(day));
+      {view === "mes" ? (
+        <div className="calendar month">
+          {[1, 2, 3, 4, 5, 6, 0].map((w) => <div className="dh" key={w}>{DOW[w].slice(0, 3)}</div>)}
+          {Array.from({ length: Math.round((Date.parse(gridEnd) - Date.parse(gridStart)) / 86400000) + 1 }, (_, i) => addDays(gridStart, i)).map((y) => {
+            const list = appts.filter((a) => toYmd(a.starts_at) === y);
             return (
-              <div className="day" key={day}>
-                <h3><Link href={q({ d: day, v: "dia" })}>{DOW[dayOfWeek(day)].slice(0, 3)} {fmtYmd(day).slice(0, 5)}</Link></h3>
-                {list.length === 0 ? <small>Livre</small> : list.map((a) => <Link key={a.id} href={apptLink(a)} className={`appt ${a.status}`} style={{ borderLeftColor: a.staff_color }}>{apptText(a)}</Link>)}
-              </div>
+              <Link key={y} className={`d ${y.slice(0, 7) !== d.slice(0, 7) ? "out" : ""} ${y === today ? "today" : ""}`} href={href({ d: y, v: "dia" })} aria-label={`${fmtYmd(y)}: ${list.length} agendamento(s)`}>
+                <span className="n">{Number(y.slice(8))}</span>
+                {list.slice(0, 3).map((a) => <span key={a.id} className="e" style={{ "--c": a.staff_color } as React.CSSProperties}>{fmtTime(a.starts_at)} {a.customer_name}</span>)}
+                {list.length > 3 ? <small>+{list.length - 3}</small> : null}
+              </Link>
             );
           })}
         </div>
+      ) : cols.length === 0 ? <Empty title="Nada para mostrar">Cadastre profissionais e cadeiras em Administração.</Empty> : (
+        <Calendar cols={cols} events={events} blocks={calBlocks} start={start} end={end} canBook={canBook} canBlock={can(ctx, "agenda.block")} />
       )}
-
+      {view !== "mes" && canBook ? <small>Arraste um horário para reagendar, puxe a borda de baixo para mudar a duração ou selecione um espaço livre. No celular, segure o horário antes de arrastar.</small> : null}
       {view === "dia" && blocks.length ? (
         <section className="card">
           <h2>Bloqueios do dia</h2>
-          <div className="stack" style={{ marginTop: 8 }}>
+          <div className="stack">
             {blocks.map((b) => (
               <div className="row" key={b.id}>
-                <span><b>{fmtTime(b.starts_at)}–{fmtTime(b.ends_at)}</b> · {b.reason} <small>({b.chair_name ?? b.staff_name ?? "toda a unidade"})</small></span>
+                <span className="grow"><b>{fmtTime(b.starts_at)}–{fmtTime(b.ends_at)}</b> · {b.reason} <small>({b.chair_name ?? b.staff_name ?? "toda a unidade"})</small></span>
                 {can(ctx, "agenda.block") ? <form action={removeBlockAction}><input type="hidden" name="id" value={b.id} /><input type="hidden" name="d" value={d} /><button className="btn small ghost" type="submit">Remover</button></form> : null}
               </div>
             ))}

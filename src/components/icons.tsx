@@ -15,6 +15,16 @@ const P: Record<string, ReactElement> = {
   more: <path d="M5 12h.01M12 12h.01M19 12h.01" />,
   arrow: <path d="M7 17 17 7M9 7h8v8" />,
   receipt: <path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6" />,
+  search: <path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Zm5-2 4 4" />,
+  sun: <path d="M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />,
+  moon: <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" />,
+  auto: <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 3v18M12 8h7M12 12h9M12 16h7" />,
+  check: <path d="M4 6h10M4 12h7M4 18h7M14 15l3 3 5-6" />,
+  repeat: <path d="M4 11a8 8 0 0 1 14-4l2 2M20 4v5h-5M20 13a8 8 0 0 1-14 4l-2-2M4 20v-5h5" />,
+  box: <path d="m12 3 8 4v10l-8 4-8-4V7zM4 7l8 4 8-4M12 11v10" />,
+  coins: <path d="M9 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10ZM15.5 8.2A6 6 0 1 1 9 17" />,
+  trophy: <path d="M7 4h10v5a5 5 0 0 1-10 0zM7 6H4c0 3 1 5 3.5 5M17 6h3c0 3-1 5-3.5 5M12 14v4M8 21h8M10 18h4" />,
+  team: <path d="M12 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM5 21a7 7 0 0 1 14 0M4 13a2.5 2.5 0 1 0 0-5M20 13a2.5 2.5 0 1 1 0-5" />,
   shield: <path d="M12 3 4 6v6c0 4.5 3.2 7.8 8 9 4.8-1.2 8-4.5 8-9V6z" />,
 };
 export type IconName = keyof typeof P;
@@ -33,6 +43,13 @@ export function iconFor(href: string): IconName {
   if (href.startsWith("/agenda")) return "calendar";
   if (href.startsWith("/atendimentos")) return "scissors";
   if (href.startsWith("/clientes")) return "users";
+  if (href.startsWith("/tarefas")) return "check";
+  if (href.startsWith("/retornos")) return "repeat";
+  if (href.startsWith("/produtos")) return "box";
+  if (href.startsWith("/comissoes") || href.startsWith("/meu-financeiro")) return "coins";
+  if (href.startsWith("/conquistas")) return "trophy";
+  if (href.startsWith("/equipe")) return "team";
+  if (href.startsWith("/notificacoes")) return "bell";
   if (href.startsWith("/financeiro")) return "wallet";
   if (href.startsWith("/relatorios")) return "chart";
   if (href.startsWith("/admin/auditoria") || href.startsWith("/admin/usuarios")) return "shield";

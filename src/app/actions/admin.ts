@@ -4,7 +4,8 @@ import { requireSession, run, str, optStr, bool } from "@/server/session";
 import { saveService, saveCategory, savePaymentMethod, saveChair, saveStaff, saveFinancialCategory, saveFinancialAccount, updateSettings, updateBusinessHours } from "@/server/services/catalog";
 import { createUser, resetUserPassword, updateUser } from "@/server/services/bootstrap";
 import { DomainError } from "@/server/errors";
-import { GRANTABLE, type Role } from "@/server/permissions";
+import type { Role } from "@/server/permissions";
+import { applyProfile, setUserPermissions } from "@/server/services/access";
 import { atLocal } from "@/lib/dates";
 import { parseBRL } from "@/lib/money";
 
@@ -128,7 +129,13 @@ export async function updateSettingsAction(fd: FormData) {
 export async function createUserAction(fd: FormData) {
   const { ctx } = await requireSession();
   await run("/admin/usuarios", async () => {
-    await createUser(await getDb(), ctx, { email: str(fd, "email"), fullName: str(fd, "name"), role: str(fd, "role") as Role, password: str(fd, "password"), staffId: optStr(fd, "staffId") });
+    const db = await getDb();
+    const profileId = str(fd, "profileId");
+    const id = await createUser(db, ctx, { email: str(fd, "email"), fullName: str(fd, "name"), role: str(fd, "role") as Role, password: str(fd, "password"), staffId: optStr(fd, "staffId") });
+    if (str(fd, "role") !== "proprietario") {
+      if (profileId === "custom") await setUserPermissions(db, ctx, id, fd.getAll("perm").map(String));
+      else if (profileId) await applyProfile(db, ctx, id, profileId);
+    }
     return "Usuário criado. Informe a senha inicial por um canal seguro; ela pode ser trocada em Minha conta.";
   });
 }
@@ -136,8 +143,7 @@ export async function createUserAction(fd: FormData) {
 export async function updateUserAction(fd: FormData) {
   const { ctx } = await requireSession();
   await run("/admin/usuarios", async () => {
-    const overrides = GRANTABLE.filter((p) => fd.get(`perm_${p}`) === "on");
-    await updateUser(await getDb(), ctx, str(fd, "id"), { role: str(fd, "role") as Role, isActive: bool(fd, "isActive"), overrides });
+    await updateUser(await getDb(), ctx, str(fd, "id"), { role: str(fd, "role") as Role, isActive: bool(fd, "isActive") });
     return "Usuário atualizado.";
   });
 }

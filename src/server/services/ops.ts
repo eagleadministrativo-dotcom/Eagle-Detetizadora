@@ -1,5 +1,5 @@
 import type { Db, Q } from "../db";
-import { audit, can, finishAutomation, need, startAutomation } from "../core";
+import { audit, finishAutomation, need, startAutomation } from "../core";
 import { DomainError } from "../errors";
 import { buildPerms, type Ctx } from "../permissions";
 import { addDays, fmtYmd, monthEnd, todayYmd } from "@/lib/dates";

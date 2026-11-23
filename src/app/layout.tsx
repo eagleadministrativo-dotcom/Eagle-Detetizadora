@@ -3,6 +3,8 @@ import "@fontsource-variable/fraunces";
 import "@fontsource-variable/inter";
 import "./tokens.css";
 import "./globals.css";
+import "./v4.css";
+import { cookies } from "next/headers";
 
 export const metadata: Metadata = {
   title: { default: "MARFIM Studio OS", template: "%s · MARFIM Studio OS" },
@@ -11,11 +13,12 @@ export const metadata: Metadata = {
   icons: { icon: "/icons/icon-192.png", apple: "/icons/icon-192.png" },
   appleWebApp: { capable: true, title: "MARFIM", statusBarStyle: "default" },
 };
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#591d27" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: [{ media: "(prefers-color-scheme: light)", color: "#f6f1e7" }, { media: "(prefers-color-scheme: dark)", color: "#121311" }] };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const theme = (await cookies()).get("marfim_theme")?.value;
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" data-theme={theme === "light" || theme === "dark" ? theme : undefined} suppressHydrationWarning>
       <body>{children}</body>
     </html>
   );

@@ -11,7 +11,7 @@ export interface AppointmentRow {
   id: string; customer_id: string; customer_name: string; customer_phone: string | null; customer_notes: string | null;
   staff_id: string; staff_name: string; staff_color: string; chair_id: string; chair_name: string;
   starts_at: Date; ends_at: Date; status: string; notes: string | null; cancellation_reason: string | null;
-  services: string; total_cents: number; attendance_id: string | null;
+  services: string; total_cents: number; attendance_id: string | null; series_id: string | null;
 }
 
 const ACTIVE = "('agendado','em_atendimento','concluido')";
@@ -235,8 +235,9 @@ export async function listAppointments(db: Db, ctx: Ctx, range: { from: Date; to
     if (!ctx.staffId) return [];
     staffId = ctx.staffId;
   }
+  const contact = can(ctx, "customers.view");
   return db.query<AppointmentRow>(
-    `select a.id, a.customer_id, c.name as customer_name, c.phone as customer_phone, c.notes as customer_notes,
+    `select a.id, a.series_id, a.customer_id, c.name as customer_name, ${contact ? "c.phone" : "null::text"} as customer_phone, ${contact ? "c.notes" : "null::text"} as customer_notes,
        a.staff_id, s.name as staff_name, s.color as staff_color, a.chair_id, ch.name as chair_name,
        a.starts_at, a.ends_at, a.status, a.notes, a.cancellation_reason,
        coalesce((select string_agg(x.name_snapshot, ' + ' order by x.name_snapshot) from appointment_services x where x.appointment_id=a.id),'') as services,

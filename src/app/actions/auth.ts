@@ -4,12 +4,17 @@ import { getDb } from "@/server/db";
 import { changePassword, beginMfaSetup, completeMfaSetup, login, logout, verifyMfaForSession } from "@/server/auth";
 import { isDomainError } from "@/server/errors";
 import { setupInitial, isSetupDone } from "@/server/services/bootstrap";
-import { clearSessionCookie, currentSession, sessionToken, setSessionCookie, str } from "@/server/session";
+import { clearSessionCookie, currentSession, sessionToken, setSessionCookie, setThemeCookie, str } from "@/server/session";
+import { getSession } from "@/server/auth";
+import { getPrefs } from "@/server/services/access";
 
 const back = (path: string, erro: string) => redirect(`${path}?erro=${encodeURIComponent(erro)}`);
 
 async function afterLogin(r: { token: string; needsMfa: boolean; needsMfaSetup: boolean }) {
   await setSessionCookie(r.token);
+  const db = await getDb();
+  const s = await getSession(db, r.token);
+  if (s) await setThemeCookie((await getPrefs(db, s.user.id)).theme);
   if (r.needsMfa) redirect("/login/mfa");
   if (r.needsMfaSetup) redirect("/login/mfa/setup");
   redirect("/");

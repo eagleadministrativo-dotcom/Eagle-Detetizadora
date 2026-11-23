@@ -4,6 +4,13 @@ import { createUser, setupInitial } from "./services/bootstrap";
 import { listCatalog, saveFinancialAccount, savePaymentMethod, saveService, saveStaff, updateSettings } from "./services/catalog";
 import { saveCustomer } from "./services/customers";
 import { applyDiscount, completeAttendance, quickAttendance } from "./services/attendance";
+import { adjustStock, saveProduct, sellProducts } from "./services/products";
+import { generateCommissionsTx, saveRule } from "./services/commissions";
+import { createTask } from "./services/tasks";
+import { saveStaffGoal } from "./services/team";
+import { runReturnJobs } from "./services/returns";
+import { runRecordJobs } from "./services/achievements";
+import { processEvents } from "./services/events";
 import { closeCash, expectedByMethod, openCash, addCashMovement } from "./services/cash";
 import { confirmPayment, settlePayment } from "./services/payments";
 import { createPayable, payPayable, saveGoal } from "./services/finance";
@@ -153,5 +160,35 @@ export async function seedDemo(db: Db) {
     await createAppointment(db, owner, { customerId: custs[i + 6], staffId: staffIds[i % 2], serviceIds: [i % 2 ? barbaS : corte], startsAt: atLocal(next, h) }).catch(() => undefined);
   }
   await updateSettings(db, owner, { retroactive_edit_days: 7 });
+  // ---------- V4 (fictício) ----------
+  const people = await db.query<{ id: string; email: string }>("select id, email from users");
+  const uid = (e: string) => people.find((x) => x.email === e)!.id;
+  const pomada = await saveProduct(db, owner, { name: "Pomada modeladora", sku: "POM-01", priceCents: 4500, trackStock: true, minStock: 4, commissionEnabled: true });
+  const shampoo = await saveProduct(db, owner, { name: "Shampoo para barba", sku: "SHA-01", priceCents: 3500, trackStock: true, minStock: 3, commissionEnabled: true });
+  await saveProduct(db, owner, { name: "Óleo para barba", sku: "OLE-01", priceCents: 5900, trackStock: true, minStock: 2, commissionEnabled: false });
+  for (const productId of [pomada, shampoo]) await adjustStock(db, owner, { productId, kind: "entrada", quantity: 20, note: "Estoque inicial (demo)" });
+  const t0 = todayYmd();
+  await saveRule(db, owner, { scope: "servico", pctBps: 4000, base: "liquido", validFrom: t0 });
+  await saveRule(db, owner, { scope: "servico", staffId: rafael, pctBps: 4500, base: "liquido", validFrom: t0 });
+  await saveRule(db, owner, { scope: "produto", pctBps: 1000, base: "liquido", validFrom: t0 });
+  // lançamentos do mês para as telas de comissão (a regra vale só daqui para a frente; isto é dado de demonstração)
+  const past = await db.query<{ id: string; receivable: string; finished_at: Date }>("select a.id, r.id as receivable, a.finished_at from attendances a join receivables r on r.attendance_id=a.id where a.status='concluido' and a.finished_at > now() - interval '45 days'");
+  for (const a of past) {
+    await db.tx((q) => generateCommissionsTx(q, owner, { attendanceId: a.id, receivableId: a.receivable }));
+    await db.query("update commission_entries set reference_at=$2 where attendance_id=$1", [a.id, a.finished_at]);
+  }
+  for (const [staffId, productId, quantity] of [[rafael, pomada, 2], [diego, shampoo, 1], [rafael, shampoo, 1]] as const) await sellProducts(db, owner, { staffId, items: [{ productId, quantity }], idempotencyKey: `demo-sale-${staffId}-${productId}` });
+  await createTask(db, owner, { title: "Higienizar cadeiras e bancadas", assignees: [uid(DEMO_USERS.barber1)], priority: "alta", category: "Limpeza", dueDate: t0, recurrence: { kind: "dias", n: 1 } });
+  await createTask(db, owner, { title: "Conferir estoque de produtos", assignees: [uid(DEMO_USERS.barber1), uid(DEMO_USERS.barber2)], mode: "coletiva", category: "Estoque", dueDate: addDays(t0, 2) });
+  await createTask(db, owner, { title: "Enviar documentos ao contador", assignees: [uid(DEMO_USERS.manager)], priority: "urgente", requiresApproval: true, dueDate: addDays(t0, -1) });
+  await createTask(db, owner, { title: "Revisar metas do mês", assignees: [ownerId], dueDate: addDays(t0, 3) });
+  for (const [metric, target] of [["atendimentos", 80], ["receita_servicos", 600000]] as const) await saveStaffGoal(db, owner, { staffId: rafael, metric, month: t0.slice(0, 7), target });
+  for (let k = 0; k < 6; k++) {
+    const day = addDays(t0, (k % 3) + (dayOfWeek(t0) === 0 ? 1 : 0));
+    await createAppointment(db, owner, { customerId: custs[k], staffId: k % 2 ? diego : rafael, startsAt: atLocal(dayOfWeek(day) === 0 ? addDays(day, 1) : day, `${10 + k}:00`), serviceIds: [k % 2 ? corte : combo] }).catch(() => null);
+  }
+  await runReturnJobs(db, unitId);
+  await runRecordJobs(db, unitId);
+  await processEvents(db, 500);
   return { unitId };
 }

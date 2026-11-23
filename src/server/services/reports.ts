@@ -320,7 +320,8 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
     if (od.n) alerts.push({ severity: "critico", message: `${od.n} conta(s) a pagar vencida(s)`, href: "/financeiro/pagar?f=abertas" });
     const [stale] = await q<{ n: number }>("select count(*)::bigint as n from cash_sessions where unit_id=$1 and status='aberto' and opened_at < now() - interval '16 hours'", [ctx.unitId]);
     if (stale.n) alerts.push({ severity: "atencao", message: "Há um caixa aberto há mais de 16 horas", href: "/financeiro/caixa" });
-    const notes = await q<{ severity: string; message: string; ref_entity: string | null }>("select severity, message, ref_entity from notifications where unit_id=$1 and not is_read order by created_at desc limit 5", [ctx.unitId]);
+    const notes = await q<{ severity: string; message: string; ref_entity: string | null }>(
+      "select n.severity, n.message from notifications n where n.unit_id=$1 and n.user_id is null and n.severity<>'info' and not exists (select 1 from notification_reads r where r.notification_id=n.id and r.user_id=$2) order by n.created_at desc limit 2", [ctx.unitId, ctx.userId]);
     for (const n of notes) if (!alerts.some((a) => a.message === n.message)) alerts.push({ severity: n.severity, message: n.message });
   }
   return { period: p, kpis, accounts, revenueByDay, resultSeries, topServices, byMethod, heat, alerts, warnings: dreWarnings, updatedAt: now };
@@ -341,6 +342,12 @@ export async function indicatorRecords(db: Db, ctx: Ctx, key: string, p: Period,
         `select a.id, a.finished_at as date, c.name as title, (s.name || ' · ' || coalesce((select string_agg(i.name_snapshot,' + ') from attendance_items i where i.attendance_id=a.id),'')) as detail, a.total_cents as cents,
            '/atendimentos/' || a.id as href from attendances a join customers c on c.id=a.customer_id join staff s on s.id=a.staff_id
          where a.unit_id=$1 and a.status='concluido' and a.finished_at >= $2 and a.finished_at < $3 and ($4::uuid is null or a.staff_id=$4) order by a.finished_at desc limit 500`, [ctx.unitId, from, to, staffId]);
+      return { rows, total: rows.reduce((a, r) => a + (r.cents ?? 0), 0) };
+    }
+    case "products": {
+      const rows = await q<RecordRow>(
+        `select s.id, s.finished_at as date, coalesce(c.name,'Venda avulsa') as title, (f.name || ' · ' || coalesce((select string_agg(i.quantity || '× ' || i.name_snapshot, ', ') from product_sale_items i where i.sale_id=s.id),'')) as detail, s.total_cents as cents, '/produtos/vendas/' || s.id as href
+         from product_sales s join staff f on f.id=s.seller_staff_id left join customers c on c.id=s.customer_id where s.unit_id=$1 and s.status='concluida' and s.finished_at >= $2 and s.finished_at < $3 and ($4::uuid is null or s.seller_staff_id=$4) order by s.finished_at desc limit 500`, [ctx.unitId, from, to, staffId]);
       return { rows, total: rows.reduce((a, r) => a + (r.cents ?? 0), 0) };
     }
     case "receipts_registered": case "receipts_confirmed": case "receipts_settled": {

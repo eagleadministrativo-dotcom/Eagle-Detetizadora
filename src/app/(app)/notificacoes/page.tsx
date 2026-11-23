@@ -1,36 +1,39 @@
+import Link from "next/link";
 import { getDb } from "@/server/db";
-import { requirePerm } from "@/server/session";
-import { listNotifications, markNotificationsRead } from "@/server/services/ops";
-import { fmtDateTime } from "@/lib/dates";
-import { Empty, PageHead } from "@/components/ui";
-import { revalidatePath } from "next/cache";
+import { requireSession } from "@/server/session";
+import { listNotifications } from "@/server/services/notify";
+import { fmtTime, fmtYmd, todayYmd, toYmd } from "@/lib/dates";
+import { Empty, PageHead, Pager, Seg } from "@/components/ui";
+import { markReadAction } from "@/app/actions/account";
 
-export const metadata = { title: "Alertas" };
+export const metadata = { title: "Avisos" };
 
-async function markAll() {
-  "use server";
-  const s = await requirePerm("finance.view", "dashboard.full");
-  await markNotificationsRead(await getDb(), s.ctx);
-  revalidatePath("/notificacoes");
-}
-
-export default async function Notifications() {
-  const s = await requirePerm("finance.view", "dashboard.full");
-  const rows = await listNotifications(await getDb(), s.ctx, 100);
+export default async function Notifications({ searchParams }: { searchParams: Promise<{ f?: string; p?: string }> }) {
+  const sp = await searchParams;
+  const { ctx } = await requireSession();
+  const page = Math.max(1, Number(sp.p) || 1);
+  const { rows, total } = await listNotifications(await getDb(), ctx, { unreadOnly: sp.f === "novos", limit: 40, offset: (page - 1) * 40 });
+  const days = [...new Set(rows.map((r) => toYmd(r.created_at)))];
   return (
     <>
-      <PageHead title="Alertas" sub="Avisos gerados pelas rotinas automáticas e pelo caixa.">
-        {rows.some((r) => !r.is_read) ? <form action={markAll}><button className="btn ghost" type="submit">Marcar todos como lidos</button></form> : null}
+      <PageHead title="Avisos" sub="Tudo o que o sistema enviou para você, com ou sem notificação no celular.">
+        <Link className="btn ghost" href="/conta#preferencias">Preferências</Link>
+        {rows.some((r) => !r.is_read) ? <form action={markReadAction}><button className="btn" type="submit">Marcar tudo como lido</button></form> : null}
       </PageHead>
-      {rows.length === 0 ? <Empty title="Nenhum alerta" /> : (
-        <div className="stack">
-          {rows.map((n) => (
-            <div key={n.id} className={`alert ${n.severity}`} style={{ opacity: n.is_read ? 0.65 : 1 }}>
-              {n.message} <small className="muted">· {fmtDateTime(n.created_at)}</small>
+      <Seg items={[{ href: "/notificacoes", label: "Todos", active: sp.f !== "novos" }, { href: "/notificacoes?f=novos", label: "Não lidos", active: sp.f === "novos" }]} />
+      {rows.length === 0 ? <Empty title={sp.f === "novos" ? "Tudo lido" : "Nenhum aviso ainda"} /> : days.map((d) => (
+        <section className="list" key={d}>
+          <div className="daysep">{d === todayYmd() ? "Hoje" : fmtYmd(d)}</div>
+          {rows.filter((r) => toYmd(r.created_at) === d).map((n) => (
+            <div key={n.id} className={`notif ${n.is_read ? "" : `unread ${n.severity}`}`}>
+              <i aria-label={n.is_read ? "Lido" : "Não lido"} />
+              <div>{n.url ? <Link href={n.url}>{n.message}</Link> : n.message}<br /><small>{fmtTime(n.created_at)}{n.severity === "critico" ? " · Prioritário" : ""}</small></div>
+              {!n.is_read ? <form action={markReadAction}><input type="hidden" name="id" value={n.id} /><button className="btn small ghost" type="submit">Lido</button></form> : <span />}
             </div>
           ))}
-        </div>
-      )}
+        </section>
+      ))}
+      {total > 40 ? <Pager base={`/notificacoes${sp.f ? "?f=novos" : ""}`} page={page} total={total} size={40} /> : null}
     </>
   );
 }
