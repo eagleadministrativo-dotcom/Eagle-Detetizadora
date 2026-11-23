@@ -33,7 +33,7 @@ describe("componentes de interface", () => {
   });
   it("ícones são decorativos e mapeados por rota", () => {
     expect(html(h(Icon, { name: "home" }))).toContain('aria-hidden="true"');
-    expect(iconFor("/financeiro/dre")).toBe("wallet");
+    expect(iconFor("/financeiro/dre")).toBe("chart");
     expect(iconFor("/admin/auditoria")).toBe("shield");
     expect(iconFor("/")).toBe("home");
   });
