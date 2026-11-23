@@ -56,6 +56,6 @@ Serviços (nome, categoria, duração, intervalo, cor, quem executa, preço **co
 
 - Nenhum deploy, domínio, repositório GitHub ou projeto Supabase novo (aguardando as contas novas).
 - Sem e-mail/WhatsApp (dependem de serviço externo e custo; alertas ficam dentro do sistema).
-- Sem comissões/repasses, estoque, fiscal e multiunidade na interface (previstos no modelo de dados; fora do MVP).
+- Fiscal e multiunidade seguem fora da interface. Comissões, estoque, tarefas e retornos entraram na V4 (ver `docs/V4.md`).
 - Sem IA (a lógica financeira é determinística e testável).
 - Restauração de backup do Supabase não pôde ser testada (não há projeto); o procedimento está em `OPERACAO.md`.

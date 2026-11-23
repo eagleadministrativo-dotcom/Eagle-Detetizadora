@@ -205,7 +205,7 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
   const kpis: Kpi[] = [];
   const base = { updatedAt: now };
   kpis.push({
-    key: "revenue", label: "Receita operacional", value: rev.revenue, unit: "brl", previous: revPrev.revenue,
+    key: "revenue", label: "Receita de serviços", value: rev.revenue, unit: "brl", previous: revPrev.revenue,
     definition: "Valor dos atendimentos concluídos no período, já descontados os descontos concedidos. Não é dinheiro recebido.",
     formula: "Σ total do atendimento (subtotal − desconto)", source: "attendances (status concluído), por data de conclusão", exclusions: "Atendimentos cancelados, em andamento e agendados.", ...base,
   });
@@ -279,7 +279,7 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
   });
   kpis.push({
     key: "revenue_per_hour", label: "Receita por hora disponível", value: occ.configured && occ.availableMin > 0 ? Math.round(rev.revenue / (occ.availableMin / 60)) : null, unit: "brl",
-    definition: "Receita operacional dividida pelas horas disponibilizadas para atendimento.", formula: "receita operacional ÷ horas disponíveis", source: "attendances, unit_settings.business_hours",
+    definition: "Receita de serviços dividida pelas horas disponibilizadas para atendimento.", formula: "receita de serviços ÷ horas disponíveis", source: "attendances, unit_settings.business_hours",
     exclusions: "—", warning: occ.configured ? undefined : "Cadastre o horário de funcionamento.", ...base,
   });
 
@@ -287,6 +287,11 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
   const { from, to } = range(p);
   const byDay = await q<{ d: string; cents: number }>(
     `select to_char(${LD("finished_at")},'YYYY-MM-DD') as d, sum(total_cents)::bigint as cents from attendances where unit_id=$1 and status='concluido' and finished_at >= $2 and finished_at < $3 and ($4::uuid is null or staff_id=$4) group by 1`, [ctx.unitId, from, to, staffId]);
+  // produtos entram no resultado acumulado, para fechar com a DRE
+  const prodDay = await q<{ d: string; cents: number }>(
+    `select d, sum(c)::bigint as cents from (
+       select to_char(${LD("s.finished_at")},'YYYY-MM-DD') as d, s.total_cents as c from product_sales s where s.unit_id=$1 and s.status='concluida' and s.finished_at >= $2 and s.finished_at < $3 and ($4::uuid is null or s.seller_staff_id=$4)
+       union all select to_char(${LD("r.created_at")},'YYYY-MM-DD'), -r.amount_cents from product_returns r join product_sale_items i on i.id=r.sale_item_id join product_sales s on s.id=i.sale_id where r.unit_id=$1 and r.created_at >= $2 and r.created_at < $3 and ($4::uuid is null or s.seller_staff_id=$4)) x group by d`, [ctx.unitId, from, to, staffId]);
   const expDay = full && can(ctx, "finance.view")
     ? await q<{ d: string; cents: number }>(
         `select to_char(coalesce(b.competence_date,b.due_date),'YYYY-MM-DD') as d, sum(b.amount_cents)::bigint as cents from payables b join financial_categories c on c.id=b.category_id
@@ -299,7 +304,7 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
     const r = byDay.find((x) => x.d === d)?.cents ?? 0;
     const e = expDay.find((x) => x.d === d)?.cents ?? 0;
     revenueByDay.push({ date: d, cents: r, expenses: e });
-    acc += r - e;
+    acc += r + (prodDay.find((x) => x.d === d)?.cents ?? 0) - e;
     resultSeries.push({ date: d, cents: acc });
   }
   const topServices = await q<{ name: string; qty: number; cents: number }>(
@@ -347,8 +352,12 @@ export async function indicatorRecords(db: Db, ctx: Ctx, key: string, p: Period,
     case "products": {
       const rows = await q<RecordRow>(
         `select s.id, s.finished_at as date, coalesce(c.name,'Venda avulsa') as title, (f.name || ' · ' || coalesce((select string_agg(i.quantity || '× ' || i.name_snapshot, ', ') from product_sale_items i where i.sale_id=s.id),'')) as detail, s.total_cents as cents, '/produtos/vendas/' || s.id as href
-         from product_sales s join staff f on f.id=s.seller_staff_id left join customers c on c.id=s.customer_id where s.unit_id=$1 and s.status='concluida' and s.finished_at >= $2 and s.finished_at < $3 and ($4::uuid is null or s.seller_staff_id=$4) order by s.finished_at desc limit 500`, [ctx.unitId, from, to, staffId]);
-      return { rows, total: rows.reduce((a, r) => a + (r.cents ?? 0), 0) };
+         from product_sales s join staff f on f.id=s.seller_staff_id left join customers c on c.id=s.customer_id where s.unit_id=$1 and s.status='concluida' and s.finished_at >= $2 and s.finished_at < $3 and ($4::uuid is null or s.seller_staff_id=$4)
+         union all
+         select r.id, r.created_at, 'Devolução', r.quantity || '× ' || i.name_snapshot, -r.amount_cents, '/produtos/vendas/' || s.id
+         from product_returns r join product_sale_items i on i.id=r.sale_item_id join product_sales s on s.id=i.sale_id where r.unit_id=$1 and r.created_at >= $2 and r.created_at < $3 and ($4::uuid is null or s.seller_staff_id=$4)
+         order by 2 desc limit 500`, [ctx.unitId, from, to, staffId]);
+      return { rows, total: rows.reduce((x, r) => x + (r.cents ?? 0), 0) };
     }
     case "receipts_registered": case "receipts_confirmed": case "receipts_settled": {
       if (!financial) throw new DomainError("forbidden", "Sem permissão.");

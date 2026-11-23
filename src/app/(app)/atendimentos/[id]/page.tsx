@@ -86,16 +86,6 @@ export default async function AttendancePage({ params, searchParams }: { params:
               {done ? <Link className="btn small ghost" href={`/produtos/vendas/${saleOn.id}`}>Ver venda</Link> : null}
             </>
           ) : null}
-          {inProgress && canSell && products.length ? (
-            <details className="confirm neutral" open={!saleOn}>
-              <summary>Produto(s) vendido(s)</summary>
-              <form action={attendanceProductsAction} className="form">
-                <input type="hidden" name="id" value={a.id} />
-                <ProductPicker key={saleOn?.total_cents ?? 0} products={products} initial={(saleOn?.items ?? []).map((i) => ({ id: i.product_id, qty: i.quantity }))} discount={saleOn?.discount_cents ?? 0} reason={saleOn?.discount_reason ?? ""} serviceCents={a.total_cents} />
-                <div><button className="btn small" type="submit">Salvar produtos</button></div>
-              </form>
-            </details>
-          ) : null}
           {inProgress ? (
             <>
               <ConfirmAction label="Alterar serviços" tone="neutral" action={setServicesAction} submit="Salvar serviços">
@@ -123,6 +113,14 @@ export default async function AttendancePage({ params, searchParams }: { params:
             <h2>Concluir atendimento</h2>
             <form action={completeAction} className="form">
               <input type="hidden" name="id" value={a.id} />
+              {canSell && products.length ? (
+                <fieldset>
+                  <legend>Produto(s) vendido(s)</legend>
+                  <input type="hidden" name="withProducts" value="1" />
+                  <ProductPicker key={saleOn?.total_cents ?? 0} products={products} initial={(saleOn?.items ?? []).map((i) => ({ id: i.product_id, qty: i.quantity }))} discount={saleOn?.discount_cents ?? 0} reason={saleOn?.discount_reason ?? ""} serviceCents={a.total_cents} syncField={canPay ? "amount0" : undefined} />
+                  <div style={{ marginTop: 10 }}><button className="btn small ghost" type="submit" formAction={attendanceProductsAction} formNoValidate>Salvar produtos e continuar atendendo</button></div>
+                </fieldset>
+              ) : null}
               {canPay ? (
                 <>
                   {!session ? <div className="alert warn">Caixa fechado: recebimento em dinheiro só depois de <Link href="/financeiro/caixa">abrir o caixa</Link>. Pix e cartão podem ser registrados.</div> : null}

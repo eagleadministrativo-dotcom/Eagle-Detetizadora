@@ -30,7 +30,7 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
             return (
               <section className="card stack" key={g.id} style={{ opacity: g.isActive ? 1 : 0.6 }}>
                 <div className="row"><h3>{g.name}</h3><Badge tone={tone as "ok"}>{label}</Badge>{!g.isActive ? <Badge>inativa</Badge> : null}</div>
-                <small>{g.kind === "reserva" ? "Reserva (saldo total das contas)" : `${g.kind === "receita" ? "Receita operacional" : "Resultado operacional"} · ${g.periodStart ? fmtYmd(g.periodStart) : ""} a ${g.periodEnd ? fmtYmd(g.periodEnd) : ""}`}</small>
+                <small>{g.kind === "reserva" ? "Reserva (saldo total das contas)" : `${g.kind === "receita" ? "Receita de serviços" : "Resultado operacional"} · ${g.periodStart ? fmtYmd(g.periodStart) : ""} a ${g.periodEnd ? fmtYmd(g.periodEnd) : ""}`}</small>
                 <div className="row"><b className="mono" style={{ fontFamily: "var(--serif)", fontSize: "1.3rem" }}>{fmtBRL(g.current)}</b><span className="muted">de {fmtBRL(g.target)} ({g.pct == null ? "—" : fmtPct(g.pct, 0)})</span></div>
                 <div className="hbar" style={{ gridTemplateColumns: "1fr" }}><div className="track"><div className="fill" style={{ width: `${Math.min(100, g.pct ?? 0)}%` }} /></div></div>
                 {g.expectedPct != null ? <small>Ritmo esperado hoje: {fmtPct(g.expectedPct, 0)} do período decorrido.</small> : null}
@@ -44,7 +44,7 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
         <form action={saveGoalAction} className="card form">
           <h2>Nova meta</h2>
           <div className="fields">
-            <Field label="Tipo"><select name="kind"><option value="receita">Receita operacional</option><option value="resultado">Resultado operacional</option><option value="reserva">Reserva (saldo das contas)</option></select></Field>
+            <Field label="Tipo"><select name="kind"><option value="receita">Receita de serviços</option><option value="resultado">Resultado operacional</option><option value="reserva">Reserva (saldo das contas)</option></select></Field>
             <Field label="Nome"><input name="name" required placeholder="Ex.: Receita de dezembro" /></Field>
             <Field label="Valor da meta (R$)"><input name="target" inputMode="decimal" required /></Field>
             <Field label="Início"><input type="date" name="start" defaultValue={monthStart(today)} /></Field>

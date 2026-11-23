@@ -97,13 +97,13 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           <h2>{title}</h2>
         </div>
         <div className="row">
-          <form method="get" className="row"><input type="hidden" name="v" value={view} /><input type="hidden" name="g" value={group} />{staffFilter && all ? <input type="hidden" name="s" value={staffFilter} /> : null}<input type="date" name="d" defaultValue={d} aria-label="Ir para a data" style={{ width: 150 }} /><button className="btn small ghost" type="submit">Ir</button></form>
+          <form method="get" className="row datejump"><input type="hidden" name="v" value={view} /><input type="hidden" name="g" value={group} />{staffFilter && all ? <input type="hidden" name="s" value={staffFilter} /> : null}<input type="date" name="d" defaultValue={d} aria-label="Ir para a data" style={{ width: 150 }} /><button className="btn small ghost" type="submit">Ir</button></form>
           <Seg items={[{ href: href({ v: "dia" }), label: "Dia", active: view === "dia" }, { href: href({ v: "semana" }), label: "Semana", active: view === "semana" }, { href: href({ v: "mes" }), label: "Mês", active: view === "mes" }]} />
           {all && view === "dia" ? <Seg items={[{ href: href({ g: "prof" }), label: "Barbeiros", active: group === "prof" }, { href: href({ g: "cadeira" }), label: "Cadeiras", active: group === "cadeira" }]} /> : null}
         </div>
       </div>
       {all && cat.staff.filter((s) => s.is_active).length > 1 ? (
-        <div className="chips">
+        <div className="chips scroll">
           <Link className="chip" style={{ textDecoration: "none", ...(staffFilter ? {} : { background: "var(--olive-soft)", borderColor: "var(--olive)" }) }} href={`/agenda?${new URLSearchParams({ d, v: view, g: group }).toString()}`}>Todos</Link>
           {cat.staff.filter((s) => s.is_active).map((s) => <Link key={s.id} className="chip" style={{ textDecoration: "none", ...(staffFilter === s.id ? { background: "var(--olive-soft)", borderColor: "var(--olive)" } : {}) }} href={href({ s: s.id })}><span className="pri" style={{ background: s.color }} />{s.name}</Link>)}
         </div>

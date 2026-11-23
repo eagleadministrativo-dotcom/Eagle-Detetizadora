@@ -6,8 +6,19 @@ import { flushPush } from "@/server/services/push";
 import { requireSession, run, str, optStr } from "@/server/session";
 import { applyDiscount, cancelAttendance, completeAttendance, setAttendanceServices } from "@/server/services/attendance";
 import { cancelReceivable, confirmPayment, flagDivergence, registerPayment, reversePayment, settlePayment } from "@/server/services/payments";
+import { saleOfAttendance, setAttendanceProducts } from "@/server/services/products";
+import type { Ctx } from "@/server/permissions";
 import { DomainError } from "@/server/errors";
 import { parseBRL } from "@/lib/money";
+
+/** Produtos escolhidos na própria conclusão: grava antes de concluir, com as mesmas validações. */
+async function saveProducts(db: Db, ctx: Ctx, id: string, fd: FormData) {
+  if (str(fd, "withProducts") !== "1") return;
+  const qty = fd.getAll("productQty").map((v) => Number.parseInt(String(v), 10));
+  const items = fd.getAll("productId").map((v, i) => ({ productId: String(v), quantity: qty[i] }));
+  if (!items.length && !(await saleOfAttendance(db, id))) return;
+  await setAttendanceProducts(db, ctx, id, { items, discountCents: items.length && str(fd, "productDiscount") ? money(fd, "productDiscount", "Desconto nos produtos") : 0, discountReason: optStr(fd, "productReason") });
+}
 
 const follow = (db: Db) => after(async () => { await processEvents(db).catch((e) => console.error("[eventos]", e)); await flushPush(db).catch((e) => console.error("[push]", e)); });
 
@@ -48,6 +59,7 @@ export async function completeAction(fd: FormData) {
       payments.push({ methodId: str(fd, `method${i}`), amountCents: money(fd, `amount${i}`), idempotencyKey: str(fd, `key${i}`), reference: optStr(fd, `ref${i}`) });
     }
     const db = await getDb();
+    await saveProducts(db, ctx, id, fd);
     await completeAttendance(db, ctx, id, { payments });
     follow(db);
     return { to: `/atendimentos/${id}`, ok: payments.length ? "Atendimento concluído e pagamento registrado." : "Atendimento concluído. Cobrança criada como pendente." };
@@ -118,6 +130,7 @@ export async function completeLaterAction(fd: FormData) {
   const id = str(fd, "id");
   await run(`/atendimentos/${id}`, async () => {
     const db = await getDb();
+    await saveProducts(db, ctx, id, fd);
     await completeAttendance(db, ctx, id, {});
     follow(db);
     return "Atendimento concluído. Cobrança criada como pendente.";

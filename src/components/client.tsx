@@ -158,7 +158,9 @@ const brl = (c: number) => (c / 100).toLocaleString("pt-BR", { style: "currency"
 const cents = (s: string) => { const n = Number(s.replace(/[R$\s.]/g, "").replace(",", ".")); return Number.isFinite(n) ? Math.round(n * 100) : 0; };
 export interface PickProduct { id: string; name: string; price: number; stock: number | null }
 /** Seleção de produtos com subtotal. Os totais mostrados são conferência: o servidor recalcula tudo com o preço cadastrado. */
-export function ProductPicker({ products, initial, discount = 0, reason = "", serviceCents }: { products: PickProduct[]; initial: { id: string; qty: number }[]; discount?: number; reason?: string; serviceCents?: number }) {
+export function ProductPicker({ products, initial, discount = 0, reason = "", serviceCents, syncField }: { products: PickProduct[]; initial: { id: string; qty: number }[]; discount?: number; reason?: string; serviceCents?: number; syncField?: string }) {
+  const root = useRef<HTMLDivElement>(null);
+  const auto = useRef<string | null>(null);
   const [items, setItems] = useState(initial);
   const [term, setTerm] = useState("");
   const [disc, setDisc] = useState(discount ? (discount / 100).toFixed(2).replace(".", ",") : "");
@@ -166,8 +168,16 @@ export function ProductPicker({ products, initial, discount = 0, reason = "", se
   const found = term.trim() ? products.filter((p) => p.name.toLowerCase().includes(term.trim().toLowerCase()) && !items.some((i) => i.id === p.id)).slice(0, 6) : [];
   const gross = items.reduce((a, i) => a + (byId.get(i.id)?.price ?? 0) * i.qty, 0);
   const total = Math.max(0, gross - cents(disc || "0"));
+  // o valor a receber acompanha o total enquanto o operador não o altera à mão
+  useEffect(() => {
+    const field = syncField ? root.current?.closest("form")?.querySelector<HTMLInputElement>(`[name="${syncField}"]`) : null;
+    if (!field) return;
+    const next = ((total + (serviceCents ?? 0)) / 100).toFixed(2).replace(".", ",");
+    if (auto.current === null || field.value === auto.current) field.value = next;
+    auto.current = next;
+  }, [total, serviceCents, syncField]);
   return (
-    <div className="form">
+    <div className="form" ref={root}>
       <label>Buscar produto<input value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Nome do produto" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (found[0]) { setItems([...items, { id: found[0].id, qty: 1 }]); setTerm(""); } } }} /></label>
       {found.length ? <div className="chips">{found.map((p) => <button key={p.id} type="button" className="chip" disabled={p.stock === 0} onClick={() => { setItems([...items, { id: p.id, qty: 1 }]); setTerm(""); }}>{p.name} · {brl(p.price)}{p.stock != null ? ` · ${p.stock} un.` : ""}</button>)}</div> : null}
       {items.map((i) => {
