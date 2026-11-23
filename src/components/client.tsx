@@ -28,6 +28,24 @@ export function ThemePicker({ initial }: { initial: Theme }) {
   );
 }
 
+/** Escolha de tema com nome e prévia (Configurações e Minha conta). Vale na hora e fica salva para o usuário. */
+export function ThemeChoice({ initial }: { initial: Theme }) {
+  const [t, setT] = useState<Theme>(initial);
+  const pick = (v: Theme) => { setT(v); applyTheme(v); void saveThemeAction(v); };
+  const opts = [["claro", "sun", "Claro", "Fundo creme, ideal de dia"], ["escuro", "moon", "Escuro", "Fundo grafite, ideal à noite"], ["auto", "auto", "Automático", "Segue o tema do aparelho"]] as const;
+  return (
+    <div className="themechoice" role="radiogroup" aria-label="Tema do aplicativo">
+      {opts.map(([v, ic, label, hint]) => (
+        <button key={v} type="button" role="radio" aria-checked={t === v} className={`tc tc-${v}`} onClick={() => pick(v)}>
+          <span className="tc-prev" aria-hidden="true"><i /><i /><i /></span>
+          <span className="tc-ic"><Icon name={ic} /></span>
+          <b>{label}</b><small>{hint}</small>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** Luz localizada que segue o ponteiro nos cards (um ouvinte só, sem renderizar). */
 export function Spotlight() {
   useEffect(() => {

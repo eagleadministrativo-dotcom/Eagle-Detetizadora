@@ -119,7 +119,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </header>
         <main className="content" id="conteudo">{children}</main>
       </div>
-      <BottomNav primary={primary} groups={groups} account={{ name: s.user.fullName, role: ROLE_LABEL[ctx.role] }} />
+      <BottomNav primary={primary} groups={groups} account={{ name: s.user.fullName, role: ROLE_LABEL[ctx.role], theme: prefs.theme }} />
       <Spotlight />
       <CountUp />
     </div>

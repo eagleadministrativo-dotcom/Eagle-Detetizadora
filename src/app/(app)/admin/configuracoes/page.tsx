@@ -3,6 +3,8 @@ import { requirePerm } from "@/server/session";
 import { getSettings } from "@/server/core";
 import { Field, Flash, PageHead } from "@/components/ui";
 import { PushToggle } from "@/components/push-toggle";
+import { ThemeChoice } from "@/components/client";
+import { getPrefs } from "@/server/services/access";
 import { returnSettingsAction } from "@/app/actions/returns";
 import { updateSettingsAction } from "@/app/actions/admin";
 
@@ -12,11 +14,18 @@ const brl = (c: number) => (c / 100).toFixed(2).replace(".", ",");
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string }> }) {
   const sp = await searchParams;
   const { ctx } = await requirePerm("admin.settings");
-  const st = await getSettings((await getDb()).query, ctx.unitId);
+  const db = await getDb();
+  const st = await getSettings(db.query, ctx.unitId);
+  const prefs = await getPrefs(db, ctx.userId);
   return (
     <>
       <PageHead title="Configurações" sub="Políticas da unidade. Cada alteração fica registrada na auditoria." />
       <Flash ok={sp.ok} erro={sp.erro} />
+      <section className="card stack" id="aparencia">
+        <h2>Aparência</h2>
+        <p>Escolha entre claro e escuro. Muda na hora e fica salvo no seu usuário, em todos os aparelhos.</p>
+        <ThemeChoice initial={prefs.theme} />
+      </section>
       <section className="card stack" id="notificacoes">
         <h2>Notificações</h2>
         <p>Ative ou desative os avisos do sistema neste aparelho. Vale para o navegador (Chrome) e para o aplicativo instalado: cada um é ativado separadamente.</p>

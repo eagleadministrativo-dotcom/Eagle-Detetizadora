@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Icon, iconFor } from "./icons";
+import { ThemePicker } from "./client";
 
 export interface NavItem { href: string; label: string; short?: string; count?: number }
 export interface NavGroup { title?: string; icon?: string; items: NavItem[] }
@@ -75,7 +76,7 @@ export function SideToggle() {
  * Barra do celular. "Mais" abre uma folha com todos os tópicos: fecha ao tocar fora, no X, com Esc ou ao navegar,
  * e trava a rolagem da página de trás enquanto está aberta.
  */
-export function BottomNav({ primary, groups, account }: { primary: NavItem[]; groups: NavGroup[]; account: { name: string; role: string } }) {
+export function BottomNav({ primary, groups, account }: { primary: NavItem[]; groups: NavGroup[]; account: { name: string; role: string; theme: "auto" | "claro" | "escuro" } }) {
   const path = usePathname();
   const best = bestMatch(path, primary.map((i) => i.href));
   const [open, setOpen] = useState(false);
@@ -121,6 +122,7 @@ export function BottomNav({ primary, groups, account }: { primary: NavItem[]; gr
           <div className="sheet" id="mais" role="dialog" aria-modal="true" aria-label="Todas as áreas" ref={sheet}>
             <div className="sheet-head">
               <Link href="/conta" className="sheet-who"><span className="avatar" aria-hidden="true">{account.name.trim().slice(0, 1).toUpperCase()}</span><span><b>{account.name}</b><small>{account.role} · Minha conta</small></span></Link>
+              <ThemePicker initial={account.theme} />
               <button type="button" className="btn icon ghost" aria-label="Fechar" onClick={() => setOpen(false)}><Icon name="close" /></button>
             </div>
             <div className="sheet-body">

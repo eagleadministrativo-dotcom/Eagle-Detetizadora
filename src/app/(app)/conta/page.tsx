@@ -6,7 +6,7 @@ import { getDb } from "@/server/db";
 import { getPrefs } from "@/server/services/access";
 import { NOTIFY_GROUPS } from "@/server/services/notify";
 import { savePrefsAction } from "@/app/actions/account";
-import { ThemePicker } from "@/components/client";
+import { ThemeChoice } from "@/components/client";
 import { PushToggle } from "@/components/push-toggle";
 
 export const metadata = { title: "Minha conta" };
@@ -39,7 +39,8 @@ export default async function Account({ searchParams }: { searchParams: Promise<
         </section>
         <section className="card stack" id="preferencias">
           <h2>Preferências</h2>
-          <div className="switch"><span>Aparência</span><ThemePicker initial={prefs.theme} /></div>
+          <h3>Aparência</h3>
+          <ThemeChoice initial={prefs.theme} />
           <form action={savePrefsAction} className="form">
             <label>Agenda abre em<select name="agendaView" defaultValue={prefs.agenda_view}><option value="dia">Dia</option><option value="semana">Semana</option><option value="mes">Mês</option></select></label>
             <fieldset>
