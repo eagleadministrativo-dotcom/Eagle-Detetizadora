@@ -41,7 +41,7 @@ Rodam uma vez por dia (idempotentes): contas recorrentes (A07), alertas de venci
 
 **Saúde do sistema** (*Sistema → Saúde do sistema*): cada execução fica em `job_runs` (início, fim, resultado). Falha → aviso crítico ao proprietário (push no celular, se ativado). Rotina sem execução no prazo aparece como *Atrasada*. Erros do servidor ficam em `error_events` (sem dados de clientes). Registros com mais de 90 dias são apagados pela rotina diária.
 
-**Trilha do banco** (`row_changes`): toda alteração e exclusão em tabela de negócio fica registrada pelo próprio banco, com antes/depois (sem colunas secretas). O app se conecta como `application_name = marfim-app`; qualquer outra origem (editor SQL, ferramentas) é marcada como *alteração direta* e aparece na Saúde do sistema. A trilha é imutável. Toda tabela nova precisa do trigger `zz_row_audit` (o teste `schema.test.ts` falha se faltar).
+**Trilha do banco** (`row_changes`): toda alteração e exclusão em tabela de negócio fica registrada pelo próprio banco, com antes/depois (sem colunas secretas). O app se conecta como `application_name = marfim-app` (pelo pooler do Supabase aparece como `Supavisor`, também tratado como app); outras origens (editor SQL do painel, `mgmt-api`, psql direto) são marcadas como *alteração direta* e aparece na Saúde do sistema. A trilha é imutável. Toda tabela nova precisa do trigger `zz_row_audit` (o teste `schema.test.ts` falha se faltar).
 
 ## 4. Segurança em produção — checklist
 

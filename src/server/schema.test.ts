@@ -36,6 +36,8 @@ describe("schema", () => {
     await db.query("update organizations set name='trilha 2' where id=$1", [org]);
     const [u] = await db.query<{ id: string }>("insert into users(email,full_name,password_hash) values ('t@t.t','T','segredo') returning id");
     await db.query("update users set password_hash='outro', full_name='T2' where id=$1", [u.id]);
+    await db.query("set application_name = 'Supavisor'"); // pooler do Supabase: é o app
+    await db.query("update organizations set name='pelo pooler' where id=$1", [org]);
     await db.query("set application_name = 'marfim-app'");
     await db.query("insert into organizations(name) values ('do app')");
     const rows = await db.query<{ table_name: string; op: string; direct: boolean; old_data: Record<string, unknown>; new_data: Record<string, unknown> }>("select table_name, op, direct, old_data, new_data from row_changes order by id");
@@ -43,6 +45,7 @@ describe("schema", () => {
     expect(JSON.stringify(rows)).not.toContain("segredo");
     expect(rows.find((r) => r.table_name === "users" && r.op === "UPDATE")?.new_data).toEqual({ full_name: "T2", password_hash: "***" });
     expect(rows.some((r) => r.new_data?.name === "do app")).toBe(false); // inserções do app já têm audit_logs
+    expect(rows.find((r) => r.new_data?.name === "pelo pooler")?.direct).toBe(false);
     await expect(db.query("delete from row_changes")).rejects.toThrow();
     await db.query("reset application_name");
   });
