@@ -184,3 +184,11 @@ input[type="time"]::-webkit-date-and-time-value, input[type="date"]::-webkit-dat
 .dayrow > span:nth-child(3) { text-align: center; }
 .editrow > input[type="time"], .editrow > input[type="date"] { flex: 1 1 110px; }
 @media (max-width: 380px) { .dayrow { grid-template-columns: 58px minmax(0, 1fr) 16px minmax(0, 1fr); column-gap: 5px; } }
+
+/* Celular: a agenda cresce com a página em vez de rolar dentro de uma caixa. Assim a rolagem é uma só e o fim
+   do dia sobe acima da barra de atalhos (a página tem espaço de sobra embaixo). */
+@media (max-width: 860px) {
+  .calscroll { max-height: none; overscroll-behavior: auto; }
+  .calendar { margin-bottom: 8px; }
+  .content { padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
+}
