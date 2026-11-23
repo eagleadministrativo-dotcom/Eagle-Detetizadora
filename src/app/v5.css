@@ -174,3 +174,13 @@ input[type="checkbox"], input[type="radio"] { padding: 0; flex: none; min-height
 .dayrow > span:first-child { font-weight: 600; font-size: 14px; }
 .dayrow > span:nth-child(3) { color: var(--muted); font-size: 13px; }
 @media (max-width: 380px) { .dayrow { grid-template-columns: 62px minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px; } .dayrow > span:first-child { font-size: 13px; } }
+
+/* Safari do iPhone: campos de data/hora têm largura mínima própria e vazam do layout. Sem a aparência nativa,
+   eles obedecem à largura da coluna; o seletor nativo continua abrindo ao tocar. */
+input[type="date"], input[type="time"], input[type="month"], input[type="datetime-local"] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; box-sizing: border-box; display: block; }
+input[type="time"]::-webkit-date-and-time-value, input[type="date"]::-webkit-date-and-time-value { text-align: center; margin: 0; }
+.dayrow { grid-template-columns: 72px minmax(0, 1fr) 20px minmax(0, 1fr); column-gap: 8px; }
+.dayrow > input { width: 100%; padding-inline: 4px; }
+.dayrow > span:nth-child(3) { text-align: center; }
+.editrow > input[type="time"], .editrow > input[type="date"] { flex: 1 1 110px; }
+@media (max-width: 380px) { .dayrow { grid-template-columns: 58px minmax(0, 1fr) 16px minmax(0, 1fr); column-gap: 5px; } }
