@@ -41,7 +41,7 @@ export default async function Purchases({ searchParams }: { searchParams: Promis
             <div className="list">
               {rows.map((p) => (
                 <div className="item2 buy" key={p.id} data-spot="">
-                  <span className={`check ${p.status === "comprado" ? "on" : ""}`} aria-hidden="true" />
+                  <span className={`tick ${p.status === "comprado" ? "on" : ""}`} aria-hidden="true" />
                   <div>
                     <b>{p.name}</b>{p.quantity > 1 ? <small> · {p.quantity} un.</small> : null}
                     <div className="meta">

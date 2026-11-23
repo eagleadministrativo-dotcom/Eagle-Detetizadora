@@ -31,7 +31,7 @@ export default async function StaffAdmin({ searchParams }: { searchParams: Promi
           <div className="stack">
             {DAYS.map((d, i) => {
               const s = sch.find((x) => x.day_of_week === i);
-              return <div className="row" key={i}><span style={{ width: 80 }}>{d}</span><input type="time" name={`s_${i}`} defaultValue={s?.start_time ?? ""} style={{ maxWidth: 130 }} aria-label={`${d} início`} /><span>às</span><input type="time" name={`e_${i}`} defaultValue={s?.end_time ?? ""} style={{ maxWidth: 130 }} aria-label={`${d} fim`} /></div>;
+              return <div className="dayrow" key={i}><span>{d}</span><input type="time" name={`s_${i}`} defaultValue={s?.start_time ?? ""} aria-label={`${d} início`} /><span>às</span><input type="time" name={`e_${i}`} defaultValue={s?.end_time ?? ""} aria-label={`${d} fim`} /></div>;
             })}
           </div>
         </fieldset>

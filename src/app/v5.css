@@ -148,9 +148,9 @@ input, select, textarea { border-radius: var(--radius-sm); }
 
 /* ───────── compras ───────── */
 .item2.buy { grid-template-columns: auto minmax(0, 1fr) auto; }
-.check { width: 22px; height: 22px; border-radius: 5px; border: 1.5px solid var(--line-strong); position: relative; }
-.check.on { background: linear-gradient(135deg, var(--olive-2), var(--olive)); border-color: transparent; box-shadow: 0 0 12px -2px var(--olive-2); }
-.check.on::after { content: ""; position: absolute; left: 7px; top: 3px; width: 6px; height: 11px; border: solid #fbf6ec; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.tick { width: 22px; height: 22px; border-radius: 5px; border: 1.5px solid var(--line-strong); position: relative; }
+.tick.on { background: linear-gradient(135deg, var(--olive-2), var(--olive)); border-color: transparent; box-shadow: 0 0 12px -2px var(--olive-2); }
+.tick.on::after { content: ""; position: absolute; left: 7px; top: 3px; width: 6px; height: 11px; border: solid #fbf6ec; border-width: 0 2px 2px 0; transform: rotate(45deg); }
 
 /* ───────── calendário e conquistas mais retos ───────── */
 .calev, .calblk, .calsel { border-radius: 6px; }
@@ -158,3 +158,19 @@ input, select, textarea { border-radius: var(--radius-sm); }
 .month .n { border-radius: 6px; }
 .calhead .today .num { border-radius: 8px; }
 @media (prefers-reduced-motion: reduce) { .sheet, .sheet-wrap, .hbar { animation: none; } }
+
+/* ───────── linhas de edição e horários (sem sobreposição em telas estreitas) ───────── */
+input[type="checkbox"], input[type="radio"] { padding: 0; flex: none; min-height: 0; }
+.check { width: auto; }
+.row > .check, .editrow > .check { white-space: nowrap; }
+.row > .check, .row > .btn, .row > form { flex: none; }
+.editrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.editrow > input, .editrow > select { flex: 1 1 96px; width: auto; min-width: 0; }
+.editrow > input.sm, .editrow > select.sm { flex: 0 0 58px; padding-inline: 8px; text-align: center; }
+@media (max-width: 860px) { .editrow { gap: 6px; } .editrow > .btn.small { padding-inline: 10px; } .editrow > .check { gap: 6px; font-size: 13px; } }
+.editrow > .check, .editrow > .btn, .editrow > button { flex: none; }
+.dayrow { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; }
+.dayrow > input { width: 100%; min-width: 0; padding-inline: 8px; text-align: center; }
+.dayrow > span:first-child { font-weight: 600; font-size: 14px; }
+.dayrow > span:nth-child(3) { color: var(--muted); font-size: 13px; }
+@media (max-width: 380px) { .dayrow { grid-template-columns: 62px minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px; } .dayrow > span:first-child { font-size: 13px; } }

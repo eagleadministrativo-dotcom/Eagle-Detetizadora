@@ -33,18 +33,17 @@ export default async function ServicesAdmin({ searchParams }: { searchParams: Pr
         <h2>Categorias de serviço</h2>
         <div className="stack">
           {cat.svcCats.map((c) => (
-            <form key={c.id} action={saveServiceCategoryAction} className="row">
+            <form key={c.id} action={saveServiceCategoryAction} className="editrow">
               <input type="hidden" name="id" value={c.id} />
-              <input name="name" defaultValue={c.name} style={{ maxWidth: 240 }} aria-label="Nome da categoria" />
-              <input name="sort" type="number" defaultValue={c.sort_order} style={{ maxWidth: 80 }} aria-label="Ordem" />
+              <input name="name" defaultValue={c.name} aria-label="Nome da categoria" />
+              <input name="sort" type="number" defaultValue={c.sort_order} className="sm" aria-label="Ordem" />
               <label className="check"><input type="checkbox" name="isActive" defaultChecked={c.is_active} />ativa</label>
               <button className="btn small ghost" type="submit">Salvar</button>
             </form>
           ))}
         </div>
-        <form action={saveServiceCategoryAction} className="row">
-          <input name="name" placeholder="Nova categoria" required style={{ maxWidth: 240 }} /><button className="btn small" type="submit">Adicionar</button>
-          <Field label=""><span /></Field>
+        <form action={saveServiceCategoryAction} className="editrow">
+          <input name="name" placeholder="Nova categoria" required /><button className="btn small" type="submit">Adicionar</button>
         </form>
       </section>
     </>
