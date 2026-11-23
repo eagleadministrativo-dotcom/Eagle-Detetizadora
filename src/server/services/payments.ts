@@ -5,6 +5,8 @@ import { DomainError, ForbiddenError } from "../errors";
 import type { Ctx } from "../permissions";
 import { feeCents } from "@/lib/money";
 import { findOpenSession } from "./cash";
+import { emit } from "./events";
+import { syncCommissions } from "./commissions";
 
 export interface RegisterPaymentInput {
   receivableId: string; methodId: string; amountCents: number; idempotencyKey: string;
@@ -85,7 +87,7 @@ export async function confirmPayment(db: Db, ctx: Ctx, paymentId: string, eviden
     if (!p) throw new DomainError("not_found", "Pagamento não encontrado.");
     if (p.kind !== "recebimento") throw new DomainError("bad_status", "Estornos não são confirmados.");
     if (p.status !== "registrado") throw new DomainError("bad_status", "Este pagamento já foi conferido.");
-    const [rv] = await q("select 1 from payments where reversal_of=$1", [paymentId]);
+    const [rv] = await q("select 1 from payments x join payments o on o.id=x.reversal_of where x.reversal_of=$1 and x.amount_cents >= o.amount_cents", [paymentId]);
     if (rv) throw new DomainError("reversed", "Este pagamento foi estornado.");
     await q("update payments set status='confirmado', confirmed_by=$2, confirmed_at=now(), confirmation_evidence=$3 where id=$1", [paymentId, ctx.userId, ev]);
     await audit(q, ctx, "PAGAMENTO_CONFIRMADO", "payment", paymentId, { status: "registrado" }, { status: "confirmado", evidence: ev });
@@ -99,7 +101,7 @@ export async function settlePayment(db: Db, ctx: Ctx, paymentId: string) {
     if (!p) throw new DomainError("not_found", "Pagamento não encontrado.");
     if (p.kind !== "recebimento") throw new DomainError("bad_status", "Estornos não são liquidados.");
     if (p.status !== "confirmado") throw new DomainError("bad_status", p.status === "liquidado" ? "Já liquidado." : "Confirme o pagamento antes de registrar a liquidação.");
-    const [rv] = await q("select 1 from payments where reversal_of=$1", [paymentId]);
+    const [rv] = await q("select 1 from payments x join payments o on o.id=x.reversal_of where x.reversal_of=$1 and x.amount_cents >= o.amount_cents", [paymentId]);
     if (rv) throw new DomainError("reversed", "Este pagamento foi estornado.");
     await q("update payments set status='liquidado', liquidated_by=$2, liquidated_at=now() where id=$1", [paymentId, ctx.userId]);
     await audit(q, ctx, "PAGAMENTO_LIQUIDADO", "payment", paymentId, { status: "confirmado" }, { status: "liquidado" });
@@ -156,8 +158,8 @@ export interface ReceivableRow {
 }
 
 export async function listReceivables(db: Db, ctx: Ctx, opts: { filter?: "abertos" | "todos" | "nao_conciliados"; search?: string; limit?: number; offset?: number } = {}) {
-  need(ctx, "finance.view", "attendance.view_all", "attendance.view_own");
-  const own = !can(ctx, "finance.view") && !can(ctx, "attendance.view_all");
+  need(ctx, "finance.view", "finance.receivables_view", "attendance.view_all", "attendance.view_own");
+  const own = !can(ctx, "finance.view") && !can(ctx, "finance.receivables_view") && !can(ctx, "attendance.view_all");
   const rows = await db.query<ReceivableRow & { total: number }>(
     `select *, count(*) over() as total from (
        select r.id, r.description, c.name as customer_name, r.amount_due_cents, b.registered_cents, b.confirmed_cents, b.settled_cents,
@@ -182,12 +184,12 @@ export interface PaymentRow {
 }
 const PAYMENT_SELECT = `select p.id, p.receivable_id, p.kind, p.status, p.amount_cents, p.fee_cents, m.name as method_name, m.kind as method_kind, p.paid_at, p.reference,
     p.confirmation_evidence, p.confirmed_at, cu.full_name as confirmed_by_name, ru.full_name as registered_by_name, p.divergence_note, p.liquidated_at,
-    c.name as customer_name, p.reversal_of, exists(select 1 from payments x where x.reversal_of=p.id) as reversed, p.notes
+    c.name as customer_name, p.reversal_of, exists(select 1 from payments x where x.reversal_of=p.id and x.amount_cents >= p.amount_cents) as reversed, p.notes
   from payments p join payment_methods m on m.id=p.method_id join users ru on ru.id=p.registered_by left join users cu on cu.id=p.confirmed_by
   join receivables r on r.id=p.receivable_id left join customers c on c.id=r.customer_id`;
 
 export async function getReceivable(db: Db, ctx: Ctx, id: string) {
-  need(ctx, "finance.view", "attendance.view_all", "attendance.view_own");
+  need(ctx, "finance.view", "finance.receivables_view", "attendance.view_all", "attendance.view_own");
   const rows = await db.query<ReceivableRow>(
     `select r.id, r.description, c.name as customer_name, r.amount_due_cents, b.registered_cents, b.confirmed_cents, b.settled_cents, to_char(r.due_date,'YYYY-MM-DD') as due_date, r.status,
        r.attendance_id, r.created_at, s.name as staff_name,
@@ -232,7 +234,12 @@ export async function cancelReceivable(db: Db, ctx: Ctx, id: string, reason: str
     const [b] = await q<{ registered_cents: number }>("select b.registered_cents from receivable_balances b join receivables r on r.id=b.receivable_id where r.id=$1 and r.unit_id=$2", [id, ctx.unitId]);
     if (!b) throw new DomainError("not_found", "Cobrança não encontrada.");
     if (b.registered_cents !== 0) throw new DomainError("has_payments", "Há pagamentos nesta cobrança. Estorne-os antes de cancelar.");
+    const [sold] = await q("select 1 from product_sales s join product_sale_items i on i.sale_id=s.id where s.receivable_id=$1 and i.returned_qty < i.quantity limit 1", [id]);
+    if (sold) throw new DomainError("has_products", "Esta cobrança tem produtos vendidos. Registre a devolução antes de cancelar.");
     await q("update receivables set status='cancelado' where id=$1", [id]);
+    await syncCommissions(q, ctx.unitId, id);
+    const [att] = await q<{ staff_id: string }>("select a.staff_id from receivables r join attendances a on a.id=r.attendance_id where r.id=$1", [id]);
+    await emit(q, ctx, "receivable.cancelled", "receivable", id, { staffId: att?.staff_id ?? null }, `receivable.cancelled:${id}`);
     await audit(q, ctx, "RECEBIVEL_CANCELADO", "receivable", id, null, null, why);
   });
 }

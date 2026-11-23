@@ -49,7 +49,7 @@ export interface PayRow {
 }
 
 export async function listPayables(db: Db, ctx: Ctx, opts: { filter?: "abertas" | "pagas" | "todas"; from?: string; to?: string; limit?: number; offset?: number } = {}) {
-  need(ctx, "finance.view");
+  need(ctx, "finance.view", "finance.payables_view");
   const today = todayYmd();
   const rows = await db.query<PayRow & { total: number }>(
     `select *, count(*) over() as total from (
@@ -68,7 +68,7 @@ export async function listPayables(db: Db, ctx: Ctx, opts: { filter?: "abertas" 
 }
 
 export async function getPayable(db: Db, ctx: Ctx, id: string) {
-  need(ctx, "finance.view");
+  need(ctx, "finance.view", "finance.payables_view");
   const [p] = await db.query<PayRow>(
     `select p.id, p.description, p.supplier, c.name as category_name, c.kind as category_kind, p.amount_cents, b.paid_cents, to_char(p.due_date,'YYYY-MM-DD') as due_date,
        p.recurrence, p.installment_no, p.installment_total, p.status, p.recurrence_parent_id,
@@ -167,6 +167,8 @@ export async function cancelPayable(db: Db, ctx: Ctx, id: string, reason: string
     const [b] = await q<{ paid_cents: number }>("select b.paid_cents from payable_balances b join payables p on p.id=b.payable_id where p.id=$1 and p.unit_id=$2", [id, ctx.unitId]);
     if (!b) throw new DomainError("not_found", "Conta não encontrada.");
     if (b.paid_cents !== 0) throw new DomainError("has_payments", "Há pagamentos nesta conta. Estorne-os antes de cancelar.");
+    const [rep] = await q("select 1 from commission_settlements where payable_id=$1", [id]);
+    if (rep) throw new DomainError("settlement", "Esta conta é um repasse de comissões. Cancele o repasse na tela de Comissões.");
     await q("update payables set status='cancelado', cancel_reason=$2 where id=$1", [id, why]);
     await audit(q, ctx, "CONTA_PAGAR_CANCELADA", "payable", id, null, null, why);
   });

@@ -33,6 +33,16 @@ async function revenueStats(q: Q, unitId: string, p: Period, staffId: string | n
   return r;
 }
 
+/** Receita de produtos por competência: venda na data da conclusão, devolução na data em que ocorreu. */
+export async function productStats(q: Q, unitId: string, p: Period, staffId: string | null) {
+  const { from, to } = range(p);
+  const [s] = await q<{ gross: number; discounts: number; units: number }>(
+    "select coalesce(sum(s.gross_cents),0)::bigint as gross, coalesce(sum(s.discount_cents),0)::bigint as discounts, coalesce(sum((select sum(i.quantity) from product_sale_items i where i.sale_id=s.id)),0)::bigint as units from product_sales s where s.unit_id=$1 and s.status='concluida' and s.finished_at >= $2 and s.finished_at < $3 and ($4::uuid is null or s.seller_staff_id=$4)", [unitId, from, to, staffId]);
+  const [r] = await q<{ returned: number }>(
+    "select coalesce(sum(r.amount_cents),0)::bigint as returned from product_returns r join product_sale_items i on i.id=r.sale_item_id join product_sales s on s.id=i.sale_id where r.unit_id=$1 and r.created_at >= $2 and r.created_at < $3 and ($4::uuid is null or s.seller_staff_id=$4)", [unitId, from, to, staffId]);
+  return { ...s, returned: r.returned, net: s.gross - s.discounts - r.returned };
+}
+
 // ---------- recebimentos ----------
 async function receiptStats(q: Q, unitId: string, p: Period, staffId: string | null) {
   const { from, to } = range(p);
@@ -62,7 +72,9 @@ export async function computeDre(q: Q, unitId: string, p: Period): Promise<Dre> 
   const { from, to } = range(p);
   const rev = await revenueStats(q, unitId, p, null);
   const [oth] = await q<{ v: number }>(
-    `select coalesce(sum(amount_due_cents),0)::bigint as v from receivables where unit_id=$1 and attendance_id is null and status='ativo' and created_at >= $2 and created_at < $3`, [unitId, from, to]);
+    `select coalesce(sum(amount_due_cents),0)::bigint as v from receivables where unit_id=$1 and attendance_id is null and status='ativo' and created_at >= $2 and created_at < $3
+       and not exists (select 1 from product_sales ps where ps.receivable_id=receivables.id)`, [unitId, from, to]);
+  const prod = await productStats(q, unitId, p, null);
   const rec = await receiptStats(q, unitId, p, null);
   const cats = await q<{ id: string; name: string; kind: string; cents: number }>(
     `select c.id, c.name, c.kind, coalesce(sum(b.amount_cents),0)::bigint as cents
@@ -76,7 +88,7 @@ export async function computeDre(q: Q, unitId: string, p: Period): Promise<Dre> 
   const taxes = sumKind("imposto");
   const nonOperating = sumKind("nao_operacional");
   const profitDistribution = sumKind("distribuicao_lucros");
-  const netRevenue = rev.revenue + oth.v;
+  const netRevenue = rev.revenue + oth.v + prod.net;
   const contributionMargin = netRevenue - rec.fees - variableCosts;
   const operatingResult = contributionMargin - expenses - taxes;
   const netResult = operatingResult - nonOperating;
@@ -85,6 +97,9 @@ export async function computeDre(q: Q, unitId: string, p: Period): Promise<Dre> 
   const lines: DreLine[] = [
     { key: "gross", label: "Receita bruta de serviços", cents: rev.gross },
     { key: "discounts", label: "(−) Descontos concedidos", cents: -rev.discounts },
+    ...(prod.gross ? [{ key: "products_gross", label: "Receita bruta de produtos", cents: prod.gross }] : []),
+    ...(prod.discounts ? [{ key: "products_discounts", label: "(−) Descontos em produtos", cents: -prod.discounts }] : []),
+    ...(prod.returned ? [{ key: "products_returned", label: "(−) Devoluções de produtos", cents: -prod.returned }] : []),
     ...(oth.v ? [{ key: "other_revenue", label: "Outras receitas (cobranças avulsas)", cents: oth.v }] : []),
     { key: "net_revenue", label: "Receita líquida", cents: netRevenue, group: "total" },
     { key: "fees", label: "(−) Taxas de meios de pagamento", cents: -rec.fees },
@@ -111,7 +126,7 @@ export async function computeDre(q: Q, unitId: string, p: Period): Promise<Dre> 
 }
 
 export async function getDre(db: Db, ctx: Ctx, p: Period) {
-  need(ctx, "finance.view");
+  need(ctx, "finance.view", "finance.dre_view");
   const cur = await computeDre(db.query, ctx.unitId, p);
   const prev = await computeDre(db.query, ctx.unitId, previousPeriod(p));
   return { current: cur, previous: prev };
@@ -203,6 +218,12 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
     previous: revPrev.eligible ? Math.round(revPrev.eligible_revenue / revPrev.eligible) : null,
     definition: "Receita média por atendimento concluído com valor.", formula: "receita elegível ÷ nº de atendimentos elegíveis",
     source: "attendances", exclusions: "Atendimentos sem valor (cortesia) e cancelados.", warning: rev.eligible === 0 ? "Sem atendimentos no período." : undefined, ...base,
+  });
+  const [prod, prodPrev] = await Promise.all([productStats(q, ctx.unitId, p, staffId), productStats(q, ctx.unitId, prevP, staffId)]);
+  if (prod.gross || prodPrev.gross) kpis.push({
+    key: "products", label: "Receita de produtos", value: prod.net, unit: "brl", previous: prodPrev.net,
+    definition: "Produtos vendidos no período, menos descontos e devoluções. É separada da receita de serviços.",
+    formula: "Σ vendas − descontos − devoluções", source: "product_sales e product_returns", exclusions: "Vendas em aberto ou canceladas.", ...base,
   });
   if (full && rec && recPrev) {
     kpis.push({

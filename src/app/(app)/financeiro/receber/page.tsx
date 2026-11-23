@@ -13,7 +13,7 @@ const SIZE = 50;
 
 export default async function ReceivablesPage({ searchParams }: { searchParams: Promise<{ f?: string; q?: string; p?: string; nova?: string; ok?: string; erro?: string }> }) {
   const sp = await searchParams;
-  const { ctx } = await requirePerm("finance.view");
+  const { ctx } = await requirePerm("finance.view", "finance.receivables_view");
   const db = await getDb();
   const filter = sp.f === "todos" ? "todos" : sp.f === "nao_conciliados" ? "nao_conciliados" : "abertos";
   const page = Math.max(1, Number(sp.p) || 1);
