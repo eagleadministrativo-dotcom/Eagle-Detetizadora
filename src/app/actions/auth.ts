@@ -1,12 +1,21 @@
 "use server";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { rateLimit } from "@/server/services/health";
 import { getDb } from "@/server/db";
-import { changePassword, beginMfaSetup, completeMfaSetup, login, logout, verifyMfaForSession } from "@/server/auth";
+import { changePassword, beginMfaSetup, completeMfaSetup, generateRecoveryCodes, login, logout, verifyMfaForSession } from "@/server/auth";
 import { isDomainError } from "@/server/errors";
 import { setupInitial, isSetupDone } from "@/server/services/bootstrap";
 import { clearSessionCookie, currentSession, sessionToken, setSessionCookie, setThemeCookie, str } from "@/server/session";
 import { getSession } from "@/server/auth";
 import { getPrefs } from "@/server/services/access";
+
+/** Origem da requisição (primeiro IP do x-forwarded-for, posto pela Vercel). */
+async function clientIp() {
+  const h = await headers();
+  return (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || h.get("x-real-ip") || "desconhecido";
+}
+const TOO_MANY = "Muitas tentativas a partir desta conexão. Aguarde alguns minutos.";
 
 const back = (path: string, erro: string) => redirect(`${path}?erro=${encodeURIComponent(erro)}`);
 
@@ -22,8 +31,10 @@ async function afterLogin(r: { token: string; needsMfa: boolean; needsMfaSetup: 
 
 export async function loginAction(fd: FormData) {
   let r;
+  const db = await getDb();
+  if (!(await rateLimit(db, `login:ip:${await clientIp()}`, 20, 900))) return back("/login", TOO_MANY);
   try {
-    r = await login(await getDb(), str(fd, "email"), str(fd, "password"));
+    r = await login(db, str(fd, "email"), str(fd, "password"));
   } catch (e) {
     return back("/login", isDomainError(e) ? e.message : "Não foi possível entrar. Tente novamente.");
   }
@@ -47,6 +58,7 @@ export async function setupAction(fd: FormData) {
 export async function mfaVerifyAction(fd: FormData) {
   const token = await sessionToken();
   if (!token) redirect("/login");
+  if (!(await rateLimit(await getDb(), `mfa:ip:${await clientIp()}`, 15, 900))) return back("/login/mfa", TOO_MANY);
   try {
     await verifyMfaForSession(await getDb(), token, str(fd, "code"));
   } catch (e) {
@@ -71,7 +83,7 @@ export async function mfaSetupFinishAction(fd: FormData) {
   } catch (e) {
     return back("/login/mfa/setup", isDomainError(e) ? e.message : "Erro ao ativar o autenticador.");
   }
-  redirect("/conta?ok=" + encodeURIComponent("Autenticador ativado."));
+  redirect("/conta?ok=" + encodeURIComponent("Autenticador ativado. Gere agora seus códigos de recuperação.") + "#seguranca");
 }
 
 export async function logoutAction() {
@@ -94,3 +106,14 @@ export async function changePasswordAction(fd: FormData) {
   redirect("/login?ok=" + encodeURIComponent("Senha alterada. Entre novamente."));
 }
 
+
+/** Gera códigos de recuperação e devolve para exibir uma única vez (useActionState). */
+export async function recoveryCodesAction(_prev: { codes?: string[]; erro?: string } | null): Promise<{ codes?: string[]; erro?: string }> {
+  const s = await currentSession();
+  if (!s) redirect("/login");
+  try {
+    return { codes: await generateRecoveryCodes(await getDb(), s.user.id) };
+  } catch (e) {
+    return { erro: isDomainError(e) ? e.message : "Não foi possível gerar os códigos." };
+  }
+}

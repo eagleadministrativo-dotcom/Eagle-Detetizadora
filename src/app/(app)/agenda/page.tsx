@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveAgenda } from "@/components/live";
 import { getDb } from "@/server/db";
 import { requirePerm } from "@/server/session";
 import { can, getSettings } from "@/server/core";
@@ -84,6 +85,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
 
   return (
     <>
+      <LiveAgenda />
       <PageHead title="Agenda">
         {canBook ? <Link className="btn ghost" href="/agenda/novo?imediato=1">Sem hora marcada</Link> : null}
         {canBook ? <Link className="btn accent" href={`/agenda/novo?d=${d}`}>Agendar</Link> : null}

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { ClearOfflineCache } from "@/components/live";
 import { getDb } from "@/server/db";
 import { isSetupDone } from "@/server/services/bootstrap";
 import { currentSession } from "@/server/session";
@@ -15,6 +16,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   if (s?.mfaVerified) redirect("/");
   return (
     <div className="login">
+      <ClearOfflineCache />
       <div className="card stack">
         <div>
           <div className="brand"><span className="mark" aria-hidden="true">M</span><span className="name">MARFIM<small>Studio OS</small></span></div>

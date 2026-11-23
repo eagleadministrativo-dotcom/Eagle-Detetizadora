@@ -40,7 +40,7 @@ function pgliteDb(dataDir: string): Db {
 async function postgresDb(url: string): Promise<Db> {
   const { Pool, types } = await import("pg");
   types.setTypeParser(INT8, toNumber);
-  const pool = new Pool({ connectionString: url, max: 5, ssl: url.includes("localhost") ? undefined : { rejectUnauthorized: false } });
+  const pool = new Pool({ connectionString: url, max: 5, application_name: "marfim-app", ssl: url.includes("localhost") ? undefined : { rejectUnauthorized: false } });
   return {
     async query<T>(sql: string, params: unknown[] = []) {
       return (await pool.query(sql, params as any[])).rows as T[];

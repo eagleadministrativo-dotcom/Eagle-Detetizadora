@@ -4,6 +4,7 @@ import { runReminders } from "@/server/services/reminders";
 import { processEvents } from "@/server/services/events";
 import { runTaskJobs } from "@/server/services/tasks";
 import { flushPush } from "@/server/services/push";
+import { recordJob } from "@/server/services/health";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +15,13 @@ export async function GET(req: Request) {
   if (ok === null) return new Response("CRON_SECRET não configurado", { status: 503 });
   if (!ok) return new Response("Não autorizado", { status: 401 });
   const db = await getDb();
-  const reminders = await runReminders(db).catch((e) => ({ error: (e as Error).message }));
-  const events = await processEvents(db).catch((e) => ({ error: (e as Error).message }));
-  const tasks: Record<string, unknown> = {};
-  for (const u of await db.query<{ id: string }>("select id from units")) tasks[u.id] = await runTaskJobs(db, u.id).catch((e) => ({ error: (e as Error).message }));
-  const push = await flushPush(db).catch((e) => ({ error: (e as Error).message }));
-  return Response.json({ ok: true, reminders, events, tasks, push });
+  const out = await recordJob(db, "lembretes", async () => {
+    const reminders = await runReminders(db).catch((e) => ({ error: (e as Error).message }));
+    const events = await processEvents(db).catch((e) => ({ error: (e as Error).message }));
+    const tasks: Record<string, unknown> = {};
+    for (const u of await db.query<{ id: string }>("select id from units")) tasks[u.id] = await runTaskJobs(db, u.id).catch((e) => ({ error: (e as Error).message }));
+    const push = await flushPush(db).catch((e) => ({ error: (e as Error).message }));
+    return { reminders, events, tasks, push };
+  });
+  return Response.json({ ok: true, ...out });
 }

@@ -7,9 +7,9 @@ Combinação das três explorações, com papéis definidos:
 - **Burgundy Atelier** (ação): botão primário, cartão de resultado e blocos editoriais. Burgundy é usado com parcimônia para que continue sendo destaque.
 Bronze/cognac aparecem só em linhas, reflexos e rótulos. Por quê: a combinação separa estrutura × leitura × ação, evita o visual "SaaS genérico" e mantém contraste alto onde há números.
 
-## Paleta (tokens em `src/app/tokens.css`)
+## Paleta (tokens no início de `src/app/styles.css`)
 Olive `#292D1E / #45482D / #686D47` · Burgundy `#351018 / #591D27 / #79353F` · Cream `#C9B798 / #E7D8BC / #F3EBDD / #F6F1E7` · Charcoal `#151615` · Graphite `#222321` · Warm Gray `#77766F` · Cognac `#9C6845` · Bronze `#A58D69`.
-Tema claro (papel) e escuro (grafite) seguem a preferência do sistema. Os valores brutos existem só em `tokens.css`; componentes usam tokens semânticos (`--bg`, `--surface`, `--ink`, `--muted`, `--line`, `--accent`, `--olive`, `--ok/--warn/--bad/--info`, `--focus`, `--chart-*`, `--shadow-1..3`, `--radius*`, `--s1..s7`, `--t-micro/trans/panel`).
+Tema claro (papel) e escuro (grafite) seguem a preferência do sistema. Os valores brutos ficam nos blocos `:root` e `:root[data-scheme="dark"]` de `styles.css` (o tema efetivo é gravado por `/theme.js`); componentes usam tokens semânticos (`--bg`, `--surface`, `--ink`, `--muted`, `--line`, `--accent`, `--olive`, `--ok/--warn/--bad/--info`, `--focus`, `--chart-*`, `--shadow-1..3`, `--radius*`, `--s1..s7`, `--t-micro/trans/panel`).
 Ajustes de acessibilidade: o cognac puro não atinge 4,5:1 em texto pequeno, então rótulos usam `--eyebrow` (mais escuro no claro, mais claro no escuro).
 
 ## Contraste medido (WCAG, razão calculada)

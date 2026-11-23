@@ -145,7 +145,9 @@ export async function verifyMfaForSession(db: Db, token: string, code: string) {
       [sha(token)],
     );
     if (!s || !s.secret) return new DomainError("no_session", "Sessão inválida.");
-    if (!verifyTotp(s.secret, code)) {
+    const recovery = isRecoveryCode(code) ? await redeemRecoveryCode(q, s.user_id, code) : false;
+    if (recovery) await audit(q, { userId: s.user_id, unitId: s.unit_id }, "MFA_CODIGO_RECUPERACAO", "user", s.user_id);
+    if (!recovery && !verifyTotp(s.secret, code)) {
       const fails = s.failed_attempts + 1;
       const lock = fails >= MAX_FAILS ? new Date(Date.now() + LOCK_MINUTES * 60000) : null;
       await q("update users set failed_attempts=$2, locked_until=$3 where id=$1", [s.user_id, lock ? 0 : fails, lock]);
@@ -163,6 +165,36 @@ export async function verifyMfaForSession(db: Db, token: string, code: string) {
     return null;
   });
   if (out) throw out;
+}
+
+// ---------- códigos de recuperação ----------
+/** Formato XXXX-XXXX (sem letras ambíguas). Guardados só como hash; cada um vale uma vez. */
+const RC_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const normRc = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, "");
+export const isRecoveryCode = (c: string) => normRc(c).length === 8 && /[A-Z]/.test(normRc(c));
+async function redeemRecoveryCode(q: Q, userId: string, code: string): Promise<boolean> {
+  const r = await q("update mfa_recovery_codes set used_at=now() where id = (select id from mfa_recovery_codes where user_id=$1 and code_hash=$2 and used_at is null limit 1) returning id", [userId, sha(normRc(code))]);
+  return r.length > 0;
+}
+/** Gera 8 códigos novos (os anteriores deixam de valer). Os valores só existem nesta resposta. */
+export async function generateRecoveryCodes(db: Db, userId: string): Promise<string[]> {
+  // o primeiro caractere é sempre letra: o código nunca se confunde com os 6 dígitos do autenticador
+  const codes = Array.from({ length: 8 }, () => {
+    const c = Array.from(crypto.randomBytes(8), (x, i) => (i === 0 ? RC_ALPHA[x % 24] : RC_ALPHA[x % RC_ALPHA.length])).join("");
+    return `${c.slice(0, 4)}-${c.slice(4)}`;
+  });
+  await db.tx(async (q) => {
+    const [u] = await q<{ mfa_enabled: boolean }>("select mfa_enabled from users where id=$1", [userId]);
+    if (!u?.mfa_enabled) throw new DomainError("no_mfa", "Ative a verificação em duas etapas antes de gerar os códigos.");
+    await q("delete from mfa_recovery_codes where user_id=$1", [userId]);
+    for (const c of codes) await q("insert into mfa_recovery_codes(user_id, code_hash) values ($1,$2)", [userId, sha(normRc(c))]);
+    await audit(q, { userId }, "MFA_CODIGOS_GERADOS", "user", userId, null, { quantidade: codes.length });
+  });
+  return codes;
+}
+export async function recoveryCodesLeft(db: Db, userId: string): Promise<number> {
+  const [r] = await db.query<{ n: number }>("select count(*)::bigint as n from mfa_recovery_codes where user_id=$1 and used_at is null", [userId]);
+  return r.n;
 }
 
 /** Etapa 1 do cadastro de autenticador: gera segredo (ainda inativo). */

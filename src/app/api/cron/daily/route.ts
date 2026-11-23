@@ -2,6 +2,7 @@ import { getDb } from "@/server/db";
 import { cronAuthorized } from "@/server/cron";
 import { runDailyJobs } from "@/server/services/ops";
 import { flushPush } from "@/server/services/push";
+import { pruneOps, recordJob } from "@/server/services/health";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +13,13 @@ export async function GET(req: Request) {
   if (ok === null) return new Response("CRON_SECRET não configurado", { status: 503 });
   if (!ok) return new Response("Não autorizado", { status: 401 });
   const db = await getDb();
-  const units = await db.query<{ id: string }>("select id from units");
-  const results: Record<string, unknown> = {};
-  for (const u of units) results[u.id] = await runDailyJobs(db, u.id).catch((e) => ({ error: (e as Error).message }));
-  const push = await flushPush(db).catch((e) => ({ error: (e as Error).message }));
-  return Response.json({ ok: true, results, push });
+  const out = await recordJob(db, "diaria", async () => {
+    const units = await db.query<{ id: string }>("select id from units");
+    const results: Record<string, unknown> = {};
+    for (const u of units) results[u.id] = await runDailyJobs(db, u.id).catch((e) => ({ error: (e as Error).message }));
+    const push = await flushPush(db).catch((e) => ({ error: (e as Error).message }));
+    const limpeza = await pruneOps(db).catch((e) => ({ error: (e as Error).message }));
+    return { results, push, limpeza };
+  });
+  return Response.json({ ok: true, ...out });
 }

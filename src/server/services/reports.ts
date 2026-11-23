@@ -196,12 +196,22 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
   const q = db.query;
   const now = new Date();
   const prevP = previousPeriod(p);
-  const [rev, revPrev, rec, recPrev, occ] = await Promise.all([
+  const fin = full && can(ctx, "finance.view");
+  const { from, to } = range(p);
+  // Consultas independentes em paralelo (no PostgreSQL real usam conexões diferentes do pool).
+  const [rev, revPrev, rec, recPrev, occ, occPrev, prod, prodPrev, dre, dp, accounts, arRows, apRows] = await Promise.all([
     revenueStats(q, ctx.unitId, p, staffId), revenueStats(q, ctx.unitId, prevP, staffId),
     full ? receiptStats(q, ctx.unitId, p, staffId) : Promise.resolve(null), full ? receiptStats(q, ctx.unitId, prevP, staffId) : Promise.resolve(null),
-    occupancyStats(q, ctx.unitId, p, staffId),
+    occupancyStats(q, ctx.unitId, p, staffId), occupancyStats(q, ctx.unitId, prevP, staffId),
+    productStats(q, ctx.unitId, p, staffId), productStats(q, ctx.unitId, prevP, staffId),
+    fin ? computeDre(q, ctx.unitId, p) : Promise.resolve(null), fin ? computeDre(q, ctx.unitId, prevP) : Promise.resolve(null),
+    fin ? accountBalances(q, ctx.unitId) : Promise.resolve([] as AccountBalance[]),
+    fin ? q<{ open: number; n: number }>(
+      "select coalesce(sum(r.amount_due_cents - b.registered_cents),0)::bigint as open, count(*)::bigint as n from receivables r join receivable_balances b on b.receivable_id=r.id where r.unit_id=$1 and r.status='ativo' and b.registered_cents < r.amount_due_cents", [ctx.unitId]) : Promise.resolve([]),
+    fin ? q<{ open: number; overdue: number }>(
+      `select coalesce(sum(p.amount_cents - b.paid_cents),0)::bigint as open, coalesce(sum(p.amount_cents - b.paid_cents) filter (where p.due_date < $2::date),0)::bigint as overdue
+       from payables p join payable_balances b on b.payable_id=p.id where p.unit_id=$1 and p.status='ativo' and b.paid_cents < p.amount_cents`, [ctx.unitId, todayYmd()]) : Promise.resolve([]),
   ]);
-  const occPrev = await occupancyStats(q, ctx.unitId, prevP, staffId);
   const kpis: Kpi[] = [];
   const base = { updatedAt: now };
   kpis.push({
@@ -219,7 +229,6 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
     definition: "Receita média por atendimento concluído com valor.", formula: "receita elegível ÷ nº de atendimentos elegíveis",
     source: "attendances", exclusions: "Atendimentos sem valor (cortesia) e cancelados.", warning: rev.eligible === 0 ? "Sem atendimentos no período." : undefined, ...base,
   });
-  const [prod, prodPrev] = await Promise.all([productStats(q, ctx.unitId, p, staffId), productStats(q, ctx.unitId, prevP, staffId)]);
   if (prod.gross || prodPrev.gross) kpis.push({
     key: "products", label: "Receita de produtos", value: prod.net, unit: "brl", previous: prodPrev.net,
     definition: "Produtos vendidos no período, menos descontos e devoluções. É separada da receita de serviços.",
@@ -244,9 +253,7 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
   let result: number | null = null;
   let resultPrev: number | null = null;
   let dreWarnings: string[] = [];
-  if (full && can(ctx, "finance.view")) {
-    const dre = await computeDre(q, ctx.unitId, p);
-    const dp = await computeDre(q, ctx.unitId, prevP);
+  if (dre && dp) {
     result = dre.operatingResult; resultPrev = dp.operatingResult; dreWarnings = dre.warnings;
     kpis.push({
       key: "operating_result", label: "Resultado operacional", value: result, unit: "brl", previous: resultPrev,
@@ -255,24 +262,20 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
       warning: dre.warnings.find((w) => w.includes("imposto")), ...base,
     });
   }
-  const accounts = full && can(ctx, "finance.view") ? await accountBalances(q, ctx.unitId) : [];
-  if (full && can(ctx, "finance.view")) {
+  if (fin) {
     kpis.push({
       key: "cash_balance", label: "Saldo das contas", value: accounts.reduce((a, c) => a + c.balance_cents, 0), unit: "brl",
       definition: "Saldo inicial cadastrado + recebimentos confirmados (líquidos de taxas) + aportes − pagamentos de contas, por conta financeira.",
       formula: "saldo inicial + entradas confirmadas − saídas pagas", source: "financial_accounts, payments, payable_payments, capital_entries", exclusions: "Pagamentos apenas registrados; sangrias e suprimentos (movimentos internos).", ...base,
     });
-    const [ar] = await q<{ open: number; n: number }>(
-      "select coalesce(sum(r.amount_due_cents - b.registered_cents),0)::bigint as open, count(*)::bigint as n from receivables r join receivable_balances b on b.receivable_id=r.id where r.unit_id=$1 and r.status='ativo' and b.registered_cents < r.amount_due_cents", [ctx.unitId]);
-    const [ap] = await q<{ open: number; overdue: number }>(
-      `select coalesce(sum(p.amount_cents - b.paid_cents),0)::bigint as open, coalesce(sum(p.amount_cents - b.paid_cents) filter (where p.due_date < $2::date),0)::bigint as overdue
-       from payables p join payable_balances b on b.payable_id=p.id where p.unit_id=$1 and p.status='ativo' and b.paid_cents < p.amount_cents`, [ctx.unitId, todayYmd()]);
+    const ar = arRows[0] ?? { open: 0, n: 0 };
+    const ap = apRows[0] ?? { open: 0, overdue: 0 };
     kpis.push({ key: "receivables_open", label: "A receber", value: ar.open, unit: "brl", definition: "Saldo ainda não pago de cobranças ativas (posição de hoje).", formula: "Σ (valor devido − pagamentos registrados)", source: "receivables, payments", exclusions: "Cobranças canceladas.", ...base });
     kpis.push({ key: "payables_open", label: "A pagar", value: ap.open, unit: "brl", definition: "Saldo de contas a pagar ativas (posição de hoje).", formula: "Σ (valor − pagamentos)", source: "payables, payable_payments", exclusions: "Contas canceladas.", warning: ap.overdue > 0 ? `${(ap.overdue / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} vencidos` : undefined, ...base });
   }
   kpis.push({
     key: "occupancy", label: "Ocupação", value: occ.configured && occ.availableMin > 0 ? (occ.occupied / occ.availableMin) * 100 : null, unit: "pct",
-    previous: (await occupancyStats(q, ctx.unitId, prevP, staffId)).availableMin > 0 ? (occPrev.occupied / occPrev.availableMin) * 100 : null,
+    previous: occPrev.availableMin > 0 ? (occPrev.occupied / occPrev.availableMin) * 100 : null,
     definition: "Tempo efetivamente ocupado dividido pelo tempo disponibilizado para atendimento (horário de funcionamento × cadeiras ativas, até agora). Horas reservadas são mostradas à parte.",
     formula: "minutos de atendimentos concluídos/em andamento ÷ minutos disponíveis", source: "appointments, unit_settings.business_hours, chairs",
     exclusions: "Agendamentos futuros, cancelados e ausências.", warning: occ.configured ? (occ.reserved ? `${Math.round(occ.reserved / 60)} h reservadas ainda por realizar` : undefined) : "Cadastre o horário de funcionamento para calcular a ocupação.", ...base,
@@ -284,19 +287,32 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
   });
 
   // séries
-  const { from, to } = range(p);
-  const byDay = await q<{ d: string; cents: number }>(
-    `select to_char(${LD("finished_at")},'YYYY-MM-DD') as d, sum(total_cents)::bigint as cents from attendances where unit_id=$1 and status='concluido' and finished_at >= $2 and finished_at < $3 and ($4::uuid is null or staff_id=$4) group by 1`, [ctx.unitId, from, to, staffId]);
-  // produtos entram no resultado acumulado, para fechar com a DRE
-  const prodDay = await q<{ d: string; cents: number }>(
+  const [byDay, prodDay, expDay, topServices, byMethod, heat, pendRows, odRows, staleRows, notes] = await Promise.all([
+    q<{ d: string; cents: number }>(
+    `select to_char(${LD("finished_at")},'YYYY-MM-DD') as d, sum(total_cents)::bigint as cents from attendances where unit_id=$1 and status='concluido' and finished_at >= $2 and finished_at < $3 and ($4::uuid is null or staff_id=$4) group by 1`, [ctx.unitId, from, to, staffId]),
+    // produtos entram no resultado acumulado, para fechar com a DRE
+    q<{ d: string; cents: number }>(
     `select d, sum(c)::bigint as cents from (
        select to_char(${LD("s.finished_at")},'YYYY-MM-DD') as d, s.total_cents as c from product_sales s where s.unit_id=$1 and s.status='concluida' and s.finished_at >= $2 and s.finished_at < $3 and ($4::uuid is null or s.seller_staff_id=$4)
-       union all select to_char(${LD("r.created_at")},'YYYY-MM-DD'), -r.amount_cents from product_returns r join product_sale_items i on i.id=r.sale_item_id join product_sales s on s.id=i.sale_id where r.unit_id=$1 and r.created_at >= $2 and r.created_at < $3 and ($4::uuid is null or s.seller_staff_id=$4)) x group by d`, [ctx.unitId, from, to, staffId]);
-  const expDay = full && can(ctx, "finance.view")
-    ? await q<{ d: string; cents: number }>(
+       union all select to_char(${LD("r.created_at")},'YYYY-MM-DD'), -r.amount_cents from product_returns r join product_sale_items i on i.id=r.sale_item_id join product_sales s on s.id=i.sale_id where r.unit_id=$1 and r.created_at >= $2 and r.created_at < $3 and ($4::uuid is null or s.seller_staff_id=$4)) x group by d`, [ctx.unitId, from, to, staffId]),
+    fin ? q<{ d: string; cents: number }>(
         `select to_char(coalesce(b.competence_date,b.due_date),'YYYY-MM-DD') as d, sum(b.amount_cents)::bigint as cents from payables b join financial_categories c on c.id=b.category_id
-         where b.unit_id=$1 and b.status='ativo' and c.kind in ('custo','despesa','pro_labore','imposto') and coalesce(b.competence_date,b.due_date) between $2::date and $3::date group by 1`, [ctx.unitId, p.start, p.end])
-    : [];
+         where b.unit_id=$1 and b.status='ativo' and c.kind in ('custo','despesa','pro_labore','imposto') and coalesce(b.competence_date,b.due_date) between $2::date and $3::date group by 1`, [ctx.unitId, p.start, p.end]) : Promise.resolve([] as { d: string; cents: number }[]),
+    q<{ name: string; qty: number; cents: number }>(
+    `select i.name_snapshot as name, sum(i.quantity)::bigint as qty, sum(i.line_total_cents)::bigint as cents from attendance_items i join attendances a on a.id=i.attendance_id
+     where a.unit_id=$1 and a.status='concluido' and a.finished_at >= $2 and a.finished_at < $3 and ($4::uuid is null or a.staff_id=$4) group by 1 order by cents desc limit 8`, [ctx.unitId, from, to, staffId]),
+    full ? q<{ name: string; cents: number }>(
+    `select m.name, sum(case when p.kind='recebimento' then p.amount_cents else -p.amount_cents end)::bigint as cents from payments p join payment_methods m on m.id=p.method_id
+     where p.unit_id=$1 and p.paid_at >= $2 and p.paid_at < $3 group by 1 having sum(case when p.kind='recebimento' then p.amount_cents else -p.amount_cents end) <> 0 order by cents desc`, [ctx.unitId, from, to]) : Promise.resolve([] as { name: string; cents: number }[]),
+    q<{ dow: number; hour: number; n: number }>(
+    `select extract(dow from (starts_at at time zone 'UTC') - interval '3 hours')::int as dow, extract(hour from (starts_at at time zone 'UTC') - interval '3 hours')::int as hour, count(*)::bigint as n
+     from appointments where unit_id=$1 and starts_at >= $2 and starts_at < $3 and status in ('concluido','em_atendimento','agendado') and ($4::uuid is null or staff_id=$4) group by 1,2`, [ctx.unitId, from, to, staffId]),
+    fin ? q<{ n: number }>("select count(*)::bigint as n from payments p where p.unit_id=$1 and p.kind='recebimento' and p.status='registrado' and not exists (select 1 from payments x where x.reversal_of=p.id)", [ctx.unitId]) : Promise.resolve([] as { n: number }[]),
+    fin ? q<{ n: number }>("select count(*)::bigint as n from payables p join payable_balances b on b.payable_id=p.id where p.unit_id=$1 and p.status='ativo' and b.paid_cents < p.amount_cents and p.due_date < $2::date", [ctx.unitId, todayYmd()]) : Promise.resolve([] as { n: number }[]),
+    fin ? q<{ n: number }>("select count(*)::bigint as n from cash_sessions where unit_id=$1 and status='aberto' and opened_at < now() - interval '16 hours'", [ctx.unitId]) : Promise.resolve([] as { n: number }[]),
+    fin ? q<{ severity: string; message: string; ref_entity: string | null }>(
+      "select n.severity, n.message from notifications n where n.unit_id=$1 and n.user_id is null and n.severity<>'info' and not exists (select 1 from notification_reads r where r.notification_id=n.id and r.user_id=$2) order by n.created_at desc limit 2", [ctx.unitId, ctx.userId]) : Promise.resolve([] as { severity: string; message: string; ref_entity: string | null }[]),
+  ]);
   const revenueByDay: DashboardData["revenueByDay"] = [];
   const resultSeries: DashboardData["resultSeries"] = [];
   let acc = 0;
@@ -307,26 +323,13 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
     acc += r + (prodDay.find((x) => x.d === d)?.cents ?? 0) - e;
     resultSeries.push({ date: d, cents: acc });
   }
-  const topServices = await q<{ name: string; qty: number; cents: number }>(
-    `select i.name_snapshot as name, sum(i.quantity)::bigint as qty, sum(i.line_total_cents)::bigint as cents from attendance_items i join attendances a on a.id=i.attendance_id
-     where a.unit_id=$1 and a.status='concluido' and a.finished_at >= $2 and a.finished_at < $3 and ($4::uuid is null or a.staff_id=$4) group by 1 order by cents desc limit 8`, [ctx.unitId, from, to, staffId]);
-  const byMethod = full ? await q<{ name: string; cents: number }>(
-    `select m.name, sum(case when p.kind='recebimento' then p.amount_cents else -p.amount_cents end)::bigint as cents from payments p join payment_methods m on m.id=p.method_id
-     where p.unit_id=$1 and p.paid_at >= $2 and p.paid_at < $3 group by 1 having sum(case when p.kind='recebimento' then p.amount_cents else -p.amount_cents end) <> 0 order by cents desc`, [ctx.unitId, from, to]) : [];
-  const heat = await q<{ dow: number; hour: number; n: number }>(
-    `select extract(dow from (starts_at at time zone 'UTC') - interval '3 hours')::int as dow, extract(hour from (starts_at at time zone 'UTC') - interval '3 hours')::int as hour, count(*)::bigint as n
-     from appointments where unit_id=$1 and starts_at >= $2 and starts_at < $3 and status in ('concluido','em_atendimento','agendado') and ($4::uuid is null or staff_id=$4) group by 1,2`, [ctx.unitId, from, to, staffId]);
 
   const alerts: DashboardData["alerts"] = [];
-  if (full && can(ctx, "finance.view")) {
-    const [pend] = await q<{ n: number }>("select count(*)::bigint as n from payments p where p.unit_id=$1 and p.kind='recebimento' and p.status='registrado' and not exists (select 1 from payments x where x.reversal_of=p.id)", [ctx.unitId]);
+  if (fin) {
+    const pend = pendRows[0] ?? { n: 0 }, od = odRows[0] ?? { n: 0 }, stale = staleRows[0] ?? { n: 0 };
     if (pend.n) alerts.push({ severity: "atencao", message: `${pend.n} pagamento(s) aguardando conferência`, href: "/financeiro/conciliacao" });
-    const [od] = await q<{ n: number }>("select count(*)::bigint as n from payables p join payable_balances b on b.payable_id=p.id where p.unit_id=$1 and p.status='ativo' and b.paid_cents < p.amount_cents and p.due_date < $2::date", [ctx.unitId, todayYmd()]);
     if (od.n) alerts.push({ severity: "critico", message: `${od.n} conta(s) a pagar vencida(s)`, href: "/financeiro/pagar?f=abertas" });
-    const [stale] = await q<{ n: number }>("select count(*)::bigint as n from cash_sessions where unit_id=$1 and status='aberto' and opened_at < now() - interval '16 hours'", [ctx.unitId]);
     if (stale.n) alerts.push({ severity: "atencao", message: "Há um caixa aberto há mais de 16 horas", href: "/financeiro/caixa" });
-    const notes = await q<{ severity: string; message: string; ref_entity: string | null }>(
-      "select n.severity, n.message from notifications n where n.unit_id=$1 and n.user_id is null and n.severity<>'info' and not exists (select 1 from notification_reads r where r.notification_id=n.id and r.user_id=$2) order by n.created_at desc limit 2", [ctx.unitId, ctx.userId]);
     for (const n of notes) if (!alerts.some((a) => a.message === n.message)) alerts.push({ severity: n.severity, message: n.message });
   }
   return { period: p, kpis, accounts, revenueByDay, resultSeries, topServices, byMethod, heat, alerts, warnings: dreWarnings, updatedAt: now };
@@ -473,12 +476,19 @@ export async function goalsProgress(db: Db, ctx: Ctx): Promise<GoalProgress[]> {
   const goals = await q<{ id: string; kind: string; name: string; target_cents: number; period_start: string | null; period_end: string | null; is_active: boolean }>(
     "select id, kind, name, target_cents, to_char(period_start,'YYYY-MM-DD') as period_start, to_char(period_end,'YYYY-MM-DD') as period_end, is_active from financial_goals where unit_id=$1 order by is_active desc, period_end nulls last", [ctx.unitId]);
   const today = todayYmd();
+  // metas do mesmo período compartilham o cálculo, e tudo roda em paralelo
+  const memo = new Map<string, Promise<number>>();
+  const once = (key: string, f: () => Promise<number>) => { if (!memo.has(key)) memo.set(key, f()); return memo.get(key)!; };
+  const currentOf = (g: (typeof goals)[number]): Promise<number> => {
+    if (g.kind === "receita" && g.period_start && g.period_end) { const per = { start: g.period_start, end: g.period_end }; return once(`r:${per.start}:${per.end}`, async () => (await revenueStats(q, ctx.unitId, per, null)).revenue); }
+    if (g.kind === "resultado" && g.period_start && g.period_end) { const per = { start: g.period_start, end: g.period_end }; return once(`d:${per.start}:${per.end}`, async () => (await computeDre(q, ctx.unitId, per)).operatingResult); }
+    if (g.kind === "reserva") return once("saldo", async () => (await accountBalances(q, ctx.unitId)).reduce((a, c) => a + c.balance_cents, 0));
+    return Promise.resolve(0);
+  };
+  const currents = await Promise.all(goals.map(currentOf));
   const out: GoalProgress[] = [];
-  for (const g of goals) {
-    let current = 0;
-    if (g.kind === "receita" && g.period_start && g.period_end) current = (await revenueStats(q, ctx.unitId, { start: g.period_start, end: g.period_end }, null)).revenue;
-    else if (g.kind === "resultado" && g.period_start && g.period_end) current = (await computeDre(q, ctx.unitId, { start: g.period_start, end: g.period_end })).operatingResult;
-    else if (g.kind === "reserva") current = (await accountBalances(q, ctx.unitId)).reduce((a, c) => a + c.balance_cents, 0);
+  for (const [i, g] of goals.entries()) {
+    const current = currents[i];
     const pct = g.target_cents > 0 ? (current / g.target_cents) * 100 : null;
     let expected: number | null = null;
     if (g.period_start && g.period_end) {

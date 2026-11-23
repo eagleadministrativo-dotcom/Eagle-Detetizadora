@@ -10,6 +10,7 @@ import { fmtBRL } from "@/lib/money";
 import { ApptBadge, Badge, Empty, Flash, KpiCard, KpiLine, PageHead, Seg } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { Copilot } from "@/components/copilot";
+import { LiveAgenda } from "@/components/live";
 import { copilotInsights } from "@/server/services/insights";
 import { BarChart, Donut, HBars, Heatmap, LineChart } from "@/components/charts";
 
@@ -67,6 +68,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<SP>
         )}
       </PageHead>
       <Flash ok={sp.ok} erro={sp.erro} />
+      <LiveAgenda every={30000} />
 
       {full ? (
         <details className="filters-d" open={custom}>

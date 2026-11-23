@@ -3,13 +3,7 @@ import "@fontsource/cormorant-garamond/500.css";
 import "@fontsource/cormorant-garamond/600.css";
 import "@fontsource/cormorant-garamond/500-italic.css";
 import "@fontsource-variable/inter";
-import "./tokens.css";
-import "./globals.css";
-import "./v4.css";
-import "./v5.css";
-import "./v6.css";
-import "./v7.css";
-import "./v8.css";
+import "./styles.css";
 import { cookies } from "next/headers";
 
 export const metadata: Metadata = {
@@ -22,9 +16,15 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: [{ media: "(prefers-color-scheme: light)", color: "#ebe4dc" }, { media: "(prefers-color-scheme: dark)", color: "#1c1c1e" }] };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const theme = (await cookies()).get("marfim_theme")?.value;
+  const cookie = (await cookies()).get("marfim_theme")?.value;
+  const theme = cookie === "light" || cookie === "dark" ? cookie : undefined;
   return (
-    <html lang="pt-BR" data-theme={theme === "light" || theme === "dark" ? theme : undefined} suppressHydrationWarning>
+    <html lang="pt-BR" data-theme={theme} data-scheme={theme} suppressHydrationWarning>
+      <head>
+        {/* resolve o tema "automático" antes da primeira pintura (sem piscar); precisa ser síncrono */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script src="/theme.js" />
+      </head>
       <body>{children}</body>
     </html>
   );

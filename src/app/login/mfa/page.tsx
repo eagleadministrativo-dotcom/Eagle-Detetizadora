@@ -18,11 +18,11 @@ export default async function MfaPage({ searchParams }: { searchParams: Promise<
         <div>
           <div className="brand"><span className="mark" aria-hidden="true">M</span><span className="name">MARFIM<small>Studio OS</small></span></div>
           <h1>Verificação em duas etapas</h1>
-          <p className="muted">Digite o código de 6 dígitos do seu aplicativo autenticador.</p>
+          <p className="muted">Digite o código de 6 dígitos do seu aplicativo autenticador. Sem o celular? Use um dos códigos de recuperação (formato ABCD-EFGH).</p>
         </div>
         <Flash erro={sp.erro} />
         <form action={mfaVerifyAction} className="form">
-          <label>Código<input name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9 ]{6,7}" maxLength={7} required autoFocus /></label>
+          <label>Código<input name="code" autoComplete="one-time-code" autoCapitalize="characters" pattern="[0-9 ]{6,7}|[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}" maxLength={9} required autoFocus /></label>
           <button className="btn accent" type="submit">Verificar</button>
         </form>
         <form action={logoutAction}><button className="btn small ghost" type="submit">Cancelar e sair</button></form>

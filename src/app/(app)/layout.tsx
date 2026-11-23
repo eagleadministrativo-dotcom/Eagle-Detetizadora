@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OfflineBanner } from "@/components/live";
 import { after } from "next/server";
 import { runReminders } from "@/server/services/reminders";
 import { flushPush } from "@/server/services/push";
@@ -80,6 +81,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     can(ctx, "users.manage") && { href: "/admin/usuarios", label: "Usuários e permissões" },
     can(ctx, "admin.settings") && { href: "/admin/configuracoes", label: "Configurações" },
     can(ctx, "audit.view") && { href: "/admin/auditoria", label: "Auditoria" },
+    can(ctx, "audit.view") && { href: "/admin/saude", label: "Saúde do sistema" },
     can(ctx, "data.export") && { href: "/admin/dados", label: "Dados e backup" },
     { href: "/notificacoes", label: "Avisos", count: unread },
   ]);
@@ -121,6 +123,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </div>
       <BottomNav primary={primary} groups={groups} account={{ name: s.user.fullName, role: ROLE_LABEL[ctx.role], theme: prefs.theme }} />
       <Spotlight />
+      <OfflineBanner />
       <CountUp />
     </div>
   );

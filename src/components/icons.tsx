@@ -76,6 +76,7 @@ export function iconFor(href: string): IconName {
   if (href.startsWith("/admin/cadeiras")) return "chair";
   if (href.startsWith("/admin/equipe")) return "team";
   if (href.startsWith("/relatorios")) return "chart";
+  if (href.startsWith("/admin/saude")) return "spark";
   if (href.startsWith("/admin/auditoria") || href.startsWith("/admin/usuarios")) return "shield";
   if (href.startsWith("/admin")) return "gear";
   return "receipt";

@@ -1,20 +1,18 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useState, useTransition, type CSSProperties } from "react";
 import { Icon, type IconName } from "./icons";
 import type { Insight } from "@/server/services/insights";
+import { dismissInsightAction } from "@/app/actions/copilot";
 
-const KEY = "marfim.copilot.hidden";
-const today = () => new Date().toISOString().slice(0, 10);
-function readHidden(): string[] {
-  try { const v = JSON.parse(localStorage.getItem(KEY) ?? "{}"); return v.d === today() ? v.ids ?? [] : []; } catch { return []; }
-}
-
-/** Copiloto: sugestões opcionais. "Dispensar" esconde só até amanhã e só neste aparelho. */
+/**
+ * Copiloto: sugestões opcionais, cada uma com o motivo ("Por que estou vendo isto?").
+ * Dispensar esconde até amanhã em todos os aparelhos desta pessoa.
+ */
 export function Copilot({ items }: { items: Insight[] }) {
   const [hidden, setHidden] = useState<string[]>([]);
-  useEffect(() => { const t = setTimeout(() => setHidden(readHidden()), 0); return () => clearTimeout(t); }, []);
-  const hide = (id: string) => setHidden((h) => { const n = [...h, id]; try { localStorage.setItem(KEY, JSON.stringify({ d: today(), ids: n })); } catch { /* sem armazenamento */ } return n; });
+  const [, start] = useTransition();
+  const hide = (id: string) => { setHidden((h) => [...h, id]); start(() => dismissInsightAction(id)); };
   const list = items.filter((i) => !hidden.includes(i.id));
   return (
     <section className="copilot" aria-label="Sugestões do copiloto">
@@ -29,10 +27,13 @@ export function Copilot({ items }: { items: Insight[] }) {
           {list.map((i, n) => (
             <li key={i.id} className={`cp ${i.tone}`} style={{ "--i": n } as CSSProperties}>
               <span className="cp-ic" aria-hidden="true"><Icon name={i.icon as IconName} /></span>
-              <div className="cp-txt"><b>{i.title}</b><span>{i.body}</span></div>
+              <div className="cp-txt">
+                <b>{i.title}</b><span>{i.body}</span>
+                <details className="cp-why"><summary>Por que estou vendo isto?</summary><p>{i.why}</p></details>
+              </div>
               <div className="cp-act">
                 <Link className="btn small accent" href={i.href}>{i.cta}</Link>
-                <button type="button" className="cp-x" aria-label={`Dispensar: ${i.title}`} onClick={() => hide(i.id)}><Icon name="close" /></button>
+                <button type="button" className="cp-x" aria-label={`Dispensar até amanhã: ${i.title}`} title="Dispensar até amanhã" onClick={() => hide(i.id)}><Icon name="close" /></button>
               </div>
             </li>
           ))}

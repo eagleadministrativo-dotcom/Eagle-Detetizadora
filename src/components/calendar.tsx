@@ -146,7 +146,7 @@ export function Calendar({ cols, events, blocks, start, end, canBook, canBlock }
   const open = (s: number) => (s - start) * PX;
 
   return (
-    <div className="calendar">
+    <div className="calendar" data-dragging={drag ? "true" : undefined}>
       <div className="calscroll" tabIndex={0} aria-label="Calendário">
         <div className="calhead" style={{ gridTemplateColumns: template }}>
           <div />

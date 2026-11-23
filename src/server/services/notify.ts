@@ -9,6 +9,7 @@ export const NOTIFY_GROUPS = [
   { key: "agenda", label: "Agenda (novos, cancelados, reagendados)", prefixes: ["novo_agendamento", "agendamento_", "lembrete_cliente"] },
   { key: "retornos", label: "Clientes para retornar", prefixes: ["retorno_"] },
   { key: "conquistas", label: "Conquistas e recordes", prefixes: ["recorde_"] },
+  { key: "sistema", label: "Saúde do sistema (falhas de rotinas)", prefixes: ["sistema_"] },
   { key: "financeiro", label: "Financeiro, caixa e comissões", prefixes: [""] },
 ] as const;
 export const groupOf = (kind: string) => NOTIFY_GROUPS.find((g) => g.prefixes.some((p) => kind.startsWith(p)))!.key;

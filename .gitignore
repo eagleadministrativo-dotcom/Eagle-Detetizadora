@@ -42,3 +42,8 @@ next-env.d.ts
 .data/
 
 !.env.example
+
+# testes de ponta a ponta
+/test-results/
+/playwright-report/
+/e2e/__shots__/

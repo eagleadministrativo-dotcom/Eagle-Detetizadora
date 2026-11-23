@@ -8,6 +8,8 @@ import { NOTIFY_GROUPS } from "@/server/services/notify";
 import { savePrefsAction } from "@/app/actions/account";
 import { ThemeChoice } from "@/components/client";
 import { PushToggle } from "@/components/push-toggle";
+import { RecoveryCodes } from "@/components/recovery";
+import { recoveryCodesLeft } from "@/server/auth";
 
 export const metadata = { title: "Minha conta" };
 
@@ -30,12 +32,18 @@ export default async function Account({ searchParams }: { searchParams: Promise<
           </form>
           <small>Ao alterar a senha, todas as sessões são encerradas.</small>
         </section>
-        <section className="card stack">
+        <section className="card stack" id="seguranca">
           <h2>Verificação em duas etapas</h2>
           <p>{s.user.mfaEnabled ? <Badge tone="ok">Ativa</Badge> : <Badge tone="warn">Desativada</Badge>}</p>
           {!s.user.mfaEnabled ? (
             <form action={mfaSetupStartAction}><button className="btn accent" type="submit">Ativar agora</button></form>
-          ) : <small>Para trocar de aparelho, peça ao proprietário para redefinir sua senha (isso reinicia o autenticador).</small>}
+          ) : (
+            <>
+              <small>Para trocar de aparelho, peça ao proprietário para redefinir sua senha (isso reinicia o autenticador).</small>
+              <h3>Códigos de recuperação</h3>
+              <RecoveryCodes left={await recoveryCodesLeft(await getDb(), s.user.id)} />
+            </>
+          )}
         </section>
         <section className="card stack" id="preferencias">
           <h2>Preferências</h2>
