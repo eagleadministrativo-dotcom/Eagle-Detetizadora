@@ -1153,3 +1153,5 @@ a.signal:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); }
 .rcodes li { counter-increment: rc; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .rcodes li::before { content: counter(rc) "."; color: var(--muted); font-size: 12px; margin-right: 8px; }
 .rcodes code { font-size: 15px; letter-spacing: 0.08em; font-weight: 600; }
+/* Importação de clientes: botão da agenda do celular */
+.contact-picker { display: grid; gap: 6px; justify-items: start; margin-bottom: 4px; }

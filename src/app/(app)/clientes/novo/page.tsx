@@ -1,7 +1,9 @@
 import { requirePerm } from "@/server/session";
 import { can } from "@/server/core";
 import { saveCustomerAction } from "@/app/actions/customers";
+import Link from "next/link";
 import { Field, Flash, PageHead } from "@/components/ui";
+import { ContactPicker } from "@/components/contact-picker";
 
 export const metadata = { title: "Novo cliente" };
 
@@ -11,9 +13,12 @@ export default async function NewCustomer({ searchParams }: { searchParams: Prom
   const sensitive = can(ctx, "customers.edit_sensitive");
   return (
     <>
-      <PageHead title="Novo cliente" sub="Cadastre apenas o necessário para o atendimento." />
+      <PageHead title="Novo cliente" sub="Cadastre apenas o necessário para o atendimento.">
+        <Link className="btn ghost" href="/clientes/importar">Importar de arquivo</Link>
+      </PageHead>
       <Flash erro={sp.erro} />
       <form action={saveCustomerAction} className="card form">
+        <ContactPicker />
         <div className="fields">
           <Field label="Nome"><input name="name" required /></Field>
           <Field label="Telefone"><input name="phone" inputMode="tel" placeholder="41 99999-0000" /></Field>

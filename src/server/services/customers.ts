@@ -2,6 +2,7 @@ import type { Db } from "../db";
 import { audit, can, need, requireText } from "../core";
 import { DomainError } from "../errors";
 import type { Ctx } from "../permissions";
+import { cleanRow, normalizePhone, MAX_IMPORT_ROWS, type ImportRow } from "@/lib/contact-import";
 
 export interface CustomerRow { id: string; name: string; phone: string | null; email: string | null; cpf: string | null; birthdate: string | null; notes: string | null; is_active: boolean; visits: number; last_visit: Date | null; total_spent_cents: number }
 
@@ -74,5 +75,45 @@ export async function saveCustomer(db: Db, ctx: Ctx, input: SaveCustomerInput): 
     );
     await audit(q, ctx, "CLIENTE_CRIADO", "customer", r.id, null, { name });
     return r.id;
+  });
+}
+
+export interface ImportResult { created: number; duplicates: number; invalid: number }
+
+const phoneKey = (p: string | null) => normalizePhone(p) ?? "";
+
+/** Importa clientes em lote (contatos do celular ou arquivo de outro sistema). Pula telefones que já existem; revalida tudo no servidor. */
+export async function importCustomers(db: Db, ctx: Ctx, input: Partial<ImportRow>[]): Promise<ImportResult> {
+  need(ctx, "customers.manage");
+  if (!Array.isArray(input)) throw new DomainError("invalid", "Lista de contatos inválida.");
+  if (input.length > MAX_IMPORT_ROWS) throw new DomainError("invalid", `Importe no máximo ${MAX_IMPORT_ROWS} contatos por vez.`);
+  const sensitive = can(ctx, "customers.edit_sensitive");
+  const clean: ImportRow[] = [];
+  let invalid = 0;
+  for (const raw of input) {
+    const r = raw && typeof raw === "object" ? cleanRow(raw) : null;
+    if (r) clean.push(r); else invalid++;
+  }
+  return db.tx(async (q) => {
+    const existing = new Set((await q<{ phone: string | null }>("select phone from customers where unit_id=$1 and phone is not null", [ctx.unitId])).map((r) => phoneKey(r.phone)));
+    const fresh: ImportRow[] = [];
+    let duplicates = 0;
+    for (const r of clean) {
+      if (existing.has(r.phone)) { duplicates++; continue; }
+      existing.add(r.phone);
+      fresh.push(r);
+    }
+    for (let i = 0; i < fresh.length; i += 200) {
+      const part = fresh.slice(i, i + 200);
+      await q(
+        `insert into customers(unit_id,name,phone,email,cpf,birthdate,notes,updated_by)
+         select $1::uuid, t.name, t.phone, t.email, t.cpf, t.birthdate, t.notes, $8::uuid
+         from unnest($2::text[], $3::text[], $4::text[], $5::text[], $6::date[], $7::text[]) as t(name, phone, email, cpf, birthdate, notes)`,
+        [ctx.unitId, part.map((r) => r.name), part.map((r) => r.phone), part.map((r) => (sensitive ? r.email ?? null : null)), part.map((r) => (sensitive ? r.cpf ?? null : null)),
+          part.map((r) => (sensitive ? r.birthdate ?? null : null)), part.map((r) => r.notes ?? null), ctx.userId],
+      );
+    }
+    await audit(q, ctx, "CLIENTES_IMPORTADOS", "customer", null, null, { criados: fresh.length, repetidos: duplicates, invalidos: invalid });
+    return { created: fresh.length, duplicates, invalid };
   });
 }

@@ -20,7 +20,7 @@ export async function login(page: Page) {
 
 async function routes(page: Page): Promise<string[]> {
   const hrefs = await page.$$eval("a[href^='/']", (as) => as.map((a) => a.getAttribute("href")!.split("?")[0].split("#")[0]));
-  return [...new Set(["/", ...hrefs])].filter((h) => !h.startsWith("/api") && !h.startsWith("/login") && h !== "/sair").sort();
+  return [...new Set(["/", "/clientes/novo", "/clientes/importar", ...hrefs])].filter((h) => !h.startsWith("/api") && !h.startsWith("/login") && h !== "/sair").sort();
 }
 
 /** Problemas de layout medidos no navegador. */

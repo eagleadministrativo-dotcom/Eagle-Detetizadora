@@ -18,7 +18,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
   return (
     <>
       <PageHead title="Clientes" sub="Cadastro interno. Clientes não recebem acesso ao sistema.">
-        {can(ctx, "customers.manage") ? <Link className="btn accent" href="/clientes/novo">+ Novo cliente</Link> : null}
+        {can(ctx, "customers.manage") ? <><Link className="btn ghost" href="/clientes/importar">Importar</Link> <Link className="btn accent" href="/clientes/novo">+ Novo cliente</Link></> : null}
       </PageHead>
       <Flash ok={sp.ok} erro={sp.erro} />
       <form className="filters" method="get">
