@@ -52,7 +52,6 @@ create table user_units (
   user_id uuid not null references users(id) on delete restrict,
   unit_id uuid not null references units(id) on delete restrict,
   role text not null check (role in ('administrador','gerente','vendedora_gestora','vendedor','tecnico','colaborador','pendente')),
-  profile_id uuid,
   primary key (user_id, unit_id)
 );
 
