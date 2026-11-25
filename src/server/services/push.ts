@@ -38,7 +38,7 @@ export async function countSubscriptions(db: Db, userId: string) {
 async function defaultSender(): Promise<PushSender> {
   const mod = (await import("web-push")) as unknown as { default?: typeof import("web-push") } & typeof import("web-push");
   const webpush = mod.default ?? mod; // interoperabilidade ESM/CommonJS no bundle de produção
-  webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:contato@marfim.local", process.env.VAPID_PUBLIC_KEY!, process.env.VAPID_PRIVATE_KEY!);
+  webpush.setVapidDetails(process.env.VAPID_SUBJECT || "https://eagle-detetizadora.vercel.app", process.env.VAPID_PUBLIC_KEY!, process.env.VAPID_PRIVATE_KEY!);
   return async (sub, payload) => {
     await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(payload), { TTL: 60 * 60 * 12, urgency: payload.severity === "critico" ? "high" : "normal" });
   };
