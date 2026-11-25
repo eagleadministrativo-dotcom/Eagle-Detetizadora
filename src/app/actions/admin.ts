@@ -3,6 +3,7 @@ import { getDb } from "@/server/db";
 import { requireSession, run, str, optStr, bool } from "@/server/session";
 import { saveService, saveCategory, savePaymentMethod, saveChair, saveStaff, saveFinancialCategory, saveFinancialAccount, updateSettings, updateBusinessHours } from "@/server/services/catalog";
 import { resetUserPassword, updateUser } from "@/server/services/bootstrap";
+import { setUserModules, setInviteModules } from "@/server/services/access";
 import { DomainError } from "@/server/errors";
 import type { Role } from "@/server/permissions";
 import { createInvite, resendInvite, revokeInvite } from "@/server/services/invites";
@@ -172,5 +173,21 @@ export async function resetPasswordAction(fd: FormData) {
   await run("/admin/usuarios", async () => {
     await resetUserPassword(await getDb(), ctx, str(fd, "id"), str(fd, "password"));
     return "Senha redefinida; o autenticador do usuário foi reiniciado e as sessões encerradas.";
+  });
+}
+
+export async function setUserModulesAction(fd: FormData) {
+  const { ctx } = await requireSession();
+  await run("/admin/usuarios", async () => {
+    await setUserModules(await getDb(), ctx, str(fd, "userId"), fd.getAll("modules").map(String));
+    return "Módulos atualizados.";
+  });
+}
+
+export async function setInviteModulesAction(fd: FormData) {
+  const { ctx } = await requireSession();
+  await run("/admin/usuarios", async () => {
+    await setInviteModules(await getDb(), ctx, str(fd, "inviteId"), fd.getAll("modules").map(String));
+    return "Módulos do convite atualizados.";
   });
 }

@@ -1,7 +1,7 @@
 import type { Db, Q } from "../db";
 import { audit, can, need, requireText, requireUuid } from "../core";
 import { DomainError, ForbiddenError } from "../errors";
-import { PERMISSIONS, ROLE_PERMISSIONS, buildPerms, type Ctx, type Permission, type Role } from "../permissions";
+import { PERMISSIONS, ROLE_PERMISSIONS, MODULES, buildPerms, type Ctx, type Permission, type Role, type Module } from "../permissions";
 
 const VALID = new Set<string>(PERMISSIONS);
 export const clean = (list: string[]) => [...new Set(list.filter((p) => VALID.has(p)))] as Permission[];
@@ -120,4 +120,32 @@ export async function search(db: Db, ctx: Ctx, term: string): Promise<Hit[]> {
   for (const k of await db.query<{ id: string; title: string; status: string }>("select t.id, t.title, t.status from tasks t where t.unit_id=$1 and lower(t.title) like $2 and t.status<>'cancelada' and ($3::boolean or t.created_by=$4 or exists (select 1 from task_assignees a where a.task_id=t.id and a.user_id=$4)) order by t.created_at desc limit 5", [ctx.unitId, like, team, ctx.userId])) out.push({ type: "Tarefa", title: k.title, sub: k.status.replace("_", " "), href: `/tarefas/${k.id}` });
   if (can(ctx, "products.view")) for (const p of await db.query<{ id: string; name: string; sku: string | null }>("select id,name,sku from products where unit_id=$1 and is_active and lower(name || ' ' || coalesce(sku,'')) like $2 order by name limit 5", [ctx.unitId, like])) out.push({ type: "Produto", title: p.name, sub: p.sku ?? "", href: `/produtos/${p.id}` });
   return out;
+}
+
+// ---------- módulos liberáveis ----------
+const VALID_MODULES = new Set(Object.keys(MODULES) as Module[]);
+const cleanModules = (list: string[]): Module[] => [...new Set(list.filter((m) => VALID_MODULES.has(m as Module)))].filter((m) => m) as Module[];
+
+export async function setUserModules(db: Db, ctx: Ctx, userId: string, modules: string[]) {
+  need(ctx, "users.manage");
+  const cleaned = cleanModules(modules);
+  return db.tx(async (q) => {
+    await target(q, ctx, userId);
+    const before = (await q<{ modules: string[] }>("select modules from user_units where user_id=$1 and unit_id=$2", [userId, ctx.unitId]))[0]?.modules ?? [];
+    await q("update user_units set modules=$3 where user_id=$1 and unit_id=$2", [userId, ctx.unitId, cleaned]);
+    if (JSON.stringify(before.sort()) !== JSON.stringify(cleaned.sort())) {
+      await audit(q, ctx, "MODULOS_ALTERADOS", "user", userId, { modules: before }, { modules: cleaned });
+    }
+  });
+}
+
+export async function setInviteModules(db: Db, ctx: Ctx, inviteId: string, modules: string[]) {
+  need(ctx, "users.manage");
+  const cleaned = cleanModules(modules);
+  return db.tx(async (q) => {
+    const [i] = await q<{ invited_by: string }>("select invited_by from user_invites where id=$1 and unit_id=$2", [requireUuid(inviteId, "Convite"), ctx.unitId]);
+    if (!i) throw new DomainError("not_found", "Convite não encontrado.");
+    await q("update user_invites set modules=$2 where id=$1", [inviteId, cleaned]);
+    await audit(q, ctx, "CONVITE_MODULOS_ALTERADOS", "user_invite", inviteId, null, { modules: cleaned });
+  });
 }
