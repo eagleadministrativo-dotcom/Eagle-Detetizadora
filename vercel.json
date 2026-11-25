@@ -1,3 +1,21 @@
 {
-  "crons": []
+  "name": "Eagle-Detetizadora",
+  "version": 2,
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
+  "crons": [],
+  "env": {
+    "NEXTAUTH_SECRET": "@nextauth_secret",
+    "NEXTAUTH_URL": "@nextauth_url"
+  },
+  "envDescription": {
+    "NEXTAUTH_SECRET": "NextAuth secret for encryption",
+    "NEXTAUTH_URL": "NextAuth URL (e.g. https://eagle-detetizadora.vercel.app)"
+  },
+  "git": {
+    "deploymentEnabled": {
+      "main": true
+    }
+  }
 }
