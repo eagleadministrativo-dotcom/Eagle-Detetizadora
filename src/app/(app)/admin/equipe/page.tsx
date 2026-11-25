@@ -6,7 +6,7 @@ import { saveStaffAction } from "@/app/actions/admin";
 
 export const metadata = { title: "Equipe" };
 const DAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
-const CONTRACT: Record<string, string> = { clt: "CLT", pj: "PJ", autonomo: "Autônomo", proprietario: "Proprietário" };
+const CONTRACT: Record<string, string> = { clt: "CLT", pj: "PJ", autonomo: "Autônomo", administrador: "Administrador" };
 
 export default async function StaffAdmin({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string }> }) {
   const sp = await searchParams;

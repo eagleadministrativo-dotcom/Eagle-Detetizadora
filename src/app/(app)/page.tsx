@@ -57,7 +57,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<SP>
 
   return (
     <>
-      <PageHead eyebrow={full ? "Painel do proprietário" : "Seu dia no studio"} title="Olá," accent={s.user.fullName.trim().split(" ")[0]} sub={`${full ? "Aqui está o resumo do studio" : "Este é o seu dia no studio"} · ${fmtYmd(p.start)} a ${fmtYmd(p.end)} · atualizado às ${fmtTime(dash.updatedAt)}`}>
+      <PageHead eyebrow={full ? "Painel do administrador" : "Seu dia"} title="Olá," accent={s.user.fullName.trim().split(" ")[0]} sub={`${full ? "Aqui está o resumo da empresa" : "Este é o seu dia"} · ${fmtYmd(p.start)} a ${fmtYmd(p.end)} · atualizado às ${fmtTime(dash.updatedAt)}`}>
         {full ? (
           <Seg items={[
             { href: base("hoje"), label: "Hoje", active: preset === "hoje" }, { href: base("7d"), label: "7 dias", active: preset === "7d" },

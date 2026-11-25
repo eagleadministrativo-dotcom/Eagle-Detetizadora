@@ -4,7 +4,7 @@ import { Icon, type IconName } from "@/components/icons";
 import { SIGNUP_CHOICES, type SignupChoice } from "@/server/services/invites";
 
 export const metadata = { title: "Cadastrar" };
-const ICON: Record<SignupChoice, IconName> = { dono: "shield", tecnico: "tools", admin: "gear" };
+const ICON: Record<SignupChoice, IconName> = { dono: "shield", tecnico: "tools", admin: "gear", equipe: "team" };
 
 export default function SignupChoicePage() {
   return (

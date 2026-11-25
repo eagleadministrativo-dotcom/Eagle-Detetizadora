@@ -216,7 +216,7 @@ describe("produtos e estoque", () => {
     await expect(sellProducts(w.db, w.barber, { staffId: w.barberStaffId, items: [{ productId: pomada, quantity: 1 }], idempotencyKey: key() })).rejects.toThrow();
     const seller = asUser(w.barber, ["products.sell"]);
     await expect(sellProducts(w.db, seller, { staffId: w.barber2StaffId, items: [{ productId: pomada, quantity: 1 }], idempotencyKey: key() })).rejects.toThrow(/seu nome/);
-    await expect(sellProducts(w.db, seller, { staffId: w.barberStaffId, items: [{ productId: pomada, quantity: 1 }], discountCents: 100, discountReason: "xxx", idempotencyKey: key() })).rejects.toThrow(/proprietário/);
+    await expect(sellProducts(w.db, seller, { staffId: w.barberStaffId, items: [{ productId: pomada, quantity: 1 }], discountCents: 100, discountReason: "xxx", idempotencyKey: key() })).rejects.toThrow(/administrador/);
     const dre = await computeDre(w.db.query, w.unitId, period);
     expect(dre.netRevenue).toBe(8000);
   });

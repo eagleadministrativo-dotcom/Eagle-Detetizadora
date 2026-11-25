@@ -1155,3 +1155,105 @@ a.signal:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); }
 .rcodes code { font-size: 15px; letter-spacing: 0.08em; font-weight: 600; }
 /* Importação de clientes: botão da agenda do celular */
 .contact-picker { display: grid; gap: 6px; justify-items: start; margin-bottom: 4px; }
+/* ──────────── EAGLE — última camada: paleta branco, preto e amarelo + papel de parede ────────────
+   Redefine os tokens das camadas anteriores; o resto do arquivo já desenha vidro, brilho e sombra a partir deles. */
+:root {
+  --eg-yellow: #f5c400; --eg-yellow-hi: #ffd633; --eg-yellow-lo: #e0b000; --eg-gold: #8a6d00;
+  --eg-black: #111111; --eg-white: #ffffff;
+  --cognac: #c9a000; --bronze: #d4b106; --warm-gray: #6b6b6b;
+  --graphite: #111111; --charcoal: #0a0a0a;
+  --cream-100: #ffffff; --cream-200: #f7f7f5; --cream-300: #f2f2ef; --cream-400: #e9e9e6;
+  --olive-900: #0f0f0f; --olive-700: #1c1c1c; --olive-500: #3a3a3a; --olive-300: #8a8a8a;
+  --burgundy-900: #000000; --burgundy-700: #0a0a0a; --burgundy-500: #161616; --burgundy-400: #1f1f1f;
+  --wine-glow: var(--eg-yellow);
+  --accent-grad: linear-gradient(135deg, var(--eg-yellow-hi), var(--eg-yellow) 55%, var(--eg-yellow-lo));
+  --pill-active: var(--accent-grad); --pill-ink: var(--eg-black);
+  --mesh-wine: radial-gradient(110% 90% at 8% 0%, rgba(245, 196, 0, 0.32) 0%, transparent 55%), linear-gradient(135deg, #222222, #111111 55%, #000000);
+  --mesh-olive: radial-gradient(110% 90% at 0% 0%, rgba(255, 255, 255, 0.14) 0%, transparent 55%), linear-gradient(135deg, #2e2e2e, #181818 55%, #0a0a0a);
+  --mesh-stone: radial-gradient(110% 90% at 0% 0%, #fff8d6 0%, transparent 55%), linear-gradient(135deg, var(--eg-yellow-hi), var(--eg-yellow) 60%, var(--eg-yellow-lo));
+  --bg: #f4f4f2; --bg-2: #ececea;
+  --surface: rgba(255, 255, 255, 0.7); --surface-2: rgba(255, 255, 255, 0.58); --surface-3: rgba(236, 236, 233, 0.9);
+  --glass: rgba(255, 255, 255, 0.68); --glass-strong: rgba(255, 255, 255, 0.93);
+  --ink: #111111; --ink-2: #2b2b2b; --muted: #595959;
+  --line: rgba(0, 0, 0, 0.1); --line-strong: rgba(0, 0, 0, 0.2); --card-border: rgba(255, 255, 255, 0.9);
+  --accent: var(--eg-gold); --accent-2: #b38f00; --accent-ink: var(--eg-black); --accent-soft: rgba(245, 196, 0, 0.16);
+  --olive: var(--eg-black); --olive-2: #3a3a3a; --olive-soft: rgba(245, 196, 0, 0.14);
+  --highlight: #b38f00; --eyebrow: var(--eg-black); --metal: #8a8a8a;
+  --chart-1: #111111; --chart-1-hi: #555555; --chart-2: var(--eg-yellow); --chart-2-hi: var(--eg-yellow-hi); --chart-3: #b38f00; --chart-4: #8a8a8a; --chart-grid: rgba(0, 0, 0, 0.08);
+  --graphite-btn: #111111; --graphite-ink: #ffffff;
+  --nav-bg: rgba(255, 255, 255, 0.7); --nav-line: rgba(255, 255, 255, 0.92); --nav-ink: #111111; --nav-muted: #595959;
+  --nav-active-ink: var(--eg-black); --nav-rail: var(--eg-yellow); --nav-hover: rgba(245, 196, 0, 0.16); --nav-glow: 0 24px 60px -30px rgba(0, 0, 0, 0.35);
+  --side-bg: #111111; --side-ink: #ffffff; --side-muted: #b5b5b5;
+  --spot: rgba(245, 196, 0, 0.2); --spot-glow: rgba(255, 255, 255, 0.55); --grain-o: 0;
+  --edge-grad: linear-gradient(140deg, rgba(245, 196, 0, 0.6), rgba(255, 255, 255, 0.45) 30%, rgba(0, 0, 0, 0.08) 70%, rgba(245, 196, 0, 0.35));
+  --grid-line: rgba(0, 0, 0, 0.05);
+  --glow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 26px 60px -28px rgba(0, 0, 0, 0.3);
+  --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 1px 2px rgba(0, 0, 0, 0.05), 0 16px 36px -22px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 26px 54px -26px rgba(0, 0, 0, 0.38);
+  --shadow-3: 0 30px 70px -30px rgba(0, 0, 0, 0.45);
+  --focus: #111111;
+  --cp-bg: radial-gradient(120% 90% at 100% 0%, rgba(245, 196, 0, 0.26), transparent 60%), #111111;
+  --cp-ink: #ffffff; --cp-muted: rgba(255, 255, 255, 0.7); --cp-line: rgba(255, 255, 255, 0.12);
+  --ambient: linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.1)), url(/wallpaper.jpg) center / cover no-repeat, #f4f4f2;
+}
+:root[data-scheme="dark"] {
+  --bg: #0d0d0d; --bg-2: #080808;
+  --surface: rgba(22, 22, 22, 0.68); --surface-2: rgba(22, 22, 22, 0.55); --surface-3: rgba(255, 255, 255, 0.09);
+  --glass: rgba(18, 18, 18, 0.7); --glass-strong: rgba(20, 20, 20, 0.94);
+  --ink: #f5f5f5; --ink-2: #dcdcdc; --muted: #a8a8a8;
+  --line: rgba(255, 255, 255, 0.1); --line-strong: rgba(255, 255, 255, 0.22); --edge: rgba(255, 255, 255, 0.1); --card-border: rgba(255, 255, 255, 0.12);
+  --accent: var(--eg-yellow); --accent-2: var(--eg-yellow-hi); --accent-ink: var(--eg-black); --accent-soft: rgba(245, 196, 0, 0.14);
+  --pill-active: var(--accent-grad); --pill-ink: var(--eg-black);
+  --olive: var(--eg-yellow); --olive-2: var(--eg-yellow-hi); --olive-soft: rgba(245, 196, 0, 0.16);
+  --highlight: var(--eg-yellow); --eyebrow: var(--eg-yellow); --metal: #a8a8a8;
+  --chart-1: #f5f5f5; --chart-1-hi: #ffffff; --chart-2: var(--eg-yellow); --chart-2-hi: var(--eg-yellow-hi); --chart-3: #b38f00; --chart-4: #8a8a8a; --chart-grid: rgba(255, 255, 255, 0.08);
+  --graphite-btn: #f5f5f5; --graphite-ink: #111111;
+  --nav-bg: rgba(14, 14, 14, 0.74); --nav-line: rgba(255, 255, 255, 0.1); --nav-ink: #f5f5f5; --nav-muted: #a8a8a8;
+  --nav-active-ink: var(--eg-black); --nav-rail: var(--eg-yellow); --nav-hover: rgba(245, 196, 0, 0.1); --nav-glow: 0 30px 60px -30px rgba(0, 0, 0, 0.9);
+  --side-bg: #0a0a0a; --side-ink: #f5f5f5; --side-muted: #a8a8a8;
+  --spot: rgba(245, 196, 0, 0.14); --spot-glow: rgba(245, 196, 0, 0.1); --grain-o: 0;
+  --edge-grad: linear-gradient(140deg, rgba(245, 196, 0, 0.5), rgba(255, 255, 255, 0.06) 30%, rgba(255, 255, 255, 0.04) 70%, rgba(245, 196, 0, 0.3));
+  --grid-line: rgba(255, 255, 255, 0.035);
+  --glow: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 30px 60px -28px rgba(0, 0, 0, 0.9);
+  --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.07) inset, 0 18px 40px -24px rgba(0, 0, 0, 0.95);
+  --shadow-2: 0 1px 0 rgba(255, 255, 255, 0.09) inset, 0 28px 60px -26px rgba(0, 0, 0, 0.95), 0 0 40px -28px rgba(245, 196, 0, 0.35);
+  --shadow-3: 0 1px 0 var(--edge) inset, 0 34px 70px -26px rgba(0, 0, 0, 0.95);
+  --focus: var(--eg-yellow);
+  --cp-bg: radial-gradient(120% 90% at 100% 0%, rgba(245, 196, 0, 0.22), transparent 60%), #141414;
+  --cp-ink: #f5f5f5; --cp-muted: rgba(245, 245, 245, 0.68); --cp-line: rgba(255, 255, 255, 0.12);
+  --ambient: linear-gradient(rgba(6, 6, 6, 0.84), rgba(6, 6, 6, 0.84)), url(/wallpaper.jpg) center / cover no-repeat, #0d0d0d;
+}
+.btn.accent { background: var(--accent-grad); color: var(--eg-black); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.45) inset, 0 12px 28px -12px rgba(160, 128, 0, 0.65); }
+.btn.accent:hover { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset, 0 16px 34px -12px rgba(160, 128, 0, 0.8); }
+:root[data-scheme="dark"] .btn.accent { border: 0; box-shadow: 0 0 0 1px rgba(245, 196, 0, 0.45), 0 14px 32px -14px rgba(0, 0, 0, 0.9), 0 0 26px -10px rgba(245, 196, 0, 0.5); }
+.btn:not(.accent):not(.ghost):not(.danger):not(.text) { background: #111111; color: #ffffff; border-color: #111111; }
+:root[data-scheme="dark"] .btn:not(.accent):not(.ghost):not(.danger):not(.text) { background: #f5f5f5; color: #111111; border-color: #f5f5f5; }
+.brand .mark { background: var(--eg-black); color: var(--eg-yellow); box-shadow: 0 0 0 1px rgba(245, 196, 0, 0.55), 0 8px 18px -8px rgba(0, 0, 0, 0.5); font-family: var(--label); font-weight: 800; }
+:root[data-scheme="dark"] .brand .mark { background: var(--accent-grad); color: var(--eg-black); }
+.seg a[aria-current="true"], .side nav a[aria-current="page"], .tile[aria-current="page"], .chip:has(input:checked) {
+  color: var(--eg-black); box-shadow: 0 12px 26px -14px rgba(160, 128, 0, 0.75), 0 1px 0 rgba(255, 255, 255, 0.45) inset;
+}
+.side nav a .count { background: var(--eg-black); color: var(--eg-yellow); }
+.side nav a[aria-current="page"] .count { background: rgba(0, 0, 0, 0.14); color: var(--eg-black); }
+@media (max-width: 860px) {
+  .bottomnav a[aria-current="page"], .bottomnav > button.on { color: var(--eg-black); box-shadow: 0 10px 22px -10px rgba(160, 128, 0, 0.75); }
+}
+.copilot { box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.75), 0 1px 0 rgba(255, 255, 255, 0.1) inset; }
+.copilot .btn.accent { background: var(--accent-grad); color: var(--eg-black); }
+.kpi.hero.wine, .stat.hi { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.14) inset, 0 30px 60px -30px rgba(0, 0, 0, 0.75); }
+.kpi.hero.olive, .stat.ol { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.14) inset, 0 30px 60px -30px rgba(0, 0, 0, 0.7); }
+.kpi.hero.stone { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 30px 60px -30px rgba(160, 128, 0, 0.55); }
+.pagehead::after { background: linear-gradient(90deg, var(--eg-yellow), transparent); }
+.toast { color: #ffffff; background: rgba(17, 17, 17, 0.94); border-color: rgba(245, 196, 0, 0.3); }
+::selection { background: rgba(245, 196, 0, 0.4); }
+.login { background: transparent; color: var(--ink); }
+.login::after { background: linear-gradient(180deg, transparent, rgba(245, 196, 0, 0.55), transparent); }
+.login .card {
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.66));
+  -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 0 #ffffff inset, 0 30px 70px -30px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(245, 196, 0, 0.18);
+  --ink: #111111; --ink-2: #2b2b2b; --muted: #555555; --surface: rgba(255, 255, 255, 0.82);
+  --line: rgba(0, 0, 0, 0.12); --line-strong: rgba(0, 0, 0, 0.22); --accent: var(--eg-gold); --accent-ink: var(--eg-black); --focus: #111111;
+}
+.login .legal { color: var(--muted); }

@@ -13,12 +13,12 @@ export default async function WelcomePage() {
   if (!(await isSetupDone(await getDb()))) redirect("/setup");
   if ((await currentSession())?.mfaVerified) redirect("/");
   return (
-    <AuthCard title="Bem-vindo" sub="Sistema privado da equipe MARFIM. Já tem acesso? Entre. Recebeu um convite? Cadastre-se.">
+    <AuthCard title="Bem-vindo" sub="Sistema privado da equipe Eagle. Já tem acesso? Entre. Recebeu um convite? Cadastre-se.">
       <div className="authactions">
         <form action={enterAction}><button className="btn accent" type="submit">Entrar</button></form>
         <Link className="btn" href="/cadastro">Cadastrar</Link>
       </div>
-      <small>O cadastro só funciona para o e-mail que recebeu convite do dono ou do administrador da barbearia.</small>
+      <small>O cadastro só funciona para o e-mail que recebeu convite do administrador ou do gerente da empresa.</small>
     </AuthCard>
   );
 }

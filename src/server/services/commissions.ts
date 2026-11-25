@@ -66,7 +66,7 @@ async function findRule(q: Q, unitId: string, at: string, t: { scope: "servico" 
   const [r] = await q<{ id: string; pct_bps: number; base: "bruto" | "liquido" }>(
     `select r.id, r.pct_bps, r.base from commission_rules r
      where r.unit_id=$1 and r.scope=$2 and r.valid_from <= $3::date and (r.valid_to is null or r.valid_to >= $3::date)
-       and (r.staff_id = $4 or (r.staff_id is null and not exists (select 1 from staff s where s.id=$4 and s.contract_type='proprietario')))
+       and (r.staff_id = $4 or (r.staff_id is null and not exists (select 1 from staff s where s.id=$4 and s.contract_type='administrador')))
        and (r.service_id is null or r.service_id=$5) and (r.category_id is null or r.category_id=$6) and (r.product_id is null or r.product_id=$7)
      order by (r.staff_id is not null) desc, (r.service_id is not null or r.product_id is not null) desc, (r.category_id is not null) desc, r.valid_from desc, r.created_at desc limit 1`,
     [unitId, t.scope, at, t.staffId, t.serviceId ?? null, t.categoryId ?? null, t.productId ?? null],
@@ -225,7 +225,7 @@ export async function divergences(db: Db, ctx: Ctx) {
 export async function withoutRule(db: Db, ctx: Ctx, p: Period) {
   need(ctx, "commissions.view_all");
   const [r] = await db.query<{ n: number }>(
-    `select count(*)::bigint as n from attendance_items i join attendances a on a.id=i.attendance_id join staff s on s.id=a.staff_id where a.unit_id=$1 and a.status='concluido' and a.finished_at >= $2 and a.finished_at < $3 and coalesce(s.contract_type,'') <> 'proprietario'
+    `select count(*)::bigint as n from attendance_items i join attendances a on a.id=i.attendance_id join staff s on s.id=a.staff_id where a.unit_id=$1 and a.status='concluido' and a.finished_at >= $2 and a.finished_at < $3 and coalesce(s.contract_type,'') <> 'administrador'
        and not exists (select 1 from commission_entries e where e.attendance_item_id=i.id)`, [ctx.unitId, dayStartUtc(p.start), dayEndUtc(p.end)]);
   return r.n;
 }

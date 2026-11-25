@@ -45,7 +45,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <form action={updateSettingsAction} className="form">
         <section className="card form">
           <h2>Descontos</h2>
-          <label className="check"><input type="checkbox" name="ownerOnly" defaultChecked={st.discount_owner_only} />Somente o proprietário concede desconto</label>
+          <label className="check"><input type="checkbox" name="ownerOnly" defaultChecked={st.discount_owner_only} />Somente o administrador concede desconto</label>
           <div className="fields"><Field label="Limite para quem tem permissão de desconto limitado (%)"><input name="limit" inputMode="decimal" defaultValue={st.discount_limit_bps != null ? (st.discount_limit_bps / 100).toString().replace(".", ",") : ""} placeholder="Ex.: 10" /></Field></div>
           <small>Se a opção acima estiver marcada, o limite é ignorado. O limite vale para gerente e para barbeiros com permissão individual.</small>
         </section>
@@ -71,7 +71,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </section>
         <section className="card form">
           <h2>Segurança e notificações</h2>
-          <label className="check"><input type="checkbox" name="mfa" defaultChecked={st.mfa_required} />Exigir verificação em duas etapas para proprietário e gerente</label>
+          <label className="check"><input type="checkbox" name="mfa" defaultChecked={st.mfa_required} />Exigir verificação em duas etapas para administrador e gerente</label>
           <small>Canal de alertas: dentro do sistema. E-mail e WhatsApp dependem de serviços externos e só serão ativados com sua autorização.</small>
         </section>
         <div className="sticky-actions"><button className="btn accent" type="submit">Salvar configurações</button></div>

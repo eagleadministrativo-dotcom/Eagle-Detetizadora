@@ -35,7 +35,7 @@ async function finish(db: Db, id: string, job: string, status: "ok" | "erro", su
 }
 
 async function alertOwners(db: Db, message: string, dedupe: string) {
-  const owners = await db.query<{ user_id: string; unit_id: string }>("select uu.user_id, uu.unit_id from user_units uu join users u on u.id=uu.user_id where uu.role='proprietario' and u.is_active");
+  const owners = await db.query<{ user_id: string; unit_id: string }>("select uu.user_id, uu.unit_id from user_units uu join users u on u.id=uu.user_id where uu.role='administrador' and u.is_active");
   for (const unit of new Set(owners.map((o) => o.unit_id))) {
     await notifyUsers(db.query, { unitId: unit, userIds: owners.filter((o) => o.unit_id === unit).map((o) => o.user_id), kind: "sistema_rotina", severity: "critico", message, url: "/admin/saude", dedupe });
   }

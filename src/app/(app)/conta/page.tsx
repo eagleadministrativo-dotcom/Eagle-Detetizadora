@@ -39,7 +39,7 @@ export default async function Account({ searchParams }: { searchParams: Promise<
             <form action={mfaSetupStartAction}><button className="btn accent" type="submit">Ativar agora</button></form>
           ) : (
             <>
-              <small>Para trocar de aparelho, peça ao proprietário para redefinir sua senha (isso reinicia o autenticador).</small>
+              <small>Para trocar de aparelho, peça ao administrador para redefinir sua senha (isso reinicia o autenticador).</small>
               <h3>Códigos de recuperação</h3>
               <RecoveryCodes left={await recoveryCodesLeft(await getDb(), s.user.id)} />
             </>

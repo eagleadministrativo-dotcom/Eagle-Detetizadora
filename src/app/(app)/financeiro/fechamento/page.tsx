@@ -45,7 +45,7 @@ export default async function ClosurePage({ searchParams }: { searchParams: Prom
             <input type="hidden" name="start" value={p.start} /><input type="hidden" name="end" value={p.end} />
             <small style={{ padding: "0 10px" }}>{v.ready ? "Todas as verificações bloqueantes foram atendidas." : "Há pendências bloqueantes: o fechamento será recusado."}</small>
           </ConfirmAction>
-        ) : <small>Apenas o proprietário fecha períodos.</small>}
+        ) : <small>Apenas o administrador fecha períodos.</small>}
       </section>
       <section className="stack">
         <h2>Fechamentos anteriores</h2>

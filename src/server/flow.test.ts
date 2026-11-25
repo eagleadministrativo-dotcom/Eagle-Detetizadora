@@ -153,7 +153,7 @@ describe("atendimento, cobrança e caixa", () => {
 
   it("desconto respeita permissão e limite; sangria não excede o dinheiro", async () => {
     const att = await quickAttendance(w.db, w.barber, { customerId: w.customerId, staffId: w.barberStaffId, serviceIds: [w.serviceId], startsAt: future(1) });
-    expect(await msg(applyDiscount(w.db, w.barber, att, { discountCents: 500, reason: "fidelidade" }))).toMatch(/proprietário/);
+    expect(await msg(applyDiscount(w.db, w.barber, att, { discountCents: 500, reason: "fidelidade" }))).toMatch(/administrador/);
     await applyDiscount(w.db, w.owner, att, { discountCents: 1000, reason: "Cliente fiel" });
     const { attendance } = await getAttendance(w.db, w.owner, att);
     expect(attendance.total_cents).toBe(5000);

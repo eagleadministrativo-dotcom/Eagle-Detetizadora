@@ -44,7 +44,7 @@ async function defaultSender(): Promise<PushSender> {
   };
 }
 
-const TITLES: Record<string, string> = { critico: "MARFIM · Alerta crítico", atencao: "MARFIM · Atenção", info: "MARFIM" };
+const TITLES: Record<string, string> = { critico: "Eagle · Alerta crítico", atencao: "Eagle · Atenção", info: "Eagle" };
 
 /**
  * Envia por push os avisos ainda não enviados (últimas 48 h). Cada aviso é "reivindicado" de forma atômica
@@ -72,10 +72,10 @@ export async function flushPush(db: Db, send?: PushSender): Promise<{ notificati
       `select distinct on (s.endpoint) s.endpoint, s.p256dh, s.auth, s.user_id, (select p.notify from user_preferences p where p.user_id=s.user_id) as notify from push_subscriptions s
          join users u on u.id=s.user_id and u.is_active
          join user_units uu on uu.user_id=s.user_id and uu.unit_id=$1
-        where s.user_id=$2::uuid or ($2::uuid is null and (uu.role='proprietario' or (uu.role='gerente' and not exists (select 1 from permission_overrides o where o.user_id=s.user_id and o.unit_id=$1 and o.permission in ('finance.view','dashboard.full') and not o.granted))))`,
+        where s.user_id=$2::uuid or ($2::uuid is null and (uu.role='administrador' or (uu.role='gerente' and not exists (select 1 from permission_overrides o where o.user_id=s.user_id and o.unit_id=$1 and o.permission in ('finance.view','dashboard.full') and not o.granted))))`,
       [n.unit_id, n.user_id],
     );
-    const payload: PushPayload = { title: TITLES[n.severity] ?? "MARFIM", body: safeBody(n.message), url: n.url ?? "/notificacoes", tag: n.id, severity: n.severity };
+    const payload: PushPayload = { title: TITLES[n.severity] ?? "Eagle", body: safeBody(n.message), url: n.url ?? "/notificacoes", tag: n.id, severity: n.severity };
     const log = (userId: string | null, status: string, error?: string) => db.query("insert into notification_deliveries(notification_id,user_id,status,error) values ($1,$2,$3,$4)", [n.id, userId, status, error ?? null]);
     if (!subs.length) await log(n.user_id, "sem_dispositivo");
     for (const sub of subs) {

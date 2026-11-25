@@ -16,7 +16,7 @@ type SP = { r?: string; de?: string; ate?: string; g?: string; k?: string; e?: s
 export default async function MyFinance({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const { ctx } = await requirePerm("finance.own");
-  if (!ctx.staffId) return <><PageHead title="Meu Financeiro" /><Empty title="Seu usuário não está vinculado a um profissional">Peça ao proprietário para vincular em Usuários.</Empty></>;
+  if (!ctx.staffId) return <><PageHead title="Meu Financeiro" /><Empty title="Seu usuário não está vinculado a um profissional">Peça ao administrador para vincular em Usuários.</Empty></>;
   const sid = ctx.staffId;
   const db = await getDb();
   const { preset, p } = resolvePeriod(sp);

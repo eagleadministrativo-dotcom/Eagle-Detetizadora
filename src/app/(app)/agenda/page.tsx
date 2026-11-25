@@ -101,7 +101,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         <div className="row">
           <form method="get" className="row datejump"><input type="hidden" name="v" value={view} /><input type="hidden" name="g" value={group} />{staffFilter && all ? <input type="hidden" name="s" value={staffFilter} /> : null}<input type="date" name="d" defaultValue={d} aria-label="Ir para a data" style={{ width: 150 }} /><button className="btn small ghost" type="submit">Ir</button></form>
           <Seg items={[{ href: href({ v: "dia" }), label: "Dia", active: view === "dia" }, { href: href({ v: "semana" }), label: "Semana", active: view === "semana" }, { href: href({ v: "mes" }), label: "Mês", active: view === "mes" }]} />
-          {all && view === "dia" ? <Seg items={[{ href: href({ g: "prof" }), label: "Barbeiros", active: group === "prof" }, { href: href({ g: "cadeira" }), label: "Cadeiras", active: group === "cadeira" }]} /> : null}
+          {all && view === "dia" ? <Seg items={[{ href: href({ g: "prof" }), label: "Técnicos", active: group === "prof" }, { href: href({ g: "cadeira" }), label: "Locais", active: group === "cadeira" }]} /> : null}
         </div>
       </div>
       {all && cat.staff.filter((s) => s.is_active).length > 1 ? (

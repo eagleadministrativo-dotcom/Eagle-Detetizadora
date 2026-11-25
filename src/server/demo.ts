@@ -136,7 +136,7 @@ export async function seedDemo(db: Db) {
   await mk("Aluguel (demo)", "Aluguel", 280000, addDays(m0, 4), { recurrence: "mensal", paid: addDays(m0, 4) < today });
   await mk("Energia elétrica (demo)", "Energia elétrica", 38000, addDays(m0, 9), { paid: addDays(m0, 9) < today });
   await mk("Internet (demo)", "Internet e telefone", 12000, addDays(m0, 14), { recurrence: "mensal", paid: addDays(m0, 14) < today });
-  await mk("Produtos de barbearia (demo)", "Produtos de consumo", 65000, addDays(m0, 6), { paid: addDays(m0, 6) < today });
+  await mk("Produtos de detetização (demo)", "Produtos de consumo", 65000, addDays(m0, 6), { paid: addDays(m0, 6) < today });
   await mk("Contador (demo)", "Contador", 30000, addDays(today, 3));
   await mk("DAS (demo)", "Impostos e taxas", 42000, addDays(today, 6));
   await mk("Pró-labore (demo)", "Pró-labore", 300000, addDays(today, 10));

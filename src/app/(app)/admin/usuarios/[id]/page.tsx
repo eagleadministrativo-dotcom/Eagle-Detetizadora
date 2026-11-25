@@ -28,7 +28,7 @@ export default async function AccessPage({ params, searchParams }: { params: Pro
       <PageHead title={a.user.full_name} sub={<>{a.user.email} · {ROLE_LABEL[a.user.role]}{profiles.find((x) => x.id === a.user.profile_id) ? ` · perfil ${profiles.find((x) => x.id === a.user.profile_id)!.name}` : ""}</>}><Link className="btn ghost" href="/admin/usuarios">Voltar</Link></PageHead>
       <Flash ok={sp.ok} erro={sp.erro} />
       <section className="card stack"><h2>Prévia do acesso</h2><div className="row">{screens.map(([n, on]) => <Badge key={n} tone={on ? "ok" : ""}>{n}{on ? "" : ": não"}</Badge>)}</div>{["tecnico"].includes(a.user.role) && !a.user.staff_id ? <small className="late">Sem vínculo com um profissional: agenda, retornos e financeiro pessoais ficam vazios.</small> : null}</section>
-      {locked ? <div className="alert">{id === ctx.userId ? "Você não pode alterar as suas próprias permissões." : "O acesso do proprietário é total e não pode ser reduzido."}</div> : (
+      {locked ? <div className="alert">{id === ctx.userId ? "Você não pode alterar as suas próprias permissões." : "O acesso do administrador é total e não pode ser reduzido."}</div> : (
         <>
           {profiles.length ? <ConfirmAction label="Aplicar um perfil salvo" tone="neutral" action={applyProfileAction} submit="Aplicar perfil" warn="Substitui as permissões atuais."><input type="hidden" name="id" value={id} /><Field label="Perfil"><select name="profileId">{profiles.map((x) => <option key={x.id} value={x.id}>{x.name} ({ROLE_LABEL[x.base_role]}, {x.permissions.length} permissões)</option>)}</select></Field></ConfirmAction> : null}
           <form action={setPermissionsAction} className="form">
@@ -40,7 +40,7 @@ export default async function AccessPage({ params, searchParams }: { params: Pro
                 </fieldset>
               ))}
             </div>
-            <Field label="Salvar também como perfil (opcional)"><input name="profileName" placeholder="Ex.: Barbeiro com vendas" /></Field>
+            <Field label="Salvar também como perfil (opcional)"><input name="profileName" placeholder="Ex.: Técnico com vendas" /></Field>
             <small>Vale na próxima tela que a pessoa abrir. Revogar tem efeito imediato.</small>
             <div className="sticky-actions"><button className="btn accent" type="submit">Salvar permissões</button></div>
           </form>

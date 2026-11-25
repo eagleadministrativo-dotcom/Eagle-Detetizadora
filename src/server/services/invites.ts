@@ -24,11 +24,12 @@ const MAX_SENDS = 5;
 const RESEND_SEC = 45;
 const FINISH_MIN = 20;
 
-export type SignupChoice = "dono" | "tecnico" | "admin";
+export type SignupChoice = "dono" | "tecnico" | "admin" | "equipe";
 export const SIGNUP_CHOICES: Record<SignupChoice, { label: string; sub: string; roles: Role[] }> = {
   dono: { label: "Dono da empresa", sub: "Acesso total: equipe, financeiro e configurações.", roles: ["administrador"] },
   tecnico: { label: "Técnico de serviço", sub: "Sua agenda, seus atendimentos e seus resultados.", roles: ["tecnico"] },
-  admin: { label: "Administrador", sub: "Gestão do dia a dia: agenda, caixa, equipe e relatórios.", roles: ["gerente"] },
+  admin: { label: "Gerente", sub: "Gestão do dia a dia: agenda, caixa, equipe e relatórios.", roles: ["gerente"] },
+  equipe: { label: "Equipe comercial e apoio", sub: "Clientes, agendamentos, orçamentos e suas tarefas.", roles: ["vendedora_gestora", "vendedor", "colaborador", "pendente"] },
 };
 export const isChoice = (c: string): c is SignupChoice => c in SIGNUP_CHOICES;
 
@@ -88,9 +89,9 @@ async function sendInviteMail(email: string, name: string, role: Role): Promise<
   try {
     await sendMail({
       to: email,
-      subject: "Seu convite para o MARFIM Studio OS",
-      text: `Olá, ${name}!\n\nVocê foi convidado(a) para o MARFIM Studio OS como ${ROLE_LABEL[role]}.\n\nAbra ${appUrl()}/login e entre com este e-mail e a senha provisória que a barbearia passou para você. Você vai receber outro e-mail com um link para criar a sua senha.\n\nOutra opção: abra ${link}, toque em "${SIGNUP_CHOICES[choice].label}" e confirme o código que chegar no e-mail.\n\nO convite vale por 14 dias.`,
-      html: mailHtml("Você foi convidado(a)", [`Olá, ${name}!`, `Você foi convidado(a) para o MARFIM Studio OS como ${ROLE_LABEL[role]}.`, "Entre no app com este e-mail e a senha provisória que a barbearia passou para você. Em seguida chega outro e-mail com um link para criar a sua senha.", `Outra opção: em Cadastrar, toque em "${SIGNUP_CHOICES[choice].label}" e confirme o código que chegar no e-mail.`, "O convite vale por 14 dias."], undefined, { href: `${appUrl()}/login`, label: "Abrir o MARFIM" }),
+      subject: "Seu convite para o Eagle Detetizadora",
+      text: `Olá, ${name}!\n\nVocê foi convidado(a) para o Eagle Detetizadora como ${ROLE_LABEL[role]}.\n\nAbra ${appUrl()}/login e entre com este e-mail e a senha provisória que a empresa passou para você. Você vai receber outro e-mail com um link para criar a sua senha.\n\nOutra opção: abra ${link}, toque em "${SIGNUP_CHOICES[choice].label}" e confirme o código que chegar no e-mail.\n\nO convite vale por 14 dias.`,
+      html: mailHtml("Você foi convidado(a)", [`Olá, ${name}!`, `Você foi convidado(a) para o Eagle Detetizadora como ${ROLE_LABEL[role]}.`, "Entre no app com este e-mail e a senha provisória que a empresa passou para você. Em seguida chega outro e-mail com um link para criar a sua senha.", `Outra opção: em Cadastrar, toque em "${SIGNUP_CHOICES[choice].label}" e confirme o código que chegar no e-mail.`, "O convite vale por 14 dias."], undefined, { href: `${appUrl()}/login`, label: "Abrir o Eagle" }),
     });
     return true;
   } catch (e) {
@@ -137,8 +138,8 @@ async function sendCode(email: string, purpose: Purpose, code: string) {
   const what = purpose === "cadastro" ? "criar seu acesso" : "redefinir sua senha";
   await sendMail({
     to: email,
-    subject: `${code} é o seu código MARFIM`,
-    text: `Seu código para ${what} no MARFIM Studio OS é: ${code}\n\nEle vale por ${CODE_MIN} minutos. Se você não pediu, ignore este e-mail.`,
+    subject: `${code} é o seu código Eagle`,
+    text: `Seu código para ${what} no Eagle Detetizadora é: ${code}\n\nEle vale por ${CODE_MIN} minutos. Se você não pediu, ignore este e-mail.`,
     html: mailHtml(purpose === "cadastro" ? "Confirme seu e-mail" : "Redefinir senha", [`Use o código abaixo para ${what}. Ele vale por ${CODE_MIN} minutos.`], code),
   });
 }
@@ -174,7 +175,7 @@ export async function sendAccessLink(db: Db, l: { purpose: Purpose; email: strin
   try {
     await sendMail({
       to: l.email,
-      subject: "Crie sua senha do MARFIM Studio OS",
+      subject: "Crie sua senha do Eagle Detetizadora",
       text: `Você entrou com a senha provisória. Para continuar, abra o link abaixo e crie a sua senha:\n\n${link}\n\nO link vale por 1 hora e só pode ser usado uma vez. Depois, volte ao app e entre com a senha nova.`,
       html: mailHtml("Crie sua senha", ["Você entrou com a senha provisória. Para continuar, toque no botão abaixo e crie a sua senha.", "O link vale por 1 hora e só pode ser usado uma vez. Depois, volte ao app e entre com a senha nova."], undefined, { href: link, label: "Criar minha senha" }),
     });

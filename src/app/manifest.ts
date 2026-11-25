@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "MARFIM Studio OS",
-    short_name: "MARFIM",
-    description: "Gestão da barbearia: agenda, atendimentos, caixa e financeiro.",
+    name: "Eagle Detetizadora",
+    short_name: "Eagle",
+    description: "Gestão de detetização: agenda, clientes, orçamentos e financeiro.",
     start_url: "/",
     scope: "/",
     display: "standalone",

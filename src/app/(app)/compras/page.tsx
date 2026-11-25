@@ -26,7 +26,7 @@ export default async function Purchases({ searchParams }: { searchParams: Promis
   const planned = pending.reduce((a, p) => a + p.total_cents, 0);
   return (
     <>
-      <PageHead eyebrow="Estoque e compras" title="Compras" sub="O que a barbearia precisa comprar. Ao marcar como comprado, o valor entra nas despesas do mês da fatura." />
+      <PageHead eyebrow="Estoque e compras" title="Compras" sub="O que a empresa precisa comprar. Ao marcar como comprado, o valor entra nas despesas do mês da fatura." />
       <Flash ok={sp.ok} erro={sp.erro} />
       <div className="stats">
         <Stat label="Na lista" value={money(planned)} hint={`${pending.length} item(ns) a comprar`} tone="ol" />

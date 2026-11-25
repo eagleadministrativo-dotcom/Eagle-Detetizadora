@@ -78,7 +78,7 @@ export function PushToggle() {
       {state === "off" || state === "busy" ? <div><button className="btn accent" type="button" onClick={enable} disabled={state === "busy"}>Ativar notificações</button></div> : null}
       {state === "on" ? <div><button className="btn ghost" type="button" onClick={disable}>Desativar neste aparelho</button></div> : null}
       {state === "blocked" ? <small>As notificações estão bloqueadas neste navegador. Libere em Configurações do site (cadeado ao lado do endereço) e recarregue a página.</small> : null}
-      {state === "ios-install" ? <small>No iPhone, instale o app primeiro: toque em Compartilhar e em &quot;Adicionar à Tela de Início&quot;, abra o ícone MARFIM e volte a esta página.</small> : null}
+      {state === "ios-install" ? <small>No iPhone, instale o app primeiro: toque em Compartilhar e em &quot;Adicionar à Tela de Início&quot;, abra o ícone Eagle e volte a esta página.</small> : null}
       {state === "unsupported" ? <small>Este navegador não oferece notificações. Use o Chrome (Android ou computador) ou instale o app no iPhone (iOS 16.4 ou mais novo).</small> : null}
       {state === "server-off" ? <small>As notificações ainda não foram configuradas no servidor.</small> : null}
       {msg ? <small role="alert">{msg}</small> : null}

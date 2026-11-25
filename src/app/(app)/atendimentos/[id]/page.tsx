@@ -97,7 +97,7 @@ export default async function AttendancePage({ params, searchParams }: { params:
                   ))}
                 </div>
               </ConfirmAction>
-              <ConfirmAction label="Aplicar desconto" tone="neutral" action={discountAction} submit="Aplicar desconto" warn="O desconto fica registrado com motivo e responsável. Acima do limite, exige o proprietário.">
+              <ConfirmAction label="Aplicar desconto" tone="neutral" action={discountAction} submit="Aplicar desconto" warn="O desconto fica registrado com motivo e responsável. Acima do limite, exige o administrador.">
                 <input type="hidden" name="id" value={a.id} />
                 <div className="fields">
                   <Field label="Valor do desconto (R$)"><input name="discount" inputMode="decimal" defaultValue={a.discount_cents ? brl(a.discount_cents) : ""} placeholder="0,00" /></Field>

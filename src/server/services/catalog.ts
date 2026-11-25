@@ -168,7 +168,7 @@ export interface StaffInput { id?: string; name: string; phone?: string | null; 
 export async function saveStaff(db: Db, ctx: Ctx, input: StaffInput) {
   need(ctx, "admin.catalog");
   const name = requireText(input.name, "Nome do profissional");
-  if (input.contractType && !["clt", "pj", "autonomo", "proprietario"].includes(input.contractType)) throw new DomainError("invalid", "Vínculo inválido.");
+  if (input.contractType && !["clt", "pj", "autonomo", "administrador"].includes(input.contractType)) throw new DomainError("invalid", "Vínculo inválido.");
   return db.tx(async (q) => {
     let id = input.id;
     if (id) {

@@ -71,7 +71,7 @@ export function verifyTotp(secret: string, code: string, now = Date.now()): bool
   return false;
 }
 export const totpUri = (secret: string, email: string) =>
-  `otpauth://totp/MARFIM%20Studio%20OS:${encodeURIComponent(email)}?secret=${secret}&issuer=MARFIM%20Studio%20OS`;
+  `otpauth://totp/Eagle%20Detetizadora:${encodeURIComponent(email)}?secret=${secret}&issuer=Eagle%20Detetizadora`;
 
 // ---------- sessões ----------
 const SESSION_HOURS = 12;

@@ -6,7 +6,7 @@ import { PERMISSIONS, ROLE_PERMISSIONS, MODULES, buildPerms, type Ctx, type Perm
 const VALID = new Set<string>(PERMISSIONS);
 export const clean = (list: string[]) => [...new Set(list.filter((p) => VALID.has(p)))] as Permission[];
 
-/** Ninguém concede o que não tem; o proprietário tem tudo. */
+/** Ninguém concede o que não tem; o administrador tem tudo. */
 export function assertGrantable(ctx: Ctx, wanted: Permission[], had: Set<string>) {
   const extra = wanted.filter((p) => !had.has(p) && p !== "tasks.own" && !can(ctx, p));
   if (extra.length) throw new ForbiddenError("Você não pode conceder um acesso que você mesmo não tem.");
@@ -89,7 +89,7 @@ export async function applyProfile(db: Db, ctx: Ctx, userId: string, profileId: 
     await target(q, ctx, userId);
     const [p] = await q<{ base_role: Role; permissions: string[] }>("select base_role, permissions from access_profiles where id=$1 and unit_id=$2", [requireUuid(profileId, "Perfil"), ctx.unitId]);
     if (!p) throw new DomainError("not_found", "Perfil não encontrado.");
-    if (p.base_role === "gerente" && ctx.role !== "administrador") throw new ForbiddenError("Só o proprietário define gerentes.");
+    if (p.base_role === "gerente" && ctx.role !== "administrador") throw new ForbiddenError("Só o administrador define gerentes.");
     await q("update user_units set role=$3 where user_id=$1 and unit_id=$2", [userId, ctx.unitId, p.base_role]);
     return writePermissionsTx(q, ctx, userId, p.base_role, p.permissions, profileId);
   });

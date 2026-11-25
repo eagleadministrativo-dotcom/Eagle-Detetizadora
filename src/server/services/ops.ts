@@ -166,8 +166,8 @@ export async function restoreBackup(db: Db, backupJson: string, ownerEmail: stri
     await insertTable(q, "user_units", backup.data.user_units);
     for (const t of RESTORE_ORDER.slice(4)) await insertTable(q, t, backup.data[t]);
     await q("select setval(pg_get_serial_sequence('audit_logs','id'), greatest((select coalesce(max(id),1) from audit_logs),1))");
-    const r = await q("update users set password_hash=$2 where lower(email)=lower($1) and id in (select user_id from user_units where role='proprietario') returning id", [ownerEmail, hashPassword(ownerPassword)]);
-    if (!r.length) throw new DomainError("no_owner", "Nenhum proprietário com esse e-mail no backup.");
+    const r = await q("update users set password_hash=$2 where lower(email)=lower($1) and id in (select user_id from user_units where role='administrador') returning id", [ownerEmail, hashPassword(ownerPassword)]);
+    if (!r.length) throw new DomainError("no_owner", "Nenhum administrador com esse e-mail no backup.");
   });
   return { tables: RESTORE_ORDER.length + 2 };
 }

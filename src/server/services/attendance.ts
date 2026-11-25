@@ -24,8 +24,8 @@ export async function assertDiscountAllowed(q: Q, ctx: Ctx, subtotalCents: numbe
   const limited = can(ctx, "attendance.discount_limited") && !st.discount_owner_only && st.discount_limit_bps != null && discountCents * 10000 <= subtotalCents * st.discount_limit_bps;
   if (!unrestricted && !limited) {
     throw new DomainError("discount_not_allowed", st.discount_owner_only || !can(ctx, "attendance.discount_limited")
-      ? "Descontos precisam ser autorizados pelo proprietário."
-      : "Desconto acima do limite autorizado. Peça a aprovação do proprietário.");
+      ? "Descontos precisam ser autorizados pelo administrador."
+      : "Desconto acima do limite autorizado. Peça a aprovação do administrador.");
   }
 }
 

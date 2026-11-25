@@ -67,7 +67,7 @@ export default async function FlowPage({ searchParams }: { searchParams: Promise
             <form action={capitalAction} className="form">
               <input type="hidden" name="key" value={newKey()} />
               <div className="fields">
-                <Field label="Tipo"><select name="kind"><option value="aporte">Aporte do proprietário</option><option value="emprestimo">Empréstimo</option></select></Field>
+                <Field label="Tipo"><select name="kind"><option value="aporte">Aporte do sócio</option><option value="emprestimo">Empréstimo</option></select></Field>
                 <Field label="Valor (R$)"><input name="amount" inputMode="decimal" required /></Field>
                 <Field label="Data"><input type="date" name="entryDate" defaultValue={today} required /></Field>
                 <Field label="Conta"><select name="accountId" required>{cat.accounts.filter((a) => a.is_active).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
