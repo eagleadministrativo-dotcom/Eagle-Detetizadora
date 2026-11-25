@@ -16,8 +16,8 @@ import { confirmPayment, settlePayment } from "./services/payments";
 import { createPayable, payPayable, saveGoal } from "./services/finance";
 import { addDays, atLocal, dayOfWeek, monthEnd, monthStart, todayYmd } from "@/lib/dates";
 
-export const DEMO_PASSWORD = "Demo@Marfim2026";
-export const DEMO_USERS = { owner: "dono@demo.marfim.local", manager: "gerente@demo.marfim.local", barber1: "rafael@demo.marfim.local", barber2: "diego@demo.marfim.local", accountant: "contador@demo.marfim.local" };
+export const DEMO_PASSWORD = "Demo@Eagle2026";
+export const DEMO_USERS = { owner: "admin@demo.eagle.local", manager: "gerente@demo.eagle.local", tech1: "tecnico1@demo.eagle.local", tech2: "tecnico2@demo.eagle.local", seller: "vendedor@demo.eagle.local" };
 
 function rng(seed: number) {
   let s = seed >>> 0;
@@ -29,29 +29,28 @@ const LAST = ["Souza", "Lima", "Oliveira", "Costa", "Pereira", "Almeida", "Ribei
 
 /** Dados FICTÍCIOS para demonstração. Nunca use em produção. */
 export async function seedDemo(db: Db) {
-  const { unitId, ownerId, staffId: ownerStaff } = await setupInitial(db, { orgName: "MARFIM Studio (DEMONSTRAÇÃO)", unitName: "Curitiba · demo", ownerName: "Proprietário Demo", email: DEMO_USERS.owner, password: DEMO_PASSWORD, demo: true });
+  const { unitId, ownerId, staffId: ownerStaff } = await setupInitial(db, { orgName: "Eagle Detetizadora (DEMONSTRAÇÃO)", unitName: "São Paulo · demo", ownerName: "Administrador Demo", email: DEMO_USERS.owner, password: DEMO_PASSWORD, demo: true });
   const ctx = (userId: string, role: Ctx["role"], staffId: string | null = null): Ctx => ({ userId, unitId, role, staffId, perms: buildPerms(role, []) });
-  const owner = ctx(ownerId, "proprietario", ownerStaff);
-  await db.query("update staff set name='Proprietário Demo' where id=$1", [ownerStaff]);
+  const owner = ctx(ownerId, "administrador", ownerStaff);
+  await db.query("update staff set name='Administrador Demo' where id=$1", [ownerStaff]);
 
-  const sch = [1, 2, 3, 4, 5, 6].map((d) => ({ day: d, start: "09:00", end: d === 6 ? "17:00" : "19:00" }));
-  const rafael = await saveStaff(db, owner, { name: "Rafael (demo)", contractType: "pj", color: "#8b6b4a", schedules: sch });
-  const diego = await saveStaff(db, owner, { name: "Diego (demo)", contractType: "clt", color: "#56697a", schedules: sch });
-  await saveStaff(db, owner, { id: ownerStaff, name: "Proprietário Demo", contractType: "proprietario", color: "#4a6b45", schedules: sch });
-  await createUser(db, owner, { email: DEMO_USERS.barber1, fullName: "Rafael (demo)", role: "barbeiro", password: DEMO_PASSWORD, staffId: rafael });
-  await createUser(db, owner, { email: DEMO_USERS.barber2, fullName: "Diego (demo)", role: "barbeiro", password: DEMO_PASSWORD, staffId: diego });
+  const sch = [1, 2, 3, 4, 5, 6].map((d) => ({ day: d, start: "08:00", end: d === 6 ? "17:00" : "18:00" }));
+  const tech1 = await saveStaff(db, owner, { name: "Técnico 1 (demo)", contractType: "pj", color: "#8b6b4a", schedules: sch });
+  const tech2 = await saveStaff(db, owner, { name: "Técnico 2 (demo)", contractType: "clt", color: "#56697a", schedules: sch });
+  await saveStaff(db, owner, { id: ownerStaff, name: "Administrador Demo", contractType: "administrador", color: "#4a6b45", schedules: sch });
+  await createUser(db, owner, { email: DEMO_USERS.tech1, fullName: "Técnico 1 (demo)", role: "tecnico", password: DEMO_PASSWORD, staffId: tech1 });
+  await createUser(db, owner, { email: DEMO_USERS.tech2, fullName: "Técnico 2 (demo)", role: "tecnico", password: DEMO_PASSWORD, staffId: tech2 });
   await createUser(db, owner, { email: DEMO_USERS.manager, fullName: "Gerente Demo", role: "gerente", password: DEMO_PASSWORD });
-  await createUser(db, owner, { email: DEMO_USERS.accountant, fullName: "Contador Demo", role: "contador", password: DEMO_PASSWORD });
-  await db.query("insert into chairs(unit_id,name) values ($1,'Cadeira 2')", [unitId]);
+  await createUser(db, owner, { email: DEMO_USERS.seller, fullName: "Vendedor Demo", role: "vendedor", password: DEMO_PASSWORD });
 
   const cat0 = await listCatalog(db, unitId);
-  const cabelo = cat0.svcCats.find((c) => c.name === "Cabelo")!.id, barba = cat0.svcCats.find((c) => c.name === "Barba")!.id, combos = cat0.svcCats.find((c) => c.name === "Combos")!.id;
-  const corte = await saveService(db, owner, { name: "Corte", durationMinutes: 30, priceCents: 6000, categoryId: cabelo, color: "#8b6b4a" });
-  const barbaS = await saveService(db, owner, { name: "Barba", durationMinutes: 30, priceCents: 4000, categoryId: barba });
-  const combo = await saveService(db, owner, { name: "Corte + Barba", durationMinutes: 60, priceCents: 9000, categoryId: combos });
-  const sobr = await saveService(db, owner, { name: "Sobrancelha", durationMinutes: 15, priceCents: 2000, categoryId: barba });
-  const pig = await saveService(db, owner, { name: "Pigmentação", durationMinutes: 45, priceCents: 8000, categoryId: cabelo, bufferMinutes: 5, customFields: [{ label: "Produto", value: "Tonalizante (demo)" }] });
-  const services = [{ id: corte, p: 6000, w: 40 }, { id: barbaS, p: 4000, w: 20 }, { id: combo, p: 9000, w: 25 }, { id: sobr, p: 2000, w: 10 }, { id: pig, p: 8000, w: 5 }];
+  const geral = cat0.svcCats.find((c) => c.name === "Dedetização geral")!.id, especifica = cat0.svcCats.find((c) => c.name === "Dedetização específica")!.id, manutencao = cat0.svcCats.find((c) => c.name === "Manutenção")!.id;
+  const dedetizacao = await saveService(db, owner, { name: "Dedetização Residencial", durationMinutes: 60, priceCents: 50000, categoryId: geral, color: "#8b6b4a" });
+  const comercial = await saveService(db, owner, { name: "Dedetização Comercial", durationMinutes: 90, priceCents: 75000, categoryId: especifica });
+  const manutencaoS = await saveService(db, owner, { name: "Manutenção Pós-Serviço", durationMinutes: 30, priceCents: 15000, categoryId: manutencao });
+  const inspecao = await saveService(db, owner, { name: "Inspeção Técnica", durationMinutes: 20, priceCents: 10000, categoryId: geral });
+  const fumigacao = await saveService(db, owner, { name: "Fumigação Termométrica", durationMinutes: 120, priceCents: 100000, categoryId: especifica, bufferMinutes: 15, customFields: [{ label: "Praga", value: "Barata (demo)" }] });
+  const services = [{ id: dedetizacao, p: 50000, w: 40 }, { id: comercial, p: 75000, w: 20 }, { id: manutencaoS, p: 15000, w: 25 }, { id: inspecao, p: 10000, w: 10 }, { id: fumigacao, p: 100000, w: 5 }];
 
   const accs = cat0.accounts;
   const bank = accs.find((a) => a.kind === "banco")!;
@@ -69,7 +68,7 @@ export async function seedDemo(db: Db) {
   const rand = rng(42);
   const pick = <T,>(xs: T[]) => xs[Math.floor(rand() * xs.length)];
   const today = todayYmd();
-  const staffIds = [rafael, diego];
+  const staffIds = [tech1, tech2];
   const chairs = (await db.query<{ id: string }>("select id from chairs where unit_id=$1 order by name", [unitId])).map((c) => c.id);
 
   let prevCash = 20000;
@@ -148,28 +147,28 @@ export async function seedDemo(db: Db) {
   // hoje: caixa aberto, um atendimento em andamento e agenda futura
   await openCash(db, owner, { declaredCents: prevCash });
   const now = new Date();
-  await quickAttendance(db, owner, { customerId: custs[0], staffId: rafael, serviceIds: [corte], startsAt: now }).catch(() => undefined);
+  await quickAttendance(db, owner, { customerId: custs[0], staffId: tech1, serviceIds: [dedetizacao], startsAt: now }).catch(() => undefined);
   const { createAppointment } = await import("./services/agenda");
   for (const [i, h] of ["15:00", "16:00", "17:00"].entries()) {
     const t = atLocal(today, h);
-    if (t.getTime() > now.getTime() + 3600000) await createAppointment(db, owner, { customerId: custs[i + 3], staffId: [diego, rafael, diego][i], serviceIds: [combo], startsAt: t }).catch(() => undefined);
+    if (t.getTime() > now.getTime() + 3600000) await createAppointment(db, owner, { customerId: custs[i + 3], staffId: [tech2, tech1, tech2][i], serviceIds: [manutencaoS], startsAt: t }).catch(() => undefined);
   }
   let next = addDays(today, 1);
   if (dayOfWeek(next) === 0) next = addDays(next, 1);
-  for (const [i, h] of ["09:00", "10:30", "14:00", "16:30"].entries()) {
-    await createAppointment(db, owner, { customerId: custs[i + 6], staffId: staffIds[i % 2], serviceIds: [i % 2 ? barbaS : corte], startsAt: atLocal(next, h) }).catch(() => undefined);
+  for (const [i, h] of ["09:00", "11:30", "14:00", "16:00"].entries()) {
+    await createAppointment(db, owner, { customerId: custs[i + 6], staffId: staffIds[i % 2], serviceIds: [i % 2 ? comercial : dedetizacao], startsAt: atLocal(next, h) }).catch(() => undefined);
   }
   await updateSettings(db, owner, { retroactive_edit_days: 7 });
   // ---------- V4 (fictício) ----------
   const people = await db.query<{ id: string; email: string }>("select id, email from users");
   const uid = (e: string) => people.find((x) => x.email === e)!.id;
-  const pomada = await saveProduct(db, owner, { name: "Pomada modeladora", sku: "POM-01", priceCents: 4500, trackStock: true, minStock: 4, commissionEnabled: true });
-  const shampoo = await saveProduct(db, owner, { name: "Shampoo para barba", sku: "SHA-01", priceCents: 3500, trackStock: true, minStock: 3, commissionEnabled: true });
-  await saveProduct(db, owner, { name: "Óleo para barba", sku: "OLE-01", priceCents: 5900, trackStock: true, minStock: 2, commissionEnabled: false });
-  for (const productId of [pomada, shampoo]) await adjustStock(db, owner, { productId, kind: "entrada", quantity: 20, note: "Estoque inicial (demo)" });
+  const inseticida = await saveProduct(db, owner, { name: "Inseticida profissional", sku: "INS-01", priceCents: 25000, trackStock: true, minStock: 4, commissionEnabled: true });
+  const equipamento = await saveProduct(db, owner, { name: "Equipamento protetor", sku: "EQP-01", priceCents: 15000, trackStock: true, minStock: 3, commissionEnabled: true });
+  await saveProduct(db, owner, { name: "Documento técnico", sku: "DOC-01", priceCents: 5000, trackStock: true, minStock: 2, commissionEnabled: false });
+  for (const productId of [inseticida, equipamento]) await adjustStock(db, owner, { productId, kind: "entrada", quantity: 20, note: "Estoque inicial (demo)" });
   const t0 = todayYmd();
   await saveRule(db, owner, { scope: "servico", pctBps: 4000, base: "liquido", validFrom: t0 });
-  await saveRule(db, owner, { scope: "servico", staffId: rafael, pctBps: 4500, base: "liquido", validFrom: t0 });
+  await saveRule(db, owner, { scope: "servico", staffId: tech1, pctBps: 4500, base: "liquido", validFrom: t0 });
   await saveRule(db, owner, { scope: "produto", pctBps: 1000, base: "liquido", validFrom: t0 });
   // lançamentos do mês para as telas de comissão (a regra vale só daqui para a frente; isto é dado de demonstração)
   const past = await db.query<{ id: string; receivable: string; finished_at: Date }>("select a.id, r.id as receivable, a.finished_at from attendances a join receivables r on r.attendance_id=a.id where a.status='concluido' and a.finished_at > now() - interval '45 days'");
@@ -177,15 +176,15 @@ export async function seedDemo(db: Db) {
     await db.tx((q) => generateCommissionsTx(q, owner, { attendanceId: a.id, receivableId: a.receivable }));
     await db.query("update commission_entries set reference_at=$2 where attendance_id=$1", [a.id, a.finished_at]);
   }
-  for (const [staffId, productId, quantity] of [[rafael, pomada, 2], [diego, shampoo, 1], [rafael, shampoo, 1]] as const) await sellProducts(db, owner, { staffId, items: [{ productId, quantity }], idempotencyKey: `demo-sale-${staffId}-${productId}` });
+  for (const [staffId, productId, quantity] of [[tech1, inseticida, 2], [tech2, equipamento, 1], [tech1, equipamento, 1]] as const) await sellProducts(db, owner, { staffId, items: [{ productId, quantity }], idempotencyKey: `demo-sale-${staffId}-${productId}` });
   await createTask(db, owner, { title: "Higienizar cadeiras e bancadas", assignees: [uid(DEMO_USERS.barber1)], priority: "alta", category: "Limpeza", dueDate: t0, recurrence: { kind: "dias", n: 1 } });
   await createTask(db, owner, { title: "Conferir estoque de produtos", assignees: [uid(DEMO_USERS.barber1), uid(DEMO_USERS.barber2)], mode: "coletiva", category: "Estoque", dueDate: addDays(t0, 2) });
   await createTask(db, owner, { title: "Enviar documentos ao contador", assignees: [uid(DEMO_USERS.manager)], priority: "urgente", requiresApproval: true, dueDate: addDays(t0, -1) });
   await createTask(db, owner, { title: "Revisar metas do mês", assignees: [ownerId], dueDate: addDays(t0, 3) });
-  for (const [metric, target] of [["atendimentos", 80], ["receita_servicos", 600000]] as const) await saveStaffGoal(db, owner, { staffId: rafael, metric, month: t0.slice(0, 7), target });
+  for (const [metric, target] of [["atendimentos", 80], ["receita_servicos", 600000]] as const) await saveStaffGoal(db, owner, { staffId: tech1, metric, month: t0.slice(0, 7), target });
   for (let k = 0; k < 6; k++) {
     const day = addDays(t0, (k % 3) + (dayOfWeek(t0) === 0 ? 1 : 0));
-    await createAppointment(db, owner, { customerId: custs[k], staffId: k % 2 ? diego : rafael, startsAt: atLocal(dayOfWeek(day) === 0 ? addDays(day, 1) : day, `${10 + k}:00`), serviceIds: [k % 2 ? corte : combo] }).catch(() => null);
+    await createAppointment(db, owner, { customerId: custs[k], staffId: k % 2 ? tech2 : tech1, startsAt: atLocal(dayOfWeek(day) === 0 ? addDays(day, 1) : day, `${10 + k}:00`), serviceIds: [k % 2 ? comercial : manutencaoS] }).catch(() => null);
   }
   await runReturnJobs(db, unitId);
   await runRecordJobs(db, unitId);
