@@ -86,7 +86,7 @@ create table staff (
   user_id uuid references users(id) on delete restrict,
   name text not null,
   phone text,
-  contract_type text check (contract_type in ('clt','pj','autonomo','proprietario')),
+  contract_type text check (contract_type in ('clt','pj','autonomo','administrador','socio')),
   color text not null default '#8B6B4A',
   is_active boolean not null default true,
   created_at timestamptz not null default now()

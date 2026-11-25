@@ -7,7 +7,7 @@ create table if not exists user_invites (
   unit_id uuid not null references units(id) on delete cascade,
   email text not null,
   full_name text not null,
-  role text not null check (role in ('proprietario','gerente','barbeiro','contador')),
+  role text not null check (role in ('administrador','gerente','vendedora_gestora','vendedor','tecnico','colaborador','pendente')),
   staff_id uuid references staff(id) on delete set null,
   profile_id uuid references access_profiles(id) on delete set null,
   permissions text[],                       -- conjunto exato escolhido por quem convidou (null = padrão do perfil)

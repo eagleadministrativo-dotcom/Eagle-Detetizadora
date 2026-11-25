@@ -6,7 +6,7 @@ create table access_profiles (
   id uuid primary key default gen_random_uuid(),
   unit_id uuid not null references units(id) on delete restrict,
   name text not null,
-  base_role text not null check (base_role in ('gerente','barbeiro','contador')),
+  base_role text not null check (base_role in ('gerente','vendedora_gestora','vendedor','tecnico','colaborador')),
   permissions text[] not null default '{}',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

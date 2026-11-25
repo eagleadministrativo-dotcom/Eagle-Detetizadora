@@ -1,4 +1,5 @@
 export type Role = "administrador" | "gerente" | "vendedora_gestora" | "vendedor" | "tecnico" | "colaborador" | "pendente";
+export type Module = "clientes" | "agendamentos" | "retornos" | "orcamentos_os" | "graficos" | "financeiro";
 
 export const PERMISSIONS = [
   "dashboard.full", "dashboard.own",
@@ -11,16 +12,43 @@ export const PERMISSIONS = [
   "finance.view", "finance.manage", "finance.close_period", "finance.goals",
   "reports.view", "reports.export",
   "admin.catalog", "admin.schedules", "admin.settings", "users.manage", "audit.view", "data.export",
-  // V4
   "agenda.create", "agenda.edit", "agenda.cancel",
   "finance.own", "finance.payables_view", "finance.receivables_view", "finance.dre_view",
   "commissions.view_all", "commissions.rules", "commissions.approve", "commissions.pay",
-  "customers.history", "returns.own", "returns.view_all", "returns.contact", "returns.rules",
+  "customers.history", "returns.own", "returns.view_all", "returns.contact", "returns.rules", "returns.manage",
   "products.view", "products.sell", "products.stock_view", "products.stock", "products.manage", "products.prices", "products.return",
   "tasks.own", "tasks.create", "tasks.delegate", "tasks.edit", "tasks.view_team", "tasks.approve",
   "achievements.own", "team.view", "team.goals", "purchases.manage",
+  "quotes.view", "quotes.manage", "charts.view", "data.import",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
+
+export const MODULES: Record<Module, { title: string; perms: Permission[] }> = {
+  clientes: {
+    title: "Clientes",
+    perms: ["customers.view", "customers.manage", "customers.edit_sensitive", "customers.deactivate", "customers.history"],
+  },
+  agendamentos: {
+    title: "Agendamentos",
+    perms: ["agenda.view_all", "agenda.view_own", "agenda.manage", "agenda.manage_own", "agenda.create", "agenda.edit", "agenda.cancel", "agenda.block", "agenda.retroactive"],
+  },
+  retornos: {
+    title: "Retornos",
+    perms: ["returns.own", "returns.view_all", "returns.contact", "returns.rules", "returns.manage"],
+  },
+  orcamentos_os: {
+    title: "Orçamentos e OS",
+    perms: ["quotes.view", "quotes.manage"],
+  },
+  graficos: {
+    title: "Gráficos",
+    perms: ["charts.view"],
+  },
+  financeiro: {
+    title: "Financeiro",
+    perms: ["finance.own", "finance.view", "finance.manage", "finance.payables_view", "finance.receivables_view", "finance.dre_view", "finance.close_period", "finance.goals", "payments.register", "payments.confirm", "payments.reverse", "cash.manage", "reports.view", "reports.export"],
+  },
+};
 
 const ALL = new Set<Permission>(PERMISSIONS);
 
@@ -29,14 +57,16 @@ export const ROLE_PERMISSIONS: Record<Role, Set<Permission>> = {
   gerente: new Set<Permission>([
     "dashboard.full", "agenda.view_all", "agenda.manage", "agenda.block", "agenda.retroactive",
     "attendance.view_all", "attendance.run", "attendance.discount_limited",
-    "customers.view", "customers.manage", "customers.edit_sensitive",
-    "payments.register", "payments.confirm", "cash.manage",
-    "finance.view", "finance.manage", "finance.close_period", "finance.goals", "reports.view", "reports.export", "admin.schedules",
-    "agenda.create", "agenda.edit", "agenda.cancel", "finance.own", "finance.payables_view", "finance.receivables_view", "finance.dre_view",
-    "customers.history", "returns.own", "returns.view_all", "returns.contact", "returns.rules",
-    "products.view", "products.sell", "products.stock_view", "products.stock",
+    "customers.view", "customers.manage", "customers.edit_sensitive", "customers.deactivate", "customers.history",
+    "payments.register", "payments.confirm", "payments.reverse", "cash.manage",
+    "finance.view", "finance.manage", "finance.close_period", "finance.goals", "finance.own", "finance.payables_view", "finance.receivables_view", "finance.dre_view",
+    "reports.view", "reports.export",
+    "agenda.create", "agenda.edit", "agenda.cancel",
+    "returns.own", "returns.view_all", "returns.contact", "returns.rules", "returns.manage",
+    "quotes.view", "quotes.manage",
+    "charts.view",
     "tasks.own", "tasks.create", "tasks.delegate", "tasks.edit", "tasks.view_team", "tasks.approve",
-    "achievements.own", "team.view", "users.manage", "admin.settings",
+    "achievements.own", "team.view", "audit.view",
   ]),
   vendedora_gestora: new Set<Permission>([
     "dashboard.full", "agenda.view_all", "agenda.manage", "agenda.create", "agenda.edit", "agenda.cancel",
@@ -44,7 +74,9 @@ export const ROLE_PERMISSIONS: Record<Role, Set<Permission>> = {
     "customers.view", "customers.manage", "customers.edit_sensitive", "customers.history",
     "payments.register", "payments.confirm",
     "finance.view", "finance.payables_view", "finance.receivables_view", "reports.view", "reports.export",
-    "returns.own", "returns.view_all", "returns.contact",
+    "returns.own", "returns.view_all", "returns.contact", "returns.rules", "returns.manage",
+    "quotes.view", "quotes.manage",
+    "charts.view",
     "tasks.own", "tasks.create", "tasks.delegate", "tasks.edit", "tasks.view_team",
     "achievements.own", "team.view",
   ]),
@@ -53,16 +85,17 @@ export const ROLE_PERMISSIONS: Record<Role, Set<Permission>> = {
     "attendance.view_all", "attendance.run",
     "customers.view", "customers.manage", "customers.history",
     "payments.register",
-    "reports.view",
     "returns.own", "returns.view_all",
+    "quotes.view",
+    "charts.view",
     "tasks.own",
     "achievements.own",
   ]),
   tecnico: new Set<Permission>([
     "dashboard.own", "agenda.view_own", "agenda.manage_own",
     "attendance.view_own", "attendance.run_own",
-    "customers.view",
-    "agenda.create", "agenda.edit", "agenda.cancel", "customers.history", "returns.own", "returns.contact",
+    "agenda.create", "agenda.edit", "agenda.cancel",
+    "returns.own", "returns.contact",
     "tasks.own", "achievements.own",
   ]),
   colaborador: new Set<Permission>([
@@ -86,6 +119,7 @@ export const ROLE_LABEL: Record<Role, string> = {
 /** Permissões que o proprietário pode conceder individualmente a um usuário. */
 export const GRANTABLE: Permission[] = [
   "payments.register", "payments.confirm", "attendance.discount_limited", "agenda.block", "cash.manage",
+  "returns.manage", "quotes.manage", "charts.view",
 ];
 
 export const PERMISSION_LABEL: Partial<Record<Permission, string>> = {
@@ -94,22 +128,21 @@ export const PERMISSION_LABEL: Partial<Record<Permission, string>> = {
   "attendance.discount_limited": "Dar desconto dentro do limite",
   "agenda.block": "Bloquear horários",
   "cash.manage": "Operar o caixa",
+  "returns.manage": "Gerenciar retornos",
+  "quotes.manage": "Gerenciar orçamentos",
+  "charts.view": "Ver gráficos",
 };
 
 /** Catálogo completo para a tela de permissões individuais (recurso → ações). */
 export const PERMISSION_GROUPS: { title: string; items: [Permission, string][] }[] = [
-  { title: "Painel e relatórios", items: [["dashboard.own", "Ver o próprio painel"], ["dashboard.full", "Ver o painel geral"], ["reports.view", "Ver relatórios"], ["reports.export", "Exportar relatórios"]] },
-  { title: "Agenda", items: [["agenda.view_own", "Ver a própria agenda"], ["agenda.view_all", "Ver a agenda da equipe"], ["agenda.manage_own", "Operar a própria agenda"], ["agenda.manage", "Operar a agenda de todos"], ["agenda.create", "Criar agendamento"], ["agenda.edit", "Editar e reagendar"], ["agenda.cancel", "Cancelar agendamento"], ["agenda.block", "Criar e remover bloqueios"], ["agenda.retroactive", "Lançar no passado"]] },
-  { title: "Atendimentos", items: [["attendance.view_own", "Ver os próprios"], ["attendance.view_all", "Ver todos"], ["attendance.run_own", "Operar os próprios"], ["attendance.run", "Operar todos"], ["attendance.discount_limited", "Desconto dentro do limite"], ["attendance.discount", "Desconto sem limite"]] },
-  { title: "Clientes", items: [["customers.view", "Ver clientes"], ["customers.manage", "Cadastrar e editar"], ["customers.history", "Consultar histórico"], ["customers.edit_sensitive", "Editar dados sensíveis"], ["customers.deactivate", "Desativar cliente"]] },
-  { title: "Retornos", items: [["returns.own", "Ver os próprios retornos"], ["returns.view_all", "Ver retornos da equipe"], ["returns.contact", "Registrar contato"], ["returns.rules", "Definir regras de retorno"]] },
-  { title: "Financeiro", items: [["finance.own", "Ver o próprio financeiro"], ["finance.view", "Ver o financeiro geral"], ["finance.payables_view", "Ver contas a pagar"], ["finance.receivables_view", "Ver contas a receber"], ["finance.dre_view", "Ver a DRE"], ["finance.manage", "Lançar e pagar contas"], ["finance.close_period", "Fechar período"], ["finance.goals", "Metas da empresa"], ["cash.manage", "Operar o caixa"], ["payments.register", "Registrar pagamentos"], ["payments.confirm", "Conciliar pagamentos"], ["payments.reverse", "Estornar pagamentos"]] },
-  { title: "Comissões", items: [["commissions.view_all", "Ver comissões da equipe"], ["commissions.rules", "Alterar regras de comissão"], ["commissions.approve", "Aprovar repasses"], ["commissions.pay", "Registrar pagamento de repasse"]] },
-  { title: "Compras", items: [["purchases.manage", "Lista de compras (gera despesas ao marcar comprado)"]] },
-  { title: "Produtos", items: [["products.view", "Ver catálogo"], ["products.sell", "Registrar vendas"], ["products.return", "Registrar devolução"], ["products.stock_view", "Consultar estoque"], ["products.stock", "Alterar estoque"], ["products.manage", "Cadastrar produtos"], ["products.prices", "Alterar preços"]] },
-  { title: "Tarefas", items: [["tasks.own", "Ver as próprias tarefas (sempre ativo)"], ["tasks.create", "Criar tarefas"], ["tasks.delegate", "Delegar a outras pessoas"], ["tasks.edit", "Editar tarefas que criou"], ["tasks.view_team", "Acompanhar a equipe"], ["tasks.approve", "Aprovar conclusão"]] },
-  { title: "Equipe e conquistas", items: [["achievements.own", "Ver as próprias conquistas"], ["team.view", "Painel da equipe"], ["team.goals", "Metas individuais"]] },
-  { title: "Administração", items: [["users.manage", "Funcionários e permissões"], ["admin.catalog", "Serviços e equipe"], ["admin.schedules", "Cadeiras e horários"], ["admin.settings", "Configurações"], ["audit.view", "Auditoria"], ["data.export", "Exportar dados e backup"]] },
+  { title: "Painel", items: [["dashboard.own", "Ver o próprio painel"], ["dashboard.full", "Ver painel da empresa"]] },
+  { title: "Clientes", items: [["customers.view", "Ver clientes"], ["customers.manage", "Criar e editar"], ["customers.history", "Consultar histórico"], ["customers.edit_sensitive", "Editar dados sensíveis (email, CPF)"], ["customers.deactivate", "Desativar cliente"]] },
+  { title: "Agendamentos", items: [["agenda.view_own", "Ver a própria agenda"], ["agenda.view_all", "Ver agenda da equipe"], ["agenda.manage_own", "Operar a própria agenda"], ["agenda.manage", "Operar agenda de todos"], ["agenda.create", "Criar agendamento"], ["agenda.edit", "Editar e reagendar"], ["agenda.cancel", "Cancelar agendamento"], ["agenda.block", "Bloquear horários"], ["agenda.retroactive", "Lançar no passado"]] },
+  { title: "Retornos (Garantia, Manutenção, Outros)", items: [["returns.own", "Ver os próprios retornos"], ["returns.view_all", "Ver retornos da equipe"], ["returns.contact", "Registrar contato com cliente"], ["returns.rules", "Definir regras automáticas"], ["returns.manage", "Gerenciar todos os retornos"]] },
+  { title: "Orçamentos", items: [["quotes.view", "Ver orçamentos"], ["quotes.manage", "Criar, editar, enviar e aprovar"]] },
+  { title: "Financeiro", items: [["finance.own", "Ver o próprio financeiro"], ["finance.view", "Ver financeiro da empresa"], ["finance.manage", "Lançar e pagar despesas"], ["finance.payables_view", "Ver contas a pagar"], ["finance.receivables_view", "Ver contas a receber"], ["finance.dre_view", "Ver DRE (resultado)"], ["finance.close_period", "Fechar período"], ["finance.goals", "Definir meta de faturamento"], ["payments.register", "Registrar pagamentos de atendimentos"], ["payments.confirm", "Conciliar pagamentos"], ["payments.reverse", "Estornar pagamentos"], ["cash.manage", "Operar o caixa"]] },
+  { title: "Relatórios e Gráficos", items: [["reports.view", "Ver relatórios"], ["reports.export", "Exportar dados"], ["charts.view", "Ver gráficos (não desbloqueia financeiro)"]] },
+  { title: "Administração (Apenas Administrador)", items: [["users.manage", "Convidar e gerenciar a equipe"], ["admin.settings", "Configurações da empresa"], ["data.import", "Importar dados em lote"], ["audit.view", "Auditoria de alterações"], ["data.export", "Backup completo"]] },
 ];
 
 export interface Ctx {
