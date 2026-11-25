@@ -1,55 +1,133 @@
-# MARFIM Studio OS
+# 🦅 Eagle Detetizadora OS
 
-Sistema web privado de gestão da barbearia MARFIM Studio: agenda, atendimentos, cobrança, caixa, financeiro (contas a pagar/receber, DRE gerencial, fluxo de caixa, metas, fechamento mensal), relatórios com indicadores rastreáveis, administração totalmente editável, auditoria e exportação de dados.
+Sistema de gestão interna para pest control (dedetização) baseado no MARFIM Studio OS.
 
-Stack: Next.js 16 (App Router) + TypeScript · PostgreSQL (migrações SQL em `db/migrations`) · sem serviços externos pagos.
-Desenvolvimento e demonstração rodam com PostgreSQL embarcado (PGlite, em arquivo). Produção exige `DATABASE_URL` (ex.: Supabase).
+## ✨ Funcionalidades
 
-## Rodar localmente
+- **Autenticação** - Email + código de 6 dígitos
+- **Clientes** - CRUD com histórico de serviços
+- **Agenda** - Calendar view com retornos automáticos
+- **Retornos** - Garantia, manutenção, outros
+- **Orçamentos** - Com itens e impressão
+- **Ordens de Serviço** - Ligadas a agendamentos
+- **Financeiro** - Receitas, gastos, saldo
+- **Equipe** - Perfis e permissões por módulo
+- **Auditoria** - Trilha de todas as operações
 
-Requisitos: Node 22+ (testado em Node 24).
+## 🛠️ Stack
 
-```powershell
+- **Frontend:** Next.js 16 App Router, React 19, TypeScript
+- **Backend:** Next.js Server Actions, Node.js
+- **Database:** PGlite (dev) ou Postgres/Supabase (prod)
+- **CSS:** Single file, sem dependências
+- **Auth:** Email + código
+
+## 🚀 Setup Local
+
+```bash
+# Clone
+git clone https://github.com/eagleadministrativo-dotcom/Eagle-Detetizadora.git
+cd Eagle-Detetizadora
+
+# Install
 npm install
-npm run dev            # http://localhost:3000 — na 1ª vez abre a tela "Primeira configuração"
+
+# Run migrations
+npm run db:migrate
+
+# Dev mode
+npm run dev
+
+# Ou demo com dados pré-carregados
+npm run dev:demo
+# → http://localhost:3000
+# admin@demo.eagle.local / Demo@Eagle2026
 ```
 
-### Modo demonstração (dados fictícios)
+## 📋 Perfis e Permissões
 
-```powershell
-npm run demo           # cria .data/demo com 30 dias de movimento fictício (use -- --reset para recriar)
-npm run dev:demo       # abre o sistema usando essa base
+| Perfil | Acesso |
+|--------|--------|
+| Administrador | Tudo |
+| Gerente | Operações + Financeiro |
+| Vendedora/Gestora | Clientes, Agenda, Orçamentos, OS, Retornos, Financeiro (view), Gráficos |
+| Vendedor | Clientes, Agenda, Retornos, Orçamentos, Gráficos |
+| Técnico | Própria agenda, Retornos |
+| Colaborador | Apenas módulos configurados |
+| Pendente | Sem acesso até confirmação |
+
+## 🔧 Variáveis de Ambiente
+
+```
+DATABASE_URL=postgresql://...
+MAIL_HOST=smtp.gmail.com (opcional)
+MAIL_PORT=587
+MAIL_USER=...
+MAIL_PASS=...
 ```
 
-Logins de demonstração (senha `Demo@Marfim2026`): `dono@demo.marfim.local`, `gerente@demo.marfim.local`, `rafael@demo.marfim.local` (barbeiro), `diego@demo.marfim.local` (barbeiro), `contador@demo.marfim.local`.
-**Nunca use a base de demonstração em produção.**
+Ver `.env.example` para todas as variáveis.
 
-## Qualidade
+## 📦 Deploy
 
-```powershell
-npm test               # 58 testes: regras financeiras, concorrência, permissões, segurança, simulação de um mês
-npm run typecheck
-npm run lint
+Veja `DEPLOY.md` para instruções completas de deploy no Vercel + Supabase.
+
+```bash
+# Production build
+npm run build
+
+# Production server
+npm start
+```
+
+## 🗂️ Estrutura
+
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── (app)/             # Layout autenticado
+│   ├── actions/           # Server actions
+│   └── styles.css         # CSS único
+├── server/
+│   ├── services/          # Business logic
+│   ├── db.ts              # Database connection
+│   ├── permissions.ts     # Roles & modules
+│   └── session.ts         # Auth middleware
+├── components/            # React components
+└── lib/                   # Utilities
+```
+
+## 📝 Commits Principais
+
+- Reescrever permissions com módulos da Eagle
+- Services para Retornos, Orçamentos, OS, Financeiro
+- UI: Retornos, Orçamentos, Financeiro, OS
+- Remover barbershop (MARFIM)
+- Deploy documentation
+
+## 🐛 Troubleshooting
+
+**Erro de migração:**
+```bash
+rm -rf .data
+npm run db:migrate
+```
+
+**Erro de build:**
+```bash
+npm run clean
+npm install
 npm run build
 ```
 
-## Documentação (`docs/`)
+## 📞 Suporte
 
-| Arquivo | Conteúdo |
-|---|---|
-| `DECISOES-TOMADAS.md` | Decisões de produto/engenharia tomadas durante a construção (leia primeiro) |
-| `ARQUITETURA.md` | Como o sistema está organizado e por quê |
-| `DESIGN-SYSTEM.md` | Identidade visual, tokens, componentes e limitações |
-| `VALIDACAO.md` | Critérios de aceite do MVP × evidências (testes e verificações) e o que ainda falta |
-| `OPERACAO.md` | Publicar na Vercel + Supabase, variáveis, backup, restauração, rotinas, custos |
+Funcionalidades externas ainda não integradas:
+- Google Calendar
+- NF-e
+- WhatsApp Business
+- Email (opcional)
 
-## Estrutura
+## 📄 Licença
 
-```
-db/migrations/        schema SQL versionado (aplicado automaticamente ao iniciar)
-src/server/           regras de negócio (serviços), autenticação, permissões, banco
-src/server/services/  agenda, atendimento, pagamentos, caixa, financeiro, relatórios, fechamento, automações
-src/app/              telas (Next.js) e ações de formulário
-src/lib/              dinheiro (centavos) e datas (America/Sao_Paulo)
-scripts/              demo, migração
-```
+Código baseado em MARFIM Studio OS, adaptado para Eagle Detetizadora.
