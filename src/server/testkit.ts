@@ -32,14 +32,14 @@ export const ctxFor = (userId: string, unitId: string, role: Role, staffId: stri
 export async function makeWorld(): Promise<World> {
   const db = await createDb({ dataDir: "memory://" });
   const { unitId, ownerId, staffId } = await setupInitial(db, { orgName: "Teste", unitName: "Unidade Teste", ownerName: "Dono", email: "dono@teste.com", password: "SenhaForte123" });
-  const owner = ctxFor(ownerId, unitId, "proprietario", staffId);
+  const owner = ctxFor(ownerId, unitId, "administrador", staffId);
   await db.query("insert into chairs(unit_id,name) values ($1,'Cadeira 2')", [unitId]);
   const b1 = await saveStaff(db, owner, { name: "Barbeiro Um", contractType: "pj" });
   const b2 = await saveStaff(db, owner, { name: "Barbeiro Dois", contractType: "clt" });
-  const u1 = await createUser(db, owner, { email: "b1@teste.com", fullName: "Barbeiro Um", role: "barbeiro", password: "SenhaForte123", staffId: b1 });
-  const u2 = await createUser(db, owner, { email: "b2@teste.com", fullName: "Barbeiro Dois", role: "barbeiro", password: "SenhaForte123", staffId: b2 });
+  const u1 = await createUser(db, owner, { email: "b1@teste.com", fullName: "Barbeiro Um", role: "tecnico", password: "SenhaForte123", staffId: b1 });
+  const u2 = await createUser(db, owner, { email: "b2@teste.com", fullName: "Barbeiro Dois", role: "tecnico", password: "SenhaForte123", staffId: b2 });
   const um = await createUser(db, owner, { email: "g@teste.com", fullName: "Gerente", role: "gerente", password: "SenhaForte123" });
-  const uc = await createUser(db, owner, { email: "c@teste.com", fullName: "Contador", role: "contador", password: "SenhaForte123" });
+  const uc = await createUser(db, owner, { email: "c@teste.com", fullName: "gerente", role: "gerente", password: "SenhaForte123" });
   const serviceId = await saveService(db, owner, { name: "Corte", durationMinutes: 30, priceCents: 6000 });
   const service2Id = await saveService(db, owner, { name: "Barba", durationMinutes: 30, priceCents: 4000 });
   const customerId = await saveCustomer(db, owner, { name: "Cliente A", phone: "41999990001" });
@@ -50,10 +50,10 @@ export async function makeWorld(): Promise<World> {
   await updateSettings(db, owner, { business_hours: {} });
   return {
     db, unitId, owner,
-    barber: ctxFor(u1, unitId, "barbeiro", b1),
-    barber2: ctxFor(u2, unitId, "barbeiro", b2),
+    barber: ctxFor(u1, unitId, "tecnico", b1),
+    barber2: ctxFor(u2, unitId, "tecnico", b2),
     manager: ctxFor(um, unitId, "gerente"),
-    accountant: ctxFor(uc, unitId, "contador"),
+    accountant: ctxFor(uc, unitId, "gerente"),
     ownerStaffId: staffId, barberStaffId: b1, barber2StaffId: b2, serviceId, service2Id, customerId, customer2Id, chairs, methods, accounts,
   };
 }

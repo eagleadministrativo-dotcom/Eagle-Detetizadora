@@ -89,7 +89,7 @@ export async function applyProfile(db: Db, ctx: Ctx, userId: string, profileId: 
     await target(q, ctx, userId);
     const [p] = await q<{ base_role: Role; permissions: string[] }>("select base_role, permissions from access_profiles where id=$1 and unit_id=$2", [requireUuid(profileId, "Perfil"), ctx.unitId]);
     if (!p) throw new DomainError("not_found", "Perfil não encontrado.");
-    if (p.base_role === "gerente" && ctx.role !== "proprietario") throw new ForbiddenError("Só o proprietário define gerentes.");
+    if (p.base_role === "gerente" && ctx.role !== "administrador") throw new ForbiddenError("Só o proprietário define gerentes.");
     await q("update user_units set role=$3 where user_id=$1 and unit_id=$2", [userId, ctx.unitId, p.base_role]);
     return writePermissionsTx(q, ctx, userId, p.base_role, p.permissions, profileId);
   });

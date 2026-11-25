@@ -14,7 +14,7 @@ import { runRecordJobs } from "./achievements";
 import { processEvents } from "./events";
 
 const SYSTEM_USER = "00000000-0000-0000-0000-000000000000";
-export const systemCtx = (unitId: string): Ctx => ({ userId: SYSTEM_USER, unitId, role: "proprietario", perms: buildPerms("proprietario", []) });
+export const systemCtx = (unitId: string): Ctx => ({ userId: SYSTEM_USER, unitId, role: "administrador", perms: buildPerms("administrador", []) });
 
 async function notify(db: Db, unitId: string, kind: string, severity: string, message: string, dedupe: string, ref?: [string, string]) {
   const r = await db.query("insert into notifications(unit_id,kind,severity,message,ref_entity,ref_id,dedupe_key) values ($1,$2,$3,$4,$5,$6,$7) on conflict (dedupe_key) do nothing returning id", [unitId, kind, severity, message, ref?.[0] ?? null, ref?.[1] ?? null, dedupe]);

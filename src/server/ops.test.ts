@@ -13,7 +13,7 @@ beforeAll(async () => {
   const r = await setupInitial(db, { orgName: "T", unitName: "U", ownerName: "Dono", email: "dono@ops.com", password: "SenhaForte123" });
   ownerId = r.ownerId; unitId = r.unitId;
 });
-const owner = () => ({ userId: ownerId, unitId, role: "proprietario" as const, staffId: null, perms: buildPerms("proprietario", []) });
+const owner = () => ({ userId: ownerId, unitId, role: "administrador" as const, staffId: null, perms: buildPerms("administrador", []) });
 
 describe("códigos de recuperação do MFA", () => {
   it("só gera com MFA ativo, cada código vale uma vez e gerar de novo invalida os antigos", async () => {

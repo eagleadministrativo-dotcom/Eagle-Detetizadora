@@ -15,8 +15,8 @@ beforeAll(async () => {
   const r = await setupInitial(db, { orgName: "T", unitName: "U", ownerName: "Dono", email: "dono@t.com", password: "SenhaForte123" });
   ownerId = r.ownerId;
   unitId = r.unitId;
-  const owner = { userId: ownerId, unitId, role: "proprietario" as const, perms: buildPerms("proprietario", []) };
-  barberId = (await createUser(db, owner, { email: "b@t.com", fullName: "Barbeiro", role: "barbeiro", password: "SenhaForte123" }));
+  const owner = { userId: ownerId, unitId, role: "administrador" as const, perms: buildPerms("administrador", []) };
+  barberId = (await createUser(db, owner, { email: "b@t.com", fullName: "tecnico", role: "tecnico", password: "SenhaForte123" }));
 });
 
 describe("notificações push", () => {
@@ -29,7 +29,7 @@ describe("notificações push", () => {
   it("envia só ao proprietário/gerente, uma única vez, e remove inscrição expirada", async () => {
     await saveSubscription(db, ownerId, sub("dono"));
     await saveSubscription(db, ownerId, sub("morta"));
-    await saveSubscription(db, barberId, sub("barbeiro"));
+    await saveSubscription(db, barberId, sub("tecnico"));
     await saveSubscription(db, ownerId, sub("dono")); // repetir não duplica
     expect(await countSubscriptions(db, ownerId)).toBe(2);
 

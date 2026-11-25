@@ -92,7 +92,7 @@ describe("permissões individuais", () => {
     await expect(setUserPermissions(w.db, w.barber, w.barber2.userId, [])).rejects.toThrow();
   });
   it("perfil salvo é aplicado e a agenda respeita criar/editar/cancelar em separado", async () => {
-    const id = await saveProfile(w.db, w.owner, { name: "Só consulta", baseRole: "barbeiro", permissions: ["agenda.view_own"] });
+    const id = await saveProfile(w.db, w.owner, { name: "Só consulta", baseRole: "tecnico", permissions: ["agenda.view_own"] });
     await applyProfile(w.db, w.owner, w.barber.userId, id);
     const noCancel = asUser(w.barber, [], ["agenda.cancel"]);
     const ap = await createAppointment(w.db, noCancel, { customerId: w.customerId, staffId: w.barberStaffId, startsAt: atLocal(addDays(today, 2), "10:00"), serviceIds: [w.serviceId] });
@@ -100,7 +100,7 @@ describe("permissões individuais", () => {
     await expect(createAppointment(w.db, asUser(w.barber, [], ["agenda.create"]), { customerId: w.customerId, staffId: w.barberStaffId, startsAt: atLocal(addDays(today, 2), "12:00"), serviceIds: [w.serviceId] })).rejects.toThrow();
   });
   it("permissões restritivas não afetam o proprietário", () => {
-    expect(buildPerms("proprietario", [{ permission: "users.manage", granted: false }]).has("users.manage")).toBe(true);
+    expect(buildPerms("administrador", [{ permission: "users.manage", granted: false }]).has("users.manage")).toBe(true);
   });
 });
 

@@ -54,7 +54,7 @@ export async function saveStaffAction(fd: FormData) {
     const staffId = await saveStaff(db, ctx, { id: id ?? undefined, name: str(fd, "name"), phone: optStr(fd, "phone"), contractType: optStr(fd, "contractType"), color: str(fd, "color") || "#8B6B4A", isActive: id ? bool(fd, "isActive") : true, schedules });
     const email = optStr(fd, "inviteEmail");
     if (!email) return "Profissional salvo.";
-    const r = await createInvite(db, ctx, { email, fullName: str(fd, "name"), role: "barbeiro", staffId });
+    const r = await createInvite(db, ctx, { email, fullName: str(fd, "name"), role: "tecnico", staffId });
     return r.sent ? "Profissional salvo e convite enviado por e-mail." : `Profissional salvo e convite criado. O e-mail não foi enviado: passe o link ${appUrl()}/cadastro para a pessoa.`;
   });
 }

@@ -18,7 +18,7 @@ beforeAll(async () => {
   db = await createDb({ dataDir: "memory://" });
   ({ unitId } = await seedDemo(db));
   const [u] = await db.query<{ id: string }>("select id from users where email=$1", [DEMO_USERS.owner]);
-  owner = { userId: u.id, unitId, role: "proprietario", perms: buildPerms("proprietario", []) };
+  owner = { userId: u.id, unitId, role: "administrador", perms: buildPerms("administrador", []) };
 }, 240000);
 
 const one = async <T,>(sql: string, p: unknown[] = []) => (await db.query<T>(sql, p))[0];
@@ -129,7 +129,7 @@ describe("backup lógico e restauração", () => {
     const db2 = await createDb({ dataDir: "memory://" });
     await expect(restoreBackup(db2, backup.json, DEMO_USERS.owner, "NovaSenhaForte99")).resolves.toBeTruthy();
     const [u2] = await db2.query<{ id: string }>("select id from users where email=$1", [DEMO_USERS.owner]);
-    const owner2: Ctx = { userId: u2.id, unitId, role: "proprietario", perms: buildPerms("proprietario", []) };
+    const owner2: Ctx = { userId: u2.id, unitId, role: "administrador", perms: buildPerms("administrador", []) };
     const a = await getDashboard(db, owner, P);
     const b = await getDashboard(db2, owner2, P);
     for (const key of ["revenue", "attendances", "receipts_registered", "receipts_confirmed", "receipts_settled", "operating_result", "cash_balance", "receivables_open", "payables_open"]) {
@@ -139,7 +139,7 @@ describe("backup lógico e restauração", () => {
     // só o proprietário informado consegue entrar; os demais têm acesso bloqueado até redefinição
     const { login } = await import("./auth");
     await expect(login(db2, DEMO_USERS.owner, "NovaSenhaForte99")).resolves.toBeTruthy();
-    await expect(login(db2, DEMO_USERS.barber1, "Demo@Marfim2026")).rejects.toThrow();
+    await expect(login(db2, DEMO_USERS.tech1, "Demo@Eagle2026")).rejects.toThrow();
     await expect(restoreBackup(db2, backup.json, DEMO_USERS.owner, "NovaSenhaForte99")).rejects.toThrow(/vazio/);
     const [aud] = await db2.query<{ n: number }>("select count(*)::bigint as n from audit_logs");
     expect(aud.n).toBeGreaterThan(100);

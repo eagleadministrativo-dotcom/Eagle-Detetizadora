@@ -181,7 +181,7 @@ describe("atendimento, cobrança e caixa", () => {
     const { receivableId } = await completeAttendance(w.db, w.barber, att);
     expect(await msg(registerPayment(w.db, w.barber, { receivableId, methodId: w.methods.pix, amountCents: 4000, idempotencyKey: key() }))).toMatch(/permissão/);
     const { ctxFor } = await import("./testkit");
-    const barberPay = ctxFor(w.barber.userId, w.unitId, "barbeiro", w.barberStaffId, [{ permission: "payments.register", granted: true }]);
+    const barberPay = ctxFor(w.barber.userId, w.unitId, "tecnico", w.barberStaffId, [{ permission: "payments.register", granted: true }]);
     await registerPayment(w.db, barberPay, { receivableId, methodId: w.methods.pix, amountCents: 4000, idempotencyKey: key() });
     const rec = await listReceivables(w.db, w.barber, {});
     expect(rec.rows.every((r) => r.staff_name === "Barbeiro Um")).toBe(true);

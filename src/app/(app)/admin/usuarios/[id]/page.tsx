@@ -21,13 +21,13 @@ export default async function AccessPage({ params, searchParams }: { params: Pro
   let a;
   try { a = await getUserAccess(db, ctx, id); } catch (e) { if (isDomainError(e)) notFound(); throw e; }
   const profiles = await listProfiles(db, ctx);
-  const locked = a.user.role === "proprietario" || id === ctx.userId;
+  const locked = a.user.role === "administrador" || id === ctx.userId;
   const screens = [["Agenda", a.perms.has("agenda.view_own") || a.perms.has("agenda.view_all")], ["Atendimentos", a.perms.has("attendance.view_own") || a.perms.has("attendance.view_all")], ["Clientes", a.perms.has("customers.view")], ["Tarefas", true], ["Retornos", a.perms.has("returns.own") || a.perms.has("returns.view_all")], ["Meu Financeiro", a.perms.has("finance.own")], ["Conquistas", a.perms.has("achievements.own")], ["Produtos", a.perms.has("products.view") || a.perms.has("products.sell")], ["Comissões", a.perms.has("commissions.view_all")], ["Painel da equipe", a.perms.has("team.view")], ["Financeiro geral", a.perms.has("finance.view")], ["Caixa", a.perms.has("cash.manage")], ["Relatórios", a.perms.has("reports.view")], ["Administração", ["admin.catalog", "admin.schedules", "admin.settings", "users.manage"].some((k) => a.perms.has(k as never))]] as const;
   return (
     <>
       <PageHead title={a.user.full_name} sub={<>{a.user.email} · {ROLE_LABEL[a.user.role]}{profiles.find((x) => x.id === a.user.profile_id) ? ` · perfil ${profiles.find((x) => x.id === a.user.profile_id)!.name}` : ""}</>}><Link className="btn ghost" href="/admin/usuarios">Voltar</Link></PageHead>
       <Flash ok={sp.ok} erro={sp.erro} />
-      <section className="card stack"><h2>Prévia do acesso</h2><div className="row">{screens.map(([n, on]) => <Badge key={n} tone={on ? "ok" : ""}>{n}{on ? "" : ": não"}</Badge>)}</div>{["barbeiro"].includes(a.user.role) && !a.user.staff_id ? <small className="late">Sem vínculo com um profissional: agenda, retornos e financeiro pessoais ficam vazios.</small> : null}</section>
+      <section className="card stack"><h2>Prévia do acesso</h2><div className="row">{screens.map(([n, on]) => <Badge key={n} tone={on ? "ok" : ""}>{n}{on ? "" : ": não"}</Badge>)}</div>{["tecnico"].includes(a.user.role) && !a.user.staff_id ? <small className="late">Sem vínculo com um profissional: agenda, retornos e financeiro pessoais ficam vazios.</small> : null}</section>
       {locked ? <div className="alert">{id === ctx.userId ? "Você não pode alterar as suas próprias permissões." : "O acesso do proprietário é total e não pode ser reduzido."}</div> : (
         <>
           {profiles.length ? <ConfirmAction label="Aplicar um perfil salvo" tone="neutral" action={applyProfileAction} submit="Aplicar perfil" warn="Substitui as permissões atuais."><input type="hidden" name="id" value={id} /><Field label="Perfil"><select name="profileId">{profiles.map((x) => <option key={x.id} value={x.id}>{x.name} ({ROLE_LABEL[x.base_role]}, {x.permissions.length} permissões)</option>)}</select></Field></ConfirmAction> : null}

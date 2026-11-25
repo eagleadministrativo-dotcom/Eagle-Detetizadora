@@ -23,9 +23,9 @@ describe("senha e TOTP", () => {
     expect(h).not.toContain("abc12345678");
     expect(verifyPassword("abc12345678", h)).toBe(true);
     expect(verifyPassword("outra", h)).toBe(false);
-    const owner = { userId: ownerId, unitId, role: "proprietario" as const, perms: buildPerms("proprietario", []) };
-    expect(await msg(createUser(db, owner, { email: "x@t.com", fullName: "X", role: "barbeiro", password: "curta" }))).toMatch(/10 caracteres/);
-    expect(await msg(createUser(db, owner, { email: "x@t.com", fullName: "X", role: "barbeiro", password: "somenteletras" }))).toMatch(/letras e números/);
+    const owner = { userId: ownerId, unitId, role: "administrador" as const, perms: buildPerms("administrador", []) };
+    expect(await msg(createUser(db, owner, { email: "x@t.com", fullName: "X", role: "tecnico", password: "curta" }))).toMatch(/10 caracteres/);
+    expect(await msg(createUser(db, owner, { email: "x@t.com", fullName: "X", role: "tecnico", password: "somenteletras" }))).toMatch(/letras e números/);
   });
   it("TOTP bate com o vetor da RFC 6238", () => {
     const secret = base32Encode(Buffer.from("12345678901234567890"));
@@ -55,7 +55,7 @@ describe("login, bloqueio, MFA e sessão", () => {
   });
 
   it("proprietário em produção precisa ativar MFA; sessão só vale depois do código", async () => {
-    const owner = { userId: ownerId, unitId, role: "proprietario" as const, perms: buildPerms("proprietario", []) };
+    const owner = { userId: ownerId, unitId, role: "administrador" as const, perms: buildPerms("administrador", []) };
     await updateSettings(db, owner, { mfa_required: true });
     const l = await login(db, "dono@t.com", "SenhaForte123");
     expect(l.needsMfaSetup).toBe(true);
@@ -90,10 +90,10 @@ describe("login, bloqueio, MFA e sessão", () => {
   });
 
   it("trocar a senha encerra todas as sessões; usuário desativado perde o acesso", async () => {
-    const owner = { userId: ownerId, unitId, role: "proprietario" as const, perms: buildPerms("proprietario", []) };
-    const uid = await createUser(db, owner, { email: "b@t.com", fullName: "B", role: "barbeiro", password: "SenhaForte123" });
+    const owner = { userId: ownerId, unitId, role: "administrador" as const, perms: buildPerms("administrador", []) };
+    const uid = await createUser(db, owner, { email: "b@t.com", fullName: "B", role: "tecnico", password: "SenhaForte123" });
     const l = await login(db, "b@t.com", "SenhaForte123");
-    expect((await getSession(db, l.token))?.ctx.role).toBe("barbeiro");
+    expect((await getSession(db, l.token))?.ctx.role).toBe("tecnico");
     await changePassword(db, uid, "SenhaForte123", "NovaSenha4567");
     expect(await getSession(db, l.token)).toBeNull();
     const l2 = await login(db, "b@t.com", "NovaSenha4567");
@@ -103,25 +103,25 @@ describe("login, bloqueio, MFA e sessão", () => {
   });
 
   it("nunca fica sem proprietário ativo", async () => {
-    const owner = { userId: ownerId, unitId, role: "proprietario" as const, perms: buildPerms("proprietario", []) };
+    const owner = { userId: ownerId, unitId, role: "administrador" as const, perms: buildPerms("administrador", []) };
     expect(await msg(updateUser(db, owner, ownerId, { role: "gerente" }))).toMatch(/pelo menos um proprietário/);
     expect(await msg(updateUser(db, owner, ownerId, { isActive: false }))).toMatch(/pelo menos um proprietário/);
-    expect((await listUsers(db, owner)).some((u) => u.role === "proprietario")).toBe(true);
+    expect((await listUsers(db, owner)).some((u) => u.role === "administrador")).toBe(true);
   });
 });
 
 describe("matriz de permissões (V1.2)", () => {
-  it("barbeiro não tem nenhuma permissão financeira ou administrativa", () => {
+  it("tecnico não tem nenhuma permissão financeira ou administrativa", () => {
     const forbidden = ["finance.view", "finance.manage", "finance.close_period", "reports.view", "reports.export", "admin.catalog", "admin.settings", "users.manage", "audit.view", "data.export", "payments.register", "payments.confirm", "payments.reverse", "cash.manage", "dashboard.full"] as const;
-    for (const p of forbidden) expect(ROLE_PERMISSIONS.barbeiro.has(p)).toBe(false);
+    for (const p of forbidden) expect(ROLE_PERMISSIONS.tecnico.has(p)).toBe(false);
   });
-  it("contador só lê; gerente não altera permissões nem fecha período; estorno é só do proprietário", () => {
-    for (const p of ["finance.manage", "payments.register", "cash.manage", "agenda.manage", "admin.catalog", "users.manage"] as const) expect(ROLE_PERMISSIONS.contador.has(p)).toBe(false);
+  it("gerente só lê; gerente não altera permissões nem fecha período; estorno é só do administrador", () => {
+    for (const p of ["finance.manage", "payments.register", "cash.manage", "agenda.manage", "admin.catalog", "users.manage"] as const) expect(ROLE_PERMISSIONS.gerente.has(p)).toBe(false);
     for (const p of ["users.manage", "finance.close_period", "payments.reverse", "admin.settings", "data.export"] as const) expect(ROLE_PERMISSIONS.gerente.has(p)).toBe(false);
-    expect(ROLE_PERMISSIONS.proprietario.has("payments.reverse")).toBe(true);
+    expect(ROLE_PERMISSIONS.administrador.has("payments.reverse")).toBe(true);
   });
   it("permissão individual concedida vale; permissões desconhecidas são ignoradas", () => {
-    const p = buildPerms("barbeiro", [{ permission: "payments.register", granted: true }, { permission: "inventada", granted: true }]);
+    const p = buildPerms("tecnico", [{ permission: "payments.register", granted: true }, { permission: "inventada", granted: true }]);
     expect(p.has("payments.register")).toBe(true);
     expect((p as Set<string>).has("inventada")).toBe(false);
   });

@@ -239,7 +239,7 @@ export async function approveSettlement(db: Db, ctx: Ctx, i: { staffId: string; 
   return db.tx(async (q) => {
     const [s] = await q<{ name: string; user_id: string | null }>("select name, user_id from staff where id=$1 and unit_id=$2 for update", [requireUuid(i.staffId, "Profissional"), ctx.unitId]);
     if (!s) throw new DomainError("not_found", "Profissional não encontrado.");
-    if (s.user_id === ctx.userId && ctx.role !== "proprietario") throw new ForbiddenError("Você não pode aprovar o próprio repasse.");
+    if (s.user_id === ctx.userId && ctx.role !== "administrador") throw new ForbiddenError("Você não pode aprovar o próprio repasse.");
     await assertPeriodOpen(q, ctx.unitId, i.period.end);
     const rows = await q<{ id: string; amount_cents: number }>(
       `select e.id, e.amount_cents ${FROM} where e.unit_id=$1 and e.staff_id=$2 and e.status='gerada' and r.status='ativo' and ${DUE} and e.reference_at >= $3 and e.reference_at < $4 for update of e`, [ctx.unitId, i.staffId, dayStartUtc(i.period.start), dayEndUtc(i.period.end)]);

@@ -177,8 +177,8 @@ export async function seedDemo(db: Db) {
     await db.query("update commission_entries set reference_at=$2 where attendance_id=$1", [a.id, a.finished_at]);
   }
   for (const [staffId, productId, quantity] of [[tech1, inseticida, 2], [tech2, equipamento, 1], [tech1, equipamento, 1]] as const) await sellProducts(db, owner, { staffId, items: [{ productId, quantity }], idempotencyKey: `demo-sale-${staffId}-${productId}` });
-  await createTask(db, owner, { title: "Higienizar cadeiras e bancadas", assignees: [uid(DEMO_USERS.barber1)], priority: "alta", category: "Limpeza", dueDate: t0, recurrence: { kind: "dias", n: 1 } });
-  await createTask(db, owner, { title: "Conferir estoque de produtos", assignees: [uid(DEMO_USERS.barber1), uid(DEMO_USERS.barber2)], mode: "coletiva", category: "Estoque", dueDate: addDays(t0, 2) });
+  await createTask(db, owner, { title: "Higienizar cadeiras e bancadas", assignees: [uid(DEMO_USERS.tech1)], priority: "alta", category: "Limpeza", dueDate: t0, recurrence: { kind: "dias", n: 1 } });
+  await createTask(db, owner, { title: "Conferir estoque de produtos", assignees: [uid(DEMO_USERS.tech1), uid(DEMO_USERS.tech2)], mode: "coletiva", category: "Estoque", dueDate: addDays(t0, 2) });
   await createTask(db, owner, { title: "Enviar documentos ao contador", assignees: [uid(DEMO_USERS.manager)], priority: "urgente", requiresApproval: true, dueDate: addDays(t0, -1) });
   await createTask(db, owner, { title: "Revisar metas do mês", assignees: [ownerId], dueDate: addDays(t0, 3) });
   for (const [metric, target] of [["atendimentos", 80], ["receita_servicos", 600000]] as const) await saveStaffGoal(db, owner, { staffId: tech1, metric, month: t0.slice(0, 7), target });

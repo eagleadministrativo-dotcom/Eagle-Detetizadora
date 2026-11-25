@@ -12,7 +12,7 @@ import { createInvite, finishPasswordReset, finishSignup, flowInfo, listInvites,
 const OUT = fs.mkdtempSync(path.join(os.tmpdir(), "marfim-mail-"));
 process.env.MAIL_OUTBOX_DIR = OUT;
 let db: Db, ownerId: string, unitId: string;
-const owner = () => ({ userId: ownerId, unitId, role: "proprietario" as const, staffId: null, perms: buildPerms("proprietario", []) });
+const owner = () => ({ userId: ownerId, unitId, role: "administrador" as const, staffId: null, perms: buildPerms("administrador", []) });
 const msg = async (p: Promise<unknown>) => p.then(() => "OK", (e) => (e as Error).message);
 /** Último código enviado para o e-mail (lido da caixa de saída de teste). */
 const lastCode = (email: string) => {
@@ -30,22 +30,22 @@ beforeAll(async () => {
 describe("cadastro por convite", () => {
   it("só o e-mail convidado, no perfil certo, recebe código; a pessoa cria a própria senha e entra", async () => {
     const staffId = await saveStaff(db, owner(), { name: "Barbeiro Novo" });
-    const inv = await createInvite(db, owner(), { email: "Novo@Conv.com", fullName: "Barbeiro Novo", role: "barbeiro", staffId });
+    const inv = await createInvite(db, owner(), { email: "Novo@Conv.com", fullName: "Barbeiro Novo", role: "tecnico", staffId });
     expect(inv.sent).toBe(true);
     expect(mails("novo@conv.com")).toBe(1); // e-mail do convite
 
     // e-mail sem convite e perfil errado: mesma resposta, nenhum e-mail sai, código nunca confere
-    const f0 = await startSignup(db, "barbeiro", "estranho@conv.com");
+    const f0 = await startSignup(db, "tecnico", "estranho@conv.com");
     expect(mails("estranho@conv.com")).toBe(0);
     expect(await msg(verifyCode(db, f0, "123456"))).toMatch(/incorreto/);
     await startSignup(db, "dono", "novo@conv.com");
     expect(mails("novo@conv.com")).toBe(1);
 
-    const flow = await startSignup(db, "barbeiro", "novo@conv.com");
+    const flow = await startSignup(db, "tecnico", "novo@conv.com");
     const code = lastCode("novo@conv.com")!;
     expect(code).toMatch(/^\d{6}$/);
     const info = await flowInfo(db, flow);
-    expect(info).toMatchObject({ purpose: "cadastro", verified: false, fullName: "Barbeiro Novo", role: "barbeiro" });
+    expect(info).toMatchObject({ purpose: "cadastro", verified: false, fullName: "Barbeiro Novo", role: "tecnico" });
     expect(info!.email).not.toContain("novo@"); // mascarado na tela
     expect(await msg(finishSignup(db, flow, { fullName: "B", password: "SenhaForte123" }))).toMatch(/Confirme o código/);
     expect(await msg(verifyCode(db, flow, code === "000000" ? "111111" : "000000"))).toMatch(/Restam 4/);
@@ -56,7 +56,7 @@ describe("cadastro por convite", () => {
 
     const l = await login(db, "novo@conv.com", "MinhaSenha2026");
     const s = await getSession(db, l.token);
-    expect(s?.ctx.role).toBe("barbeiro");
+    expect(s?.ctx.role).toBe("tecnico");
     expect(s?.ctx.staffId).toBe(staffId);
     // o fluxo não pode ser reutilizado e o convite fica marcado como aceito
     expect(await msg(finishSignup(db, flow, { fullName: "X", password: "OutraSenha2026" }))).toMatch(/Confirme o código/);
@@ -64,7 +64,7 @@ describe("cadastro por convite", () => {
     const [n] = await db.query<{ n: number }>("select count(*)::bigint as n from notifications where kind='acesso_convite_aceito' and user_id=$1", [ownerId]);
     expect(n.n).toBe(1);
     // não dá para convidar de novo quem já tem acesso
-    expect(await msg(createInvite(db, owner(), { email: "novo@conv.com", fullName: "X", role: "barbeiro" }))).toMatch(/Já existe/);
+    expect(await msg(createInvite(db, owner(), { email: "novo@conv.com", fullName: "X", role: "tecnico" }))).toMatch(/Já existe/);
   });
 
   it("Administrador aceita gerente e contador; convite cancelado deixa de valer; 5 erros invalidam o código", async () => {
@@ -75,7 +75,7 @@ describe("cadastro por convite", () => {
     expect(await msg(verifyCode(db, flow, "000001"))).toMatch(/muitas vezes/);
     expect(await msg(verifyCode(db, flow, lastCode("ger@conv.com")!))).toMatch(/muitas vezes|Peça/);
 
-    const c = await createInvite(db, owner(), { email: "cont@conv.com", fullName: "Contador", role: "contador" });
+    const c = await createInvite(db, owner(), { email: "cont@conv.com", fullName: "gerente", role: "gerente" });
     const f2 = await startSignup(db, "admin", "cont@conv.com");
     await revokeInvite(db, owner(), c.id);
     expect(await msg(verifyCode(db, f2, lastCode("cont@conv.com")!))).toMatch(/expirou/);
@@ -83,13 +83,13 @@ describe("cadastro por convite", () => {
 
   it("só o proprietário convida outro dono", async () => {
     const ger = { userId: ownerId, unitId, role: "gerente" as const, staffId: null, perms: buildPerms("gerente", [{ permission: "users.manage", granted: true }]) };
-    expect(await msg(createInvite(db, ger, { email: "socio@conv.com", fullName: "Sócio", role: "proprietario" }))).toMatch(/mais acesso/);
-    await createInvite(db, owner(), { email: "socio@conv.com", fullName: "Sócio", role: "proprietario" });
+    expect(await msg(createInvite(db, ger, { email: "socio@conv.com", fullName: "Sócio", role: "administrador" }))).toMatch(/mais acesso/);
+    await createInvite(db, owner(), { email: "socio@conv.com", fullName: "Sócio", role: "administrador" });
     const f = await startSignup(db, "dono", "socio@conv.com");
     await verifyCode(db, f, lastCode("socio@conv.com")!);
     await finishSignup(db, f, { fullName: "Sócio", password: "SenhaDoSocio1" });
     const s = await getSession(db, (await login(db, "socio@conv.com", "SenhaDoSocio1")).token);
-    expect(s?.ctx.role).toBe("proprietario");
+    expect(s?.ctx.role).toBe("administrador");
   });
 });
 
@@ -123,7 +123,7 @@ describe("senha provisória + link por e-mail", () => {
   it("convidado entra com a provisória, recebe link, cria senha e só então entra", async () => {
     const { setTempPassword, sendAccessLink, openAccessLink } = await import("./services/invites");
     await setTempPassword(db, owner(), "Provisoria2026");
-    await createInvite(db, owner(), { email: "prov@conv.com", fullName: "Provisório", role: "barbeiro" });
+    await createInvite(db, owner(), { email: "prov@conv.com", fullName: "Provisório", role: "tecnico" });
     expect(await msg(login(db, "prov@conv.com", "errada123x"))).toMatch(/incorretos/);
     const r = await login(db, "prov@conv.com", "Provisoria2026");
     expect(r.token).toBe(""); // nenhuma sessão com a senha provisória

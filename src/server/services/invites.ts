@@ -24,11 +24,11 @@ const MAX_SENDS = 5;
 const RESEND_SEC = 45;
 const FINISH_MIN = 20;
 
-export type SignupChoice = "dono" | "barbeiro" | "admin";
+export type SignupChoice = "dono" | "tecnico" | "admin";
 export const SIGNUP_CHOICES: Record<SignupChoice, { label: string; sub: string; roles: Role[] }> = {
-  dono: { label: "Dono de barbearia", sub: "Acesso total: equipe, financeiro e configurações.", roles: ["proprietario"] },
-  barbeiro: { label: "Barbeiro colaborador", sub: "Sua agenda, seus atendimentos e seus resultados.", roles: ["barbeiro"] },
-  admin: { label: "Administrador", sub: "Gestão do dia a dia: agenda, caixa, equipe e relatórios.", roles: ["gerente", "contador"] },
+  dono: { label: "Dono da empresa", sub: "Acesso total: equipe, financeiro e configurações.", roles: ["administrador"] },
+  tecnico: { label: "Técnico de serviço", sub: "Sua agenda, seus atendimentos e seus resultados.", roles: ["tecnico"] },
+  admin: { label: "Administrador", sub: "Gestão do dia a dia: agenda, caixa, equipe e relatórios.", roles: ["gerente"] },
 };
 export const isChoice = (c: string): c is SignupChoice => c in SIGNUP_CHOICES;
 
@@ -55,13 +55,13 @@ export async function createInvite(db: Db, ctx: Ctx, i: InviteInput): Promise<{ 
   let perms: Permission[] | null = null;
   const id = await db.tx(async (q) => {
     let profileId: string | null = null;
-    if (i.profileId && role !== "proprietario") {
+    if (i.profileId && role !== "administrador") {
       const [p] = await q<{ base_role: Role; permissions: string[] }>("select base_role, permissions from access_profiles where id=$1 and unit_id=$2", [requireUuid(i.profileId, "Perfil"), ctx.unitId]);
       if (!p) throw new DomainError("not_found", "Perfil não encontrado.");
       role = p.base_role;
       perms = clean(p.permissions);
       profileId = i.profileId;
-    } else if (i.permissions && role !== "proprietario") perms = clean(i.permissions);
+    } else if (i.permissions && role !== "administrador") perms = clean(i.permissions);
     assertRoleGrant(ctx, role);
     if (perms) assertGrantable(ctx, perms, new Set());
     const [dup] = await q("select 1 from users where lower(email)=$1", [email]);
@@ -296,7 +296,7 @@ export async function finishSignup(db: Db, flow: string | undefined, i: { fullNa
     await notTempPassword(q, inv.unit_id, i.password);
     const [u] = await q<{ id: string }>("insert into users(email,full_name,password_hash) values ($1,$2,$3) returning id", [inv.email.toLowerCase(), fullName, hashPassword(i.password)]);
     await q("insert into user_units(user_id,unit_id,role,profile_id) values ($1,$2,$3,$4)", [u.id, inv.unit_id, inv.role, inv.profile_id]);
-    if (inv.permissions && inv.role !== "proprietario") {
+    if (inv.permissions && inv.role !== "administrador") {
       const want = new Set<string>(inv.permissions);
       want.add("tasks.own");
       for (const p of PERMISSIONS) {
