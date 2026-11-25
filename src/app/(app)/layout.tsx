@@ -36,46 +36,26 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // menu por tópicos: cada área aparece uma vez, junto das relacionadas
   const groups: NavGroup[] = [];
   const add = (title: string | undefined, items: (NavItem | false | null | undefined)[]) => { const list = items.filter((x): x is NavItem => !!x); if (list.length) groups.push({ title, items: list }); };
-  add(undefined, [(can(ctx, "dashboard.full") || can(ctx, "dashboard.own")) && { href: "/", label: can(ctx, "dashboard.full") ? "Visão geral" : "Meu dia", short: "Início" }]);
-  add("Atendimento", [
+  add(undefined, [(can(ctx, "dashboard.full") || can(ctx, "dashboard.own")) && { href: "/", label: can(ctx, "dashboard.full") ? "Painel" : "Meu dia", short: "Início" }]);
+  add("Dedetização", [
     (can(ctx, "agenda.view_all") || can(ctx, "agenda.view_own")) && { href: "/agenda", label: "Agenda" },
-    (can(ctx, "attendance.view_all") || can(ctx, "attendance.view_own")) && { href: "/atendimentos", label: "Atendimentos", short: "Atend." },
     can(ctx, "customers.view") && { href: "/clientes", label: "Clientes" },
-    seesReturns && { href: "/retornos", label: "Retornos", count: returns.vencido },
+    seesReturns && { href: "/retornos", label: "Retornos" },
+    (can(ctx, "quotes.view") || can(ctx, "quotes.manage")) && { href: "/orcamentos", label: "Orçamentos" },
+    can(ctx, "agenda.manage") && { href: "/os", label: "Ordens de Serviço" },
   ]);
   add("Equipe", [
     { href: "/tarefas", label: "Tarefas", count: tasks.open },
     can(ctx, "team.view") && { href: "/equipe", label: "Painel da equipe" },
-    can(ctx, "commissions.view_all") && { href: "/comissoes", label: "Comissões" },
   ]);
-  add("Meu desempenho", [
-    !!ctx.staffId && can(ctx, "finance.own") && { href: "/meu-financeiro", label: "Meu Financeiro" },
-    !!ctx.staffId && can(ctx, "achievements.own") && { href: "/conquistas", label: "Conquistas" },
-  ]);
-  add("Estoque e compras", [
-    (can(ctx, "products.view") || can(ctx, "products.sell") || can(ctx, "products.manage")) && { href: "/produtos", label: "Produtos" },
-    can(ctx, "purchases.manage") && { href: "/compras", label: "Compras" },
-  ]);
-  const fv = can(ctx, "finance.view"), cash = can(ctx, "cash.manage");
+  const fv = can(ctx, "finance.view");
   add("Financeiro", [
-    (fv || cash) && { href: "/financeiro", label: "Resumo" },
-    (fv || cash) && { href: "/financeiro/caixa", label: "Caixa" },
-    (fv || can(ctx, "finance.payables_view")) && { href: "/financeiro/pagar", label: "Contas a pagar" },
-    (fv || can(ctx, "finance.receivables_view")) && { href: "/financeiro/receber", label: "Contas a receber" },
-    fv && { href: "/financeiro/conciliacao", label: "Conciliação" },
-    fv && { href: "/financeiro/fluxo", label: "Fluxo de caixa" },
+    fv && { href: "/financeiro", label: "Resumo" },
+    can(ctx, "charts.view") && { href: "/graficos", label: "Gráficos" },
   ]);
-  add("Resultados", [
-    (fv || can(ctx, "finance.dre_view")) && { href: "/financeiro/dre", label: "DRE gerencial" },
-    fv && { href: "/financeiro/metas", label: "Metas e reservas" },
-    fv && { href: "/financeiro/fechamento", label: "Fechamento mensal" },
-    can(ctx, "reports.view") && { href: "/relatorios", label: "Indicadores" },
-  ]);
-  add("Cadastros", [
-    can(ctx, "admin.catalog") && { href: "/admin/servicos", label: "Serviços e preços" },
-    can(ctx, "admin.catalog") && { href: "/admin/equipe", label: "Profissionais" },
-    can(ctx, "admin.schedules") && { href: "/admin/cadeiras", label: "Cadeiras e horários" },
-    can(ctx, "admin.settings") && { href: "/admin/financeiro", label: "Pagamentos e contas" },
+  add("Configurações", [
+    can(ctx, "admin.catalog") && { href: "/admin/servicos", label: "Serviços" },
+    can(ctx, "admin.catalog") && { href: "/admin/equipe", label: "Equipe" },
   ]);
   add("Sistema", [
     can(ctx, "users.manage") && { href: "/admin/usuarios", label: "Usuários e permissões" },
@@ -94,19 +74,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const quick = [
     can(ctx, "agenda.create") && (can(ctx, "agenda.manage") || can(ctx, "agenda.manage_own")) && { title: "Novo agendamento", href: "/agenda/novo" },
     can(ctx, "customers.manage") && { title: "Novo cliente", href: "/clientes/novo" },
-    can(ctx, "products.sell") && { title: "Registrar venda", href: "/produtos/vender" },
     can(ctx, "tasks.create") && { title: "Nova tarefa", href: "/tarefas/nova" },
-    can(ctx, "purchases.manage") && { title: "Adicionar à lista de compras", href: "/compras#nova" },
-    seesReturns && { title: "Consultar retornos", href: "/retornos" },
-    can(ctx, "commissions.view_all") && { title: "Consultar comissões", href: "/comissoes" },
-    ctx.staffId && can(ctx, "finance.own") && { title: "Meu financeiro", href: "/meu-financeiro" },
+    can(ctx, "quotes.manage") && { title: "Novo orçamento", href: "/orcamentos/novo" },
+    seesReturns && { title: "Novo retorno", href: "/retornos/novo" },
+    fv && { title: "Novo lançamento financeiro", href: "/financeiro#nova" },
   ].filter((x): x is { title: string; href: string } => !!x).map((x) => ({ type: "Ações rápidas", sub: "", ...x }));
 
   return (
     <div className="shell">
       <a className="skip" href="#conteudo">Pular para o conteúdo</a>
       <aside className="side">
-        <Link className="brand" href="/" aria-label="MARFIM Studio OS — início"><span className="mark" aria-hidden="true">M</span><span className="name">MARFIM<small>Studio OS</small></span></Link>
+        <Link className="brand" href="/" aria-label="Eagle — início"><span className="mark" aria-hidden="true">E</span><span className="name">Eagle<small>Detetizadora</small></span></Link>
         <SideNav groups={groups} />
         <SideToggle />
       </aside>

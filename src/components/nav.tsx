@@ -19,8 +19,8 @@ export function SideNav({ groups }: { groups: NavGroup[] }) {
   const path = usePathname();
   const best = bestMatch(path, groups.flatMap((g) => g.items.map((i) => i.href)));
   const [closed, setClosed] = useState<string[]>([]);
-  useEffect(() => { const t = setTimeout(() => setClosed(JSON.parse(read("marfim.topics") ?? "[]")), 0); return () => clearTimeout(t); }, []);
-  const toggle = (t: string) => setClosed((c) => { const n = c.includes(t) ? c.filter((x) => x !== t) : [...c, t]; write("marfim.topics", JSON.stringify(n)); return n; });
+  useEffect(() => { const t = setTimeout(() => setClosed(JSON.parse(read("eagle.topics") ?? "[]")), 0); return () => clearTimeout(t); }, []);
+  const toggle = (t: string) => setClosed((c) => { const n = c.includes(t) ? c.filter((x) => x !== t) : [...c, t]; write("eagle.topics", JSON.stringify(n)); return n; });
   return (
     <nav aria-label="Principal">
       {groups.map((g, i) => {
@@ -54,14 +54,14 @@ export function SideNav({ groups }: { groups: NavGroup[] }) {
 export function SideToggle() {
   const shell = () => document.querySelector<HTMLElement>(".shell");
   useEffect(() => {
-    if (read("marfim.side") === "1" && shell()) shell()!.dataset.collapsed = "true";
+    if (read("eagle.side") === "1" && shell()) shell()!.dataset.collapsed = "true";
   }, []);
   const toggle = () => {
     const el = shell();
     if (!el) return;
     const next = el.dataset.collapsed !== "true";
     el.dataset.collapsed = String(next);
-    write("marfim.side", next ? "1" : "0");
+    write("eagle.side", next ? "1" : "0");
   };
   return (
     <button type="button" className="sidetoggle" aria-label="Recolher ou expandir o menu" onClick={toggle}>
