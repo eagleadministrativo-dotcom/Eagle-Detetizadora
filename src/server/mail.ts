@@ -37,16 +37,16 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 
 /** Layout simples, legível em qualquer cliente de e-mail, nas cores da marca. */
 export function mailHtml(title: string, paragraphs: string[], code?: string, button?: { href: string; label: string }) {
-  return `<!doctype html><html><body style="margin:0;background:#ebe4dc;font-family:Inter,Arial,sans-serif;color:#1c1c1e">
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f2;font-family:Inter,Arial,sans-serif;color:#111111">
 <div style="max-width:480px;margin:0 auto;padding:32px 20px">
-<p style="font-family:Georgia,serif;font-size:22px;letter-spacing:.08em;margin:0 0 24px">EAGLE <span style="font-size:12px;color:#8a7400">Detetizadora</span></p>
-<div style="background:#fff;border-radius:14px;padding:24px">
+<p style="font-family:Arial,sans-serif;font-weight:800;font-size:20px;letter-spacing:.08em;margin:0 0 24px"><span style="display:inline-block;background:#111111;color:#f5c400;border-radius:8px;padding:2px 9px;margin-right:8px">E</span>EAGLE <span style="font-size:12px;font-weight:400;color:#8a6d00">Detetizadora</span></p>
+<div style="background:#ffffff;border-radius:14px;padding:24px;border-top:4px solid #f5c400">
 <h1 style="font-family:Georgia,serif;font-weight:500;font-size:22px;margin:0 0 12px">${esc(title)}</h1>
 ${paragraphs.map((p) => `<p style="margin:0 0 12px;line-height:1.5">${esc(p)}</p>`).join("")}
-${code ? `<p style="font-size:34px;letter-spacing:.3em;font-weight:600;margin:20px 0;color:#494527">${esc(code)}</p>` : ""}
-${button ? `<p style="margin:20px 0"><a href="${esc(button.href)}" style="display:inline-block;background:#310804;color:#ebe4dc;padding:14px 22px;border-radius:999px;text-decoration:none;font-weight:600">${esc(button.label)}</a></p><p style="font-size:12px;color:#6e6a51;word-break:break-all">Se o botão não abrir, copie este endereço: ${esc(button.href)}</p>` : ""}
+${code ? `<p style="font-size:34px;letter-spacing:.3em;font-weight:700;margin:20px 0;color:#111111">${esc(code)}</p>` : ""}
+${button ? `<p style="margin:20px 0"><a href="${esc(button.href)}" style="display:inline-block;background:#f5c400;color:#111111;padding:14px 22px;border-radius:999px;text-decoration:none;font-weight:700">${esc(button.label)}</a></p><p style="font-size:12px;color:#595959;word-break:break-all">Se o botão não abrir, copie este endereço: ${esc(button.href)}</p>` : ""}
 </div>
-<p style="font-size:12px;color:#6e6a51;margin-top:16px">Se você não pediu isto, ignore este e-mail. Ninguém da Eagle pede este código por telefone ou mensagem.</p>
+<p style="font-size:12px;color:#595959;margin-top:16px">Se você não pediu isto, ignore este e-mail. Ninguém da Eagle pede este código por telefone ou mensagem.</p>
 </div></body></html>`;
 }
 
