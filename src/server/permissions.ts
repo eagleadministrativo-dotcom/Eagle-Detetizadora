@@ -1,4 +1,4 @@
-export type Role = "proprietario" | "gerente" | "barbeiro" | "contador";
+export type Role = "administrador" | "gerente" | "vendedora_gestora" | "vendedor" | "tecnico" | "colaborador" | "pendente";
 
 export const PERMISSIONS = [
   "dashboard.full", "dashboard.own",
@@ -25,36 +25,62 @@ export type Permission = (typeof PERMISSIONS)[number];
 const ALL = new Set<Permission>(PERMISSIONS);
 
 export const ROLE_PERMISSIONS: Record<Role, Set<Permission>> = {
-  proprietario: ALL,
+  administrador: ALL,
   gerente: new Set<Permission>([
     "dashboard.full", "agenda.view_all", "agenda.manage", "agenda.block", "agenda.retroactive",
     "attendance.view_all", "attendance.run", "attendance.discount_limited",
     "customers.view", "customers.manage", "customers.edit_sensitive",
     "payments.register", "payments.confirm", "cash.manage",
-    "finance.view", "reports.view", "reports.export", "admin.schedules",
+    "finance.view", "finance.manage", "finance.close_period", "finance.goals", "reports.view", "reports.export", "admin.schedules",
     "agenda.create", "agenda.edit", "agenda.cancel", "finance.own", "finance.payables_view", "finance.receivables_view", "finance.dre_view",
     "customers.history", "returns.own", "returns.view_all", "returns.contact", "returns.rules",
     "products.view", "products.sell", "products.stock_view", "products.stock",
     "tasks.own", "tasks.create", "tasks.delegate", "tasks.edit", "tasks.view_team", "tasks.approve",
+    "achievements.own", "team.view", "users.manage", "admin.settings",
+  ]),
+  vendedora_gestora: new Set<Permission>([
+    "dashboard.full", "agenda.view_all", "agenda.manage", "agenda.create", "agenda.edit", "agenda.cancel",
+    "attendance.view_all", "attendance.run", "attendance.discount_limited",
+    "customers.view", "customers.manage", "customers.edit_sensitive", "customers.history",
+    "payments.register", "payments.confirm",
+    "finance.view", "finance.payables_view", "finance.receivables_view", "reports.view", "reports.export",
+    "returns.own", "returns.view_all", "returns.contact",
+    "tasks.own", "tasks.create", "tasks.delegate", "tasks.edit", "tasks.view_team",
     "achievements.own", "team.view",
   ]),
-  barbeiro: new Set<Permission>([
+  vendedor: new Set<Permission>([
+    "dashboard.own", "agenda.view_all", "agenda.create", "agenda.edit", "agenda.cancel",
+    "attendance.view_all", "attendance.run",
+    "customers.view", "customers.manage", "customers.history",
+    "payments.register",
+    "reports.view",
+    "returns.own", "returns.view_all",
+    "tasks.own",
+    "achievements.own",
+  ]),
+  tecnico: new Set<Permission>([
     "dashboard.own", "agenda.view_own", "agenda.manage_own",
     "attendance.view_own", "attendance.run_own",
-    "customers.view", "customers.manage",
-    "agenda.create", "agenda.edit", "agenda.cancel", "customers.history", "finance.own", "returns.own", "returns.contact", "tasks.own", "achievements.own",
+    "customers.view",
+    "agenda.create", "agenda.edit", "agenda.cancel", "customers.history", "returns.own", "returns.contact",
+    "tasks.own", "achievements.own",
   ]),
-  contador: new Set<Permission>([
-    "attendance.view_all", "customers.view", "finance.view", "reports.view", "reports.export",
-    "customers.history", "finance.payables_view", "finance.receivables_view", "finance.dre_view", "commissions.view_all", "tasks.own",
+  colaborador: new Set<Permission>([
+    "tasks.own",
+  ]),
+  pendente: new Set<Permission>([
+    "tasks.own",
   ]),
 };
 
 export const ROLE_LABEL: Record<Role, string> = {
-  proprietario: "Proprietário",
+  administrador: "Administrador",
   gerente: "Gerente",
-  barbeiro: "Barbeiro",
-  contador: "Contador",
+  vendedora_gestora: "Vendedora/Gestora",
+  vendedor: "Vendedor",
+  tecnico: "Técnico",
+  colaborador: "Colaborador",
+  pendente: "Perfil Pendente",
 };
 
 /** Permissões que o proprietário pode conceder individualmente a um usuário. */
@@ -99,7 +125,7 @@ export function buildPerms(role: Role, overrides: { permission: string; granted:
   for (const o of overrides) {
     if (!(ALL as Set<string>).has(o.permission)) continue;
     if (o.granted) set.add(o.permission as Permission);
-    else if (role !== "proprietario") set.delete(o.permission as Permission); // o acesso do proprietário não pode ser reduzido
+    else if (role !== "administrador") set.delete(o.permission as Permission); // o acesso do administrador não pode ser reduzido
   }
   set.add("tasks.own");
   return set;

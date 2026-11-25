@@ -15,7 +15,7 @@ export function assertGrantable(ctx: Ctx, wanted: Permission[], had: Set<string>
 async function target(q: Q, ctx: Ctx, userId: string) {
   const [u] = await q<{ role: Role }>("select role from user_units where user_id=$1 and unit_id=$2 for update", [requireUuid(userId, "Usuário"), ctx.unitId]);
   if (!u) throw new DomainError("not_found", "Usuário não encontrado.");
-  if (u.role === "proprietario") throw new ForbiddenError("O acesso do proprietário é total e não pode ser reduzido.");
+  if (u.role === "administrador") throw new ForbiddenError("O acesso do administrador é total e não pode ser reduzido.");
   if (userId === ctx.userId) throw new ForbiddenError("Você não pode alterar as suas próprias permissões.");
   return u;
 }
@@ -64,7 +64,7 @@ export async function listProfiles(db: Db, ctx: Ctx) {
 export async function saveProfile(db: Db, ctx: Ctx, i: { name: string; baseRole: Role; permissions: string[] }) {
   need(ctx, "users.manage");
   const name = requireText(i.name, "Nome do perfil", 2);
-  if (!["gerente", "barbeiro", "contador"].includes(i.baseRole)) throw new DomainError("invalid", "Perfil base inválido.");
+  if (!["gerente", "vendedora_gestora", "vendedor", "tecnico", "colaborador"].includes(i.baseRole)) throw new DomainError("invalid", "Perfil base inválido.");
   const perms = clean(i.permissions);
   assertGrantable(ctx, perms, new Set());
   return db.tx(async (q) => {

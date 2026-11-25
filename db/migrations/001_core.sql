@@ -1,4 +1,4 @@
--- MARFIM Studio OS — núcleo. Valores em centavos (integer). Datas em timestamptz (UTC).
+-- Eagle Detetizadora OS — núcleo. Valores em centavos (integer). Datas em timestamptz (UTC).
 create extension if not exists btree_gist;
 
 create table organizations (
@@ -51,7 +51,8 @@ create unique index users_email_uq on users (lower(email));
 create table user_units (
   user_id uuid not null references users(id) on delete restrict,
   unit_id uuid not null references units(id) on delete restrict,
-  role text not null check (role in ('proprietario','gerente','barbeiro','contador')),
+  role text not null check (role in ('administrador','gerente','vendedora_gestora','vendedor','tecnico','colaborador','pendente')),
+  profile_id uuid,
   primary key (user_id, unit_id)
 );
 

@@ -94,7 +94,7 @@ export const LOCKED_MSG = `Senha incorreta ${LOGIN_MAX_FAILS} vezes. Por seguran
 const stillLocked = (min: number) => { const m = Math.max(1, Math.ceil(min)); return `Acesso bloqueado por tentativas erradas. Tente de novo em ${m} minuto${m > 1 ? "s" : ""} ou redefina a senha pelo e-mail.`; };
 
 async function mfaRequiredFor(q: Q, unitId: string, role: Role): Promise<boolean> {
-  if (role !== "proprietario" && role !== "gerente") return false;
+  if (role !== "administrador" && role !== "gerente") return false;
   const [s] = await q<{ mfa_required: boolean }>("select mfa_required from unit_settings where unit_id=$1", [unitId]);
   return s?.mfa_required ?? true;
 }
@@ -162,7 +162,7 @@ export async function login(db: Db, email: string, password: string): Promise<Lo
 
 async function notifyLock(q: Q, userId: string) {
   await q(
-    "insert into notifications(unit_id,kind,severity,message,ref_entity,ref_id) select unit_id,'login_bloqueado','atencao',$2,'user',$1 from user_units where role='proprietario'",
+    "insert into notifications(unit_id,kind,severity,message,ref_entity,ref_id) select unit_id,'login_bloqueado','atencao',$2,'user',$1 from user_units where role='administrador'",
     [userId, "Conta bloqueada por tentativas de login repetidas."],
   );
 }

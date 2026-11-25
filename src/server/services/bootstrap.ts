@@ -48,7 +48,7 @@ export async function setupInitial(db: Db, input: SetupInput): Promise<{ unitId:
       process.env.NODE_ENV === "production",
     ]);
     const [owner] = await q<{ id: string }>("insert into users(email,full_name,password_hash) values ($1,$2,$3) returning id", [email, ownerName, hashPassword(input.password)]);
-    await q("insert into user_units(user_id,unit_id,role) values ($1,$2,'proprietario')", [owner.id, unitId]);
+    await q("insert into user_units(user_id,unit_id,role) values ($1,$2,'administrador')", [owner.id, unitId]);
     const [cash] = await q<{ id: string }>("insert into financial_accounts(unit_id,name,kind) values ($1,'Caixa da loja','caixa') returning id", [unitId]);
     const [bank] = await q<{ id: string }>("insert into financial_accounts(unit_id,name,kind) values ($1,'Conta bancária','banco') returning id", [unitId]);
     const methods: [string, string, string, number][] = [
@@ -63,11 +63,11 @@ export async function setupInitial(db: Db, input: SetupInput): Promise<{ unitId:
     for (const [i, [name, kind, code]] of DEFAULT_CATEGORIES.entries()) {
       await q("insert into financial_categories(unit_id,name,kind,account_code,sort_order) values ($1,$2,$3,$4,$5)", [unitId, name, kind, code, i]);
     }
-    for (const [i, name] of ["Cabelo", "Barba", "Combos", "Outros"].entries()) {
+    for (const [i, name] of ["Dedetização geral", "Dedetização específica", "Manutenção", "Outros"].entries()) {
       await q("insert into service_categories(unit_id,name,sort_order) values ($1,$2,$3)", [unitId, name, i]);
     }
     await q("insert into chairs(unit_id,name) values ($1,'Cadeira 1')", [unitId]);
-    const [staff] = await q<{ id: string }>("insert into staff(unit_id,user_id,name,contract_type) values ($1,$2,$3,'proprietario') returning id", [unitId, owner.id, ownerName]);
+    const [staff] = await q<{ id: string }>("insert into staff(unit_id,user_id,name,contract_type) values ($1,$2,$3,'administrador') returning id", [unitId, owner.id, ownerName]);
     await audit(q, { userId: owner.id, unitId }, "SISTEMA_CONFIGURADO", "organization", org.id, null, { orgName, unitName });
     return { unitId, ownerId: owner.id, staffId: staff.id };
   });
@@ -89,7 +89,7 @@ export async function listUsers(db: Db, ctx: Ctx): Promise<UserRow[]> {
 
 async function activeOwners(q: Q, unitId: string, excluding?: string): Promise<number> {
   const [r] = await q<{ n: number }>(
-    "select count(*) as n from users u join user_units uu on uu.user_id=u.id where uu.unit_id=$1 and uu.role='proprietario' and u.is_active and ($2::uuid is null or u.id <> $2)",
+    "select count(*) as n from users u join user_units uu on uu.user_id=u.id where uu.unit_id=$1 and uu.role='administrador' and u.is_active and ($2::uuid is null or u.id <> $2)",
     [unitId, excluding ?? null],
   );
   return r.n;
@@ -97,8 +97,8 @@ async function activeOwners(q: Q, unitId: string, excluding?: string): Promise<n
 
 /** Quem recebeu "gerenciar usuários" não cria nem promove alguém acima de si. */
 export function assertRoleGrant(ctx: Ctx, role: Role) {
-  if (ctx.role === "proprietario") return;
-  if (role === "proprietario" || [...ROLE_PERMISSIONS[role]].some((p) => !ctx.perms.has(p) && p !== "tasks.own" && !p.endsWith(".own") && !p.endsWith("_own"))) throw new ForbiddenError("Você não pode conceder um perfil com mais acesso que o seu.");
+  if (ctx.role === "administrador") return;
+  if (role === "administrador" || [...ROLE_PERMISSIONS[role]].some((p) => !ctx.perms.has(p) && p !== "tasks.own" && !p.endsWith(".own") && !p.endsWith("_own"))) throw new ForbiddenError("Você não pode conceder um perfil com mais acesso que o seu.");
 }
 
 export async function createUser(db: Db, ctx: Ctx, input: { email: string; fullName: string; role: Role; password: string; staffId?: string | null }) {
@@ -106,7 +106,7 @@ export async function createUser(db: Db, ctx: Ctx, input: { email: string; fullN
   const email = requireText(input.email, "E-mail").toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new DomainError("invalid", "E-mail inválido.");
   const fullName = requireText(input.fullName, "Nome");
-  if (!["proprietario", "gerente", "barbeiro", "contador"].includes(input.role)) throw new DomainError("invalid", "Perfil inválido.");
+  if (!["administrador", "gerente", "vendedora_gestora", "vendedor", "tecnico", "colaborador", "pendente"].includes(input.role)) throw new DomainError("invalid", "Perfil inválido.");
   assertRoleGrant(ctx, input.role);
   checkPasswordStrength(input.password);
   return db.tx(async (q) => {
@@ -125,7 +125,7 @@ export async function updateUser(db: Db, ctx: Ctx, userId: string, patch: { role
   await db.tx(async (q) => {
     const [cur] = await q<{ role: Role; is_active: boolean }>("select uu.role, u.is_active from users u join user_units uu on uu.user_id=u.id where u.id=$1 and uu.unit_id=$2 for update of u", [userId, ctx.unitId]);
     if (!cur) throw new DomainError("not_found", "Usuário não encontrado.");
-    if (ctx.role !== "proprietario" && (cur.role === "proprietario" || userId === ctx.userId)) throw new ForbiddenError("Só o proprietário pode alterar este acesso.");
+    if (ctx.role !== "administrador" && (cur.role === "administrador" || userId === ctx.userId)) throw new ForbiddenError("Só o administrador pode alterar este acesso.");
     if (patch.role && patch.role !== cur.role) {
       assertRoleGrant(ctx, patch.role);
       // trocar o perfil base recomeça do padrão: exceções do perfil antigo não vazam para o novo
@@ -134,8 +134,8 @@ export async function updateUser(db: Db, ctx: Ctx, userId: string, patch: { role
     }
     const newRole = patch.role ?? cur.role;
     const newActive = patch.isActive ?? cur.is_active;
-    if ((cur.role === "proprietario" && cur.is_active) && (newRole !== "proprietario" || !newActive)) {
-      if ((await activeOwners(q, ctx.unitId, userId)) === 0) throw new DomainError("last_owner", "É preciso manter pelo menos um proprietário ativo.");
+    if ((cur.role === "administrador" && cur.is_active) && (newRole !== "administrador" || !newActive)) {
+      if ((await activeOwners(q, ctx.unitId, userId)) === 0) throw new DomainError("last_owner", "É preciso manter pelo menos um administrador ativo.");
     }
     if (patch.role) await q("update user_units set role=$3 where user_id=$1 and unit_id=$2", [userId, ctx.unitId, patch.role]);
     if (patch.isActive != null) {
@@ -160,7 +160,7 @@ export async function resetUserPassword(db: Db, ctx: Ctx, userId: string, newPas
   await db.tx(async (q) => {
     const [u] = await q<{ role: Role }>("select role from user_units where user_id=$1 and unit_id=$2", [userId, ctx.unitId]);
     if (!u) throw new DomainError("not_found", "Usuário não encontrado.");
-    if (ctx.role !== "proprietario" && u.role === "proprietario") throw new ForbiddenError("Só o proprietário redefine a senha do proprietário.");
+    if (ctx.role !== "administrador" && u.role === "administrador") throw new ForbiddenError("Só o administrador redefine a senha do administrador.");
     await q("update users set password_hash=$2, failed_attempts=0, locked_until=null, mfa_enabled=false, mfa_secret=null where id=$1", [userId, hashPassword(newPassword)]);
     await q("delete from sessions where user_id=$1", [userId]);
     await audit(q, ctx, "SENHA_REDEFINIDA", "user", userId);
