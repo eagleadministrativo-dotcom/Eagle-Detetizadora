@@ -1,62 +1,104 @@
-import Link from "next/link";
 import { getDb } from "@/server/db";
-import { requirePerm } from "@/server/session";
-import { can } from "@/server/core";
-import { getDashboard } from "@/server/services/reports";
-import { listPayables } from "@/server/services/finance";
-import { findOpenSession } from "@/server/services/cash";
-import { addDays, fmtDateTime, fmtYmd, monthStart, todayYmd } from "@/lib/dates";
-import { Badge, Empty, Flash, KpiCard, PageHead, money } from "@/components/ui";
+import { requireSession } from "@/server/session";
+import { can, need } from "@/server/core";
+import { listFinanceEntries } from "@/server/services/eagle";
+import { saveFinanceEntryAction } from "@/app/actions/eagle";
 
 export const metadata = { title: "Financeiro" };
 
-export default async function FinanceHome({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string }> }) {
-  const sp = await searchParams;
-  const { ctx } = await requirePerm("finance.view", "cash.manage");
+export default async function Finance() {
+  const { ctx } = await requireSession();
+  need(ctx, "finance.view");
   const db = await getDb();
-  if (!can(ctx, "finance.view")) {
-    return (<><PageHead title="Financeiro" /><div className="card"><p>Use o <Link href="/financeiro/caixa">Caixa</Link> para abrir, movimentar e fechar o caixa.</p></div></>);
-  }
-  const today = todayYmd();
-  const p = { start: monthStart(today), end: today };
-  const dash = await getDashboard(db, ctx, p);
-  const open = await findOpenSession(db.query, ctx.unitId);
-  const upcoming = await listPayables(db, ctx, { filter: "abertas", to: addDays(today, 7), limit: 8 });
-  const keys = ["revenue", "receipts_confirmed", "operating_result", "cash_balance", "receivables_open", "payables_open"];
-  const kpis = dash.kpis.filter((k) => keys.includes(k.key));
-  const qs = `de=${p.start}&ate=${p.end}`;
+  const { rows } = await listFinanceEntries(db, ctx, { limit: 50 });
+
+  const receitas = rows.filter((r) => r.kind === "receita");
+  const gastos = rows.filter((r) => r.kind === "gasto");
+  const totalReceitas = receitas.reduce((sum, r) => sum + r.amountCents, 0);
+  const totalGastos = gastos.reduce((sum, r) => sum + r.amountCents, 0);
+  const saldo = totalReceitas - totalGastos;
+
   return (
-    <>
-      <PageHead title="Financeiro" sub={`Mês atual · ${fmtYmd(p.start)} a ${fmtYmd(p.end)}`} />
-      <Flash ok={sp.ok} erro={sp.erro} />
-      <div className="row">
-        {open ? <Badge tone="ok">Caixa aberto desde {fmtDateTime(open.opened_at)}</Badge> : <Badge>Caixa fechado</Badge>}
-        <Link className="btn small ghost" href="/financeiro/caixa">Ir ao caixa</Link>
-      </div>
-      {dash.alerts.length ? <div className="stack">{dash.alerts.map((a, i) => <div className={`alert ${a.severity}`} key={i}>{a.href ? <Link href={a.href}>{a.message}</Link> : a.message}</div>)}</div> : null}
-      <section className="kpis">{kpis.map((k) => <KpiCard key={k.key} k={k} href={`/relatorios/${k.key}?${qs}`} />)}</section>
-      <div className="grid cols-2">
-        <section className="card stack">
-          <h2>Vencendo nos próximos 7 dias</h2>
-          {upcoming.rows.length === 0 ? <Empty title="Nenhuma conta a vencer" /> : (
-            <div className="tablewrap"><table><tbody>
-              {upcoming.rows.map((r) => <tr key={r.id}><td className="nowrap">{fmtYmd(r.due_date)}{r.overdue ? <> <Badge tone="bad">vencida</Badge></> : null}</td><td><Link href={`/financeiro/pagar/${r.id}`}>{r.description}</Link></td><td className="n">{money(r.amount_cents - r.paid_cents)}</td></tr>)}
-            </tbody></table></div>
-          )}
-          <Link className="btn ghost small" href="/financeiro/pagar">Todas as contas a pagar</Link>
-        </section>
-        <section className="card stack">
-          <h2>Atalhos</h2>
-          <div className="stack">
-            <Link href="/financeiro/conciliacao">Conciliação de pagamentos</Link>
-            <Link href="/financeiro/receber">Contas a receber</Link>
-            <Link href="/financeiro/dre">DRE gerencial</Link>
-            <Link href="/financeiro/fluxo">Fluxo de caixa e projeção</Link>
-            <Link href="/financeiro/metas">Metas e reservas</Link>
-            <Link href="/financeiro/fechamento">Fechamento mensal</Link>
+    <div className="page">
+      <h1>Financeiro</h1>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px", marginBottom: "24px" }}>
+        <div style={{ padding: "16px", background: "#e8f5e9", borderRadius: "4px" }}>
+          <div style={{ fontSize: "12px", color: "#666" }}>Receitas</div>
+          <div style={{ fontSize: "24px", fontWeight: "bold", color: "#2e7d32" }}>
+            {(totalReceitas / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
           </div>
-        </section>
+        </div>
+        <div style={{ padding: "16px", background: "#ffebee", borderRadius: "4px" }}>
+          <div style={{ fontSize: "12px", color: "#666" }}>Gastos</div>
+          <div style={{ fontSize: "24px", fontWeight: "bold", color: "#c62828" }}>
+            {(totalGastos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+          </div>
+        </div>
+        <div style={{ padding: "16px", background: "#f3e5f5", borderRadius: "4px" }}>
+          <div style={{ fontSize: "12px", color: "#666" }}>Saldo</div>
+          <div style={{ fontSize: "24px", fontWeight: "bold", color: saldo >= 0 ? "#2e7d32" : "#c62828" }}>
+            {(saldo / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+          </div>
+        </div>
       </div>
-    </>
+
+      {can(ctx, "finance.manage") ? (
+        <details style={{ marginBottom: "24px", padding: "12px", border: "1px solid #ddd", borderRadius: "4px" }}>
+          <summary style={{ cursor: "pointer", fontWeight: "bold" }}>+ Novo Lançamento</summary>
+          <form action={saveFinanceEntryAction} style={{ marginTop: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+              <select name="kind" defaultValue="receita" required style={{ padding: "6px", borderRadius: "4px", border: "1px solid #ddd" }}>
+                <option value="receita">Receita</option>
+                <option value="gasto">Gasto</option>
+              </select>
+              <input name="category" type="text" placeholder="Categoria" required style={{ padding: "6px", borderRadius: "4px", border: "1px solid #ddd" }} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "8px", marginBottom: "12px" }}>
+              <input name="description" type="text" placeholder="Descrição" required style={{ padding: "6px", borderRadius: "4px", border: "1px solid #ddd" }} />
+              <input name="entryDate" type="date" defaultValue={new Date().toISOString().split("T")[0]} required style={{ padding: "6px", borderRadius: "4px", border: "1px solid #ddd" }} />
+            </div>
+            <div style={{ marginBottom: "12px" }}>
+              <input name="amount" type="text" placeholder="Valor (ex: 100,00)" required style={{ width: "100%", padding: "6px", borderRadius: "4px", border: "1px solid #ddd" }} />
+            </div>
+            <button type="submit" style={{ padding: "8px 16px", background: "#0066cc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}>
+              Lançar
+            </button>
+          </form>
+        </details>
+      ) : null}
+
+      <div style={{ marginBottom: "24px" }}>
+        <h2>Últimos lançamentos</h2>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ borderBottom: "2px solid #ddd" }}>
+              <th style={{ textAlign: "left", padding: "8px" }}>Data</th>
+              <th style={{ textAlign: "left", padding: "8px" }}>Tipo</th>
+              <th style={{ textAlign: "left", padding: "8px" }}>Descrição</th>
+              <th style={{ textAlign: "left", padding: "8px" }}>Categoria</th>
+              <th style={{ textAlign: "right", padding: "8px" }}>Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, 20).map((r) => (
+              <tr key={r.id} style={{ borderBottom: "1px solid #eee" }}>
+                <td style={{ padding: "8px" }}>{new Date(r.entryDate).toLocaleDateString("pt-BR")}</td>
+                <td style={{ padding: "8px" }}>
+                  <span style={{ padding: "2px 6px", borderRadius: "3px", fontSize: "11px", backgroundColor: r.kind === "receita" ? "#c8e6c9" : "#ffcdd2", color: r.kind === "receita" ? "#1b5e20" : "#b71c1c" }}>
+                    {r.kind === "receita" ? "Receita" : "Gasto"}
+                  </span>
+                </td>
+                <td style={{ padding: "8px" }}>{r.description}</td>
+                <td style={{ padding: "8px" }}>{r.category}</td>
+                <td style={{ padding: "8px", textAlign: "right", color: r.kind === "receita" ? "#2e7d32" : "#c62828" }}>
+                  {(r.amountCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
