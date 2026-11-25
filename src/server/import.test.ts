@@ -63,6 +63,6 @@ describe("importação de clientes", () => {
   });
 
   it("exige permissão de gerir clientes", async () => {
-    await expect(importCustomers(w.db, w.accountant, [{ name: "X Y", phone: "41999990199" }])).rejects.toThrow();
+    await expect(importCustomers(w.db, w.barber, [{ name: "X Y", phone: "41999990199" }])).rejects.toThrow();
   });
 });

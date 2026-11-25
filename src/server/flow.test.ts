@@ -15,24 +15,22 @@ beforeAll(async () => {
 const msg = async (p: Promise<unknown>) => p.then(() => "OK", (e) => (e as Error).message);
 
 describe("agenda", () => {
-  it("barra conflito de cadeira e de profissional, inclusive sobreposição parcial", async () => {
+  it("barra conflito do técnico, inclusive sobreposição parcial; o local não bloqueia", async () => {
     const t = future(48);
     await createAppointment(w.db, w.owner, { customerId: w.customerId, staffId: w.barberStaffId, chairId: w.chairs[0], startsAt: t, serviceIds: [w.serviceId] });
-    // mesma cadeira, outro barbeiro, sobreposição parcial
-    expect(await msg(createAppointment(w.db, w.owner, { customerId: w.customer2Id, staffId: w.barber2StaffId, chairId: w.chairs[0], startsAt: new Date(t.getTime() + 15 * 60000), serviceIds: [w.serviceId] }))).toMatch(/Cadeira 1 já está ocupada/);
-    // mesmo barbeiro, outra cadeira
+    // mesmo local, outro técnico, sobreposição parcial: ok (cada um vai a um endereço)
+    await createAppointment(w.db, w.owner, { customerId: w.customer2Id, staffId: w.barber2StaffId, chairId: w.chairs[0], startsAt: new Date(t.getTime() + 15 * 60000), serviceIds: [w.serviceId] });
+    // mesmo técnico, outro local
     expect(await msg(createAppointment(w.db, w.owner, { customerId: w.customer2Id, staffId: w.barberStaffId, chairId: w.chairs[1], startsAt: new Date(t.getTime() + 15 * 60000), serviceIds: [w.serviceId] }))).toMatch(/já tem atendimento/);
-    // outro barbeiro + outra cadeira: ok
-    await createAppointment(w.db, w.owner, { customerId: w.customer2Id, staffId: w.barber2StaffId, chairId: w.chairs[1], startsAt: t, serviceIds: [w.serviceId] });
-    // sem cadeira informada e ambas ocupadas
-    expect(await msg(createAppointment(w.db, w.owner, { customerId: w.customerId, staffId: w.ownerStaffId, startsAt: t, serviceIds: [w.serviceId] }))).toMatch(/ocupada/);
+    // sem local informado: o técnico ocupado continua barrado
+    expect(await msg(createAppointment(w.db, w.owner, { customerId: w.customerId, staffId: w.barberStaffId, startsAt: t, serviceIds: [w.serviceId] }))).toMatch(/já tem atendimento/);
   });
 
-  it("duas tentativas simultâneas no mesmo horário: apenas uma vence", async () => {
+  it("duas tentativas simultâneas para o mesmo técnico no mesmo horário: apenas uma vence", async () => {
     const t = future(72);
     const r = await Promise.allSettled([
       createAppointment(w.db, w.owner, { customerId: w.customerId, staffId: w.barberStaffId, chairId: w.chairs[0], startsAt: t, serviceIds: [w.serviceId] }),
-      createAppointment(w.db, w.manager, { customerId: w.customer2Id, staffId: w.barber2StaffId, chairId: w.chairs[0], startsAt: t, serviceIds: [w.serviceId] }),
+      createAppointment(w.db, w.manager, { customerId: w.customer2Id, staffId: w.barberStaffId, chairId: w.chairs[1], startsAt: t, serviceIds: [w.serviceId] }),
     ]);
     expect(r.filter((x) => x.status === "fulfilled")).toHaveLength(1);
     expect(r.filter((x) => x.status === "rejected")).toHaveLength(1);
@@ -59,8 +57,8 @@ describe("agenda", () => {
   it("reagendar valida conflito", async () => {
     const t = future(120);
     const a = await createAppointment(w.db, w.owner, { customerId: w.customerId, staffId: w.barberStaffId, chairId: w.chairs[0], startsAt: t, serviceIds: [w.serviceId] });
-    await createAppointment(w.db, w.owner, { customerId: w.customer2Id, staffId: w.barber2StaffId, chairId: w.chairs[1], startsAt: future(121), serviceIds: [w.serviceId] });
-    expect(await msg(rescheduleAppointment(w.db, w.owner, a, { startsAt: future(121), chairId: w.chairs[1] }))).toMatch(/ocupada/);
+    await createAppointment(w.db, w.owner, { customerId: w.customer2Id, staffId: w.barberStaffId, chairId: w.chairs[1], startsAt: future(122), serviceIds: [w.serviceId] });
+    expect(await msg(rescheduleAppointment(w.db, w.owner, a, { startsAt: future(122), chairId: w.chairs[1] }))).toMatch(/já tem atendimento/);
     await rescheduleAppointment(w.db, w.owner, a, { startsAt: future(130) });
   });
 });

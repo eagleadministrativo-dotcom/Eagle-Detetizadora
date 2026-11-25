@@ -50,12 +50,7 @@ export async function validateSlot(q: Q, s: Slot) {
   );
   if (blk) throw new DomainError("blocked", `Horário bloqueado: ${blk.reason}.`);
 
-  const [cc] = await q<{ customer_name: string; starts_at: Date; ends_at: Date }>(
-    `select c.name as customer_name, a.starts_at, a.ends_at from appointments a join customers c on c.id=a.customer_id
-     where a.chair_id=$1 and a.status in ${ACTIVE} and tstzrange(a.starts_at,a.ends_at) && tstzrange($2,$3) and ($4::uuid is null or a.id <> $4) limit 1`,
-    [s.chairId, s.startsAt, s.endsAt, s.excludeId ?? null],
-  );
-  if (cc) throw new DomainError("chair_conflict", `${chair.name} já está ocupada nesse horário (${cc.customer_name}).`, cc);
+  // O "local" interno não bloqueia: técnicos atendem em endereços diferentes ao mesmo tempo. Só o técnico não pode ter dois atendimentos simultâneos.
   const [sc] = await q<{ customer_name: string }>(
     `select c.name as customer_name from appointments a join customers c on c.id=a.customer_id
      where a.staff_id=$1 and a.status in ${ACTIVE} and tstzrange(a.starts_at,a.ends_at) && tstzrange($2,$3) and ($4::uuid is null or a.id <> $4) limit 1`,

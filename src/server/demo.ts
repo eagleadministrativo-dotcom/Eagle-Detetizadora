@@ -76,12 +76,13 @@ export async function seedDemo(db: Db) {
     const day = addDays(today, -back);
     if (dayOfWeek(day) === 0) continue;
     const cashId = await openCash(db, owner, { declaredCents: prevCash });
-    const n = dayOfWeek(day) === 6 ? 6 : 5 + Math.floor(rand() * 5);
+    const n = dayOfWeek(day) === 6 ? 6 : 5 + Math.floor(rand() * 4);
     for (let k = 0; k < n; k++) {
       const staffId = staffIds[k % 2];
-      const startsAt = new Date(atLocal(day, "09:00").getTime() + Math.floor(k / 2) * 120 * 60000);
+      // janelas de 2h30 por técnico (08:00, 10:30, 13:00, 15:30): cabem o serviço mais longo e as combinações abaixo
+      const startsAt = new Date(atLocal(day, "08:00").getTime() + Math.floor(k / 2) * 150 * 60000);
       const ids = [pick(services.flatMap((s) => Array(s.w).fill(s)))] as typeof services;
-      if (rand() < 0.15) ids.push(pick(services.filter((s) => s.id !== ids[0].id)));
+      if (ids[0].id !== fumigacao && rand() < 0.15) ids.push(pick(services.filter((s) => s.id !== ids[0].id && s.id !== fumigacao)));
       const att = await quickAttendance(db, owner, { customerId: pick(custs), staffId, chairId: chairs[k % 2], serviceIds: ids.map((s) => s.id), startsAt });
       let total = ids.reduce((a, s) => a + s.p, 0);
       if (rand() < 0.08) { const d = Math.round(total * 0.1 / 100) * 100; await applyDiscount(db, owner, att, { discountCents: d, reason: "Cliente fidelidade (demo)" }); total -= d; }

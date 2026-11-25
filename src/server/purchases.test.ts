@@ -43,7 +43,7 @@ describe("compras", () => {
   });
   it("só quem tem permissão usa a lista; marcar comprado exige lançar contas", async () => {
     await expect(savePurchase(w.db, w.barber, { name: "Pente", totalCents: 1000, payment: "avista" })).rejects.toThrow();
-    const buyer = { ...w.manager, perms: buildPerms("gerente", [{ permission: "purchases.manage", granted: true }]) };
+    const buyer = { ...w.manager, perms: buildPerms("vendedora_gestora", [{ permission: "purchases.manage", granted: true }]) };
     const id = await savePurchase(w.db, buyer, { name: "Pente", totalCents: 1000, payment: "avista" });
     await expect(markBought(w.db, buyer, id, { firstDue: t, categoryId: cat })).rejects.toThrow();
     await expect(savePurchase(w.db, w.owner, { name: "Xy", totalCents: 0, payment: "avista" })).rejects.toThrow();

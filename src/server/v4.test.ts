@@ -69,7 +69,7 @@ describe("permissões individuais", () => {
   it("barbeiro não acessa o financeiro geral nem comissões da equipe", async () => {
     await expect(listPayables(w.db, w.barber, {} as never)).rejects.toThrow();
     await expect(byStaff(w.db, w.barber, period)).rejects.toThrow();
-    await expect(totals(w.db, w.barber, period, w.barber2StaffId)).rejects.toThrow(/suas próprias/);
+    await expect(totals(w.db, asUser(w.barber, ["finance.own"]), period, w.barber2StaffId)).rejects.toThrow(/suas próprias/);
     await expect(teamOverview(w.db, w.barber, period)).rejects.toThrow();
   });
   it("muda, revoga e registra histórico; vale na próxima requisição", async () => {
@@ -87,7 +87,7 @@ describe("permissões individuais", () => {
   it("gerente com permissão de usuários não concede o que não tem, nem mexe no dono ou em si", async () => {
     const m = asUser(w.manager, ["users.manage"]);
     await expect(setUserPermissions(w.db, m, w.barber.userId, ["commissions.pay"])).rejects.toThrow(/não tem/);
-    await expect(setUserPermissions(w.db, m, w.owner.userId, [])).rejects.toThrow(/proprietário/);
+    await expect(setUserPermissions(w.db, m, w.owner.userId, [])).rejects.toThrow(/administrador/);
     await expect(setUserPermissions(w.db, m, m.userId, [])).rejects.toThrow(/próprias/);
     await expect(setUserPermissions(w.db, w.barber, w.barber2.userId, [])).rejects.toThrow();
   });
@@ -291,14 +291,15 @@ describe("comissões", () => {
     const pay = { id, amountCents: 2000, accountId: w.accounts.caixa, idempotencyKey: k };
     await paySettlement(w.db, w.owner, pay);
     expect((await paySettlement(w.db, w.owner, pay)).duplicate).toBe(true);
-    let [s] = await listSettlements(w.db, w.barber);
+    const tech = asUser(w.barber, ["finance.own"]);
+    let [s] = await listSettlements(w.db, tech);
     expect(s).toMatchObject({ state: "parcial", paid_cents: 2000, total_cents: 6000 });
     await expect(cancelSettlement(w.db, w.owner, id, "engano")).rejects.toThrow(/pagamento/);
     await expect(paySettlement(w.db, w.owner, { ...pay, amountCents: 5000, idempotencyKey: key() })).rejects.toThrow();
     await paySettlement(w.db, w.owner, { ...pay, amountCents: 4000, idempotencyKey: key() });
-    [s] = await listSettlements(w.db, w.barber);
+    [s] = await listSettlements(w.db, tech);
     expect(s.state).toBe("pago");
-    expect(await listSettlements(w.db, w.barber2)).toHaveLength(0);
+    expect(await listSettlements(w.db, asUser(w.barber2, ["finance.own"]))).toHaveLength(0);
     await expect(paySettlement(w.db, w.manager, pay)).rejects.toThrow();
     const [pb] = await w.db.query<{ payable_id: string }>("select payable_id from commission_settlements where id=$1", [id]);
     await expect(cancelPayable(w.db, w.owner, pb.payable_id, "teste")).rejects.toThrow();
@@ -475,11 +476,12 @@ describe("equipe, metas, busca, rotina e backup", () => {
     await saveRule(w.db, w.owner, { scope: "servico", pctBps: 5000, base: "bruto", validFrom: today });
     await done(w.owner, w.barberStaffId);
     await saveStaffGoal(w.db, w.owner, { staffId: w.barberStaffId, metric: "atendimentos", month: today.slice(0, 7), target: 10 });
-    expect((await staffGoals(w.db, w.barber, w.barberStaffId, today.slice(0, 7)))[0]).toMatchObject({ value: 1, pct: 10 });
-    expect((await staffStats(w.db, w.barber, period)).services).toBe(6000);
-    expect((await totals(w.db, w.barber, period)).generated).toBe(3000);
+    const tech = asUser(w.barber, ["finance.own"]);
+    expect((await staffGoals(w.db, tech, w.barberStaffId, today.slice(0, 7)))[0]).toMatchObject({ value: 1, pct: 10 });
+    expect((await staffStats(w.db, tech, period)).services).toBe(6000);
+    expect((await totals(w.db, tech, period)).generated).toBe(3000);
     expect((await teamOverview(w.db, w.owner, period)).find((r) => r.staff_id === w.barberStaffId)).toMatchObject({ n: 1, services: 6000 });
-    await expect(staffStats(w.db, w.barber, period, w.barber2StaffId)).rejects.toThrow();
+    await expect(staffStats(w.db, tech, period, w.barber2StaffId)).rejects.toThrow();
   });
   it("busca respeita permissões", async () => {
     expect((await search(w.db, w.owner, "cliente")).length).toBe(2);

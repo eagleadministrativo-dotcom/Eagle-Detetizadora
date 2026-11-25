@@ -57,8 +57,8 @@ describe("notificações push", () => {
     await db.query("insert into notifications(unit_id,user_id,kind,severity,message,dedupe_key) values ($1,$2,'pessoal','info','Só para você','t2')", [unitId, barberId]);
     const got: string[] = [];
     await flushPush(db, async (s) => { got.push(s.endpoint); });
-    expect(got).toEqual(["https://push.example/barbeiro"]);
-    await removeSubscription(db, barberId, "https://push.example/barbeiro");
+    expect(got).toEqual(["https://push.example/tecnico"]);
+    await removeSubscription(db, barberId, "https://push.example/tecnico");
     expect(await countSubscriptions(db, barberId)).toBe(0);
   });
 

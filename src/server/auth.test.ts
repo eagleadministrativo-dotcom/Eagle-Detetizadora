@@ -104,8 +104,8 @@ describe("login, bloqueio, MFA e sessão", () => {
 
   it("nunca fica sem proprietário ativo", async () => {
     const owner = { userId: ownerId, unitId, role: "administrador" as const, perms: buildPerms("administrador", []) };
-    expect(await msg(updateUser(db, owner, ownerId, { role: "gerente" }))).toMatch(/pelo menos um proprietário/);
-    expect(await msg(updateUser(db, owner, ownerId, { isActive: false }))).toMatch(/pelo menos um proprietário/);
+    expect(await msg(updateUser(db, owner, ownerId, { role: "gerente" }))).toMatch(/pelo menos um administrador/);
+    expect(await msg(updateUser(db, owner, ownerId, { isActive: false }))).toMatch(/pelo menos um administrador/);
     expect((await listUsers(db, owner)).some((u) => u.role === "administrador")).toBe(true);
   });
 });
@@ -115,9 +115,10 @@ describe("matriz de permissões (V1.2)", () => {
     const forbidden = ["finance.view", "finance.manage", "finance.close_period", "reports.view", "reports.export", "admin.catalog", "admin.settings", "users.manage", "audit.view", "data.export", "payments.register", "payments.confirm", "payments.reverse", "cash.manage", "dashboard.full"] as const;
     for (const p of forbidden) expect(ROLE_PERMISSIONS.tecnico.has(p)).toBe(false);
   });
-  it("gerente só lê; gerente não altera permissões nem fecha período; estorno é só do administrador", () => {
-    for (const p of ["finance.manage", "payments.register", "cash.manage", "agenda.manage", "admin.catalog", "users.manage"] as const) expect(ROLE_PERMISSIONS.gerente.has(p)).toBe(false);
-    for (const p of ["users.manage", "finance.close_period", "payments.reverse", "admin.settings", "data.export"] as const) expect(ROLE_PERMISSIONS.gerente.has(p)).toBe(false);
+  it("gerente opera e lança no financeiro; não altera permissões nem fecha período; estorno é só do administrador", () => {
+    for (const p of ["finance.manage", "payments.register", "cash.manage", "agenda.manage"] as const) expect(ROLE_PERMISSIONS.gerente.has(p)).toBe(true);
+    for (const p of ["users.manage", "finance.close_period", "payments.reverse", "admin.settings", "admin.catalog", "data.export"] as const) expect(ROLE_PERMISSIONS.gerente.has(p)).toBe(false);
+    for (const p of ["finance.manage", "finance.close_period", "payments.reverse", "cash.manage"] as const) expect(ROLE_PERMISSIONS.vendedora_gestora.has(p)).toBe(false);
     expect(ROLE_PERMISSIONS.administrador.has("payments.reverse")).toBe(true);
   });
   it("permissão individual concedida vale; permissões desconhecidas são ignoradas", () => {
