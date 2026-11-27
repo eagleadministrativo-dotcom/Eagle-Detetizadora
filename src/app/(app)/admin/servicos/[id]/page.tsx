@@ -41,7 +41,7 @@ export default async function ServiceEditor({ params, searchParams }: { params: 
           <Field label="Cor na agenda"><input name="color" type="color" defaultValue={s?.color ?? "#8b6b4a"} /></Field>
           <Field label="Ordem"><input name="sort" type="number" defaultValue={s?.sort_order ?? 0} /></Field>
         </div>
-        <Field label="Descrição (opcional)"><textarea name="description" defaultValue={s?.description ?? ""} /></Field>
+        <Field label="Texto no orçamento (opcional: é o que sai em “Serviços a serem realizados”; em branco, vai o nome)"><textarea name="description" defaultValue={s?.description ?? ""} rows={3} placeholder="Ex.: Dedetização \ Controle de insetos rasteiros, aplicação interna e externa, onde se fizer necessário." /></Field>
         <fieldset>
           <legend>Preço</legend>
           <div className="fields">

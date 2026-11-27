@@ -3,6 +3,7 @@ import { audit, can, need, requireText, requireUuid } from "../core";
 import { DomainError, ForbiddenError } from "../errors";
 import type { Ctx } from "../permissions";
 import { addDays, todayYmd } from "@/lib/dates";
+import { defaultTexts, listDocOptions } from "./doc-options";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const ymdOrThrow = (v: string | null | undefined, label: string) => {
@@ -134,6 +135,7 @@ export interface QuoteRow {
   execution_time: string | null; validity_text: string | null; includes_text: string | null; scheduling_text: string | null;
   attention_text: string | null; cancellation_text: string | null; signature_name: string | null; signature_role: string | null;
   signature_phone: string | null; city: string | null; file_id: string | null;
+  scheduled_date: string | null; scheduled_time: string | null; service_ids: string[] | null;
   items_cents: number; total_cents: number; doc_value_cents: number; created_by_name: string | null;
 }
 export interface QuoteItemRow { id: string; service_id: string | null; description: string; quantity: number; unit_price_cents: number; total_cents: number }
@@ -144,6 +146,7 @@ const QUOTE_SELECT = `
          to_char(q.valid_until,'YYYY-MM-DD') as valid_until, q.status, q.discount_cents, q.payment_terms, q.conditions, q.notes, q.appointment_id,
          q.services_text, q.application_text, q.products_text, q.value_cents, q.execution_time, q.validity_text, q.includes_text, q.scheduling_text,
          q.attention_text, q.cancellation_text, q.signature_name, q.signature_role, q.signature_phone, q.city, q.file_id,
+         to_char(q.scheduled_date,'YYYY-MM-DD') as scheduled_date, q.scheduled_time, q.service_ids,
          coalesce(t.items, 0)::bigint as items_cents, greatest(coalesce(t.items, 0) - q.discount_cents, 0)::bigint as total_cents,
          coalesce(q.value_cents, greatest(coalesce(t.items, 0) - q.discount_cents, 0))::bigint as doc_value_cents, u.full_name as created_by_name
   from quotes q
@@ -183,6 +186,7 @@ export interface QuoteTexts {
 export interface SaveQuoteInput extends QuoteTexts {
   id?: string | null; customerId: string; serviceAddress?: string | null; issueDate?: string | null; validUntil?: string | null; discountCents?: number;
   valueCents?: number | null; paymentTerms?: string | null; conditions?: string | null; notes?: string | null; fileId?: string | null;
+  scheduledDate?: string | null; scheduledTime?: string | null; serviceIds?: string[] | null;
   items?: { serviceId?: string | null; description?: string | null; quantity?: number | null; unitPriceCents?: number | null }[];
 }
 
@@ -196,9 +200,16 @@ export async function saveQuote(db: Db, ctx: Ctx, input: SaveQuoteInput): Promis
   if (input.validUntil) ymdOrThrow(input.validUntil, "Validade");
   if (input.issueDate) ymdOrThrow(input.issueDate, "Data do orçamento");
   if (input.valueCents != null && input.valueCents < 0) throw new DomainError("invalid", "Valor inválido.");
+  if (input.scheduledDate) ymdOrThrow(input.scheduledDate, "Data do agendamento");
+  if (input.scheduledTime && !/^\d{2}:\d{2}$/.test(input.scheduledTime)) throw new DomainError("invalid", "Horário do agendamento inválido.");
+  const serviceIds = [...new Set((input.serviceIds ?? []).filter(Boolean))].map((s) => requireUuid(s, "Serviço"));
   return db.tx(async (q) => {
     const [c] = await q("select 1 from customers where id=$1 and unit_id=$2", [requireUuid(input.customerId, "Cliente"), ctx.unitId]);
     if (!c) throw new DomainError("not_found", "Cliente não encontrado.");
+    if (serviceIds.length) {
+      const [{ n }] = await q<{ n: number }>("select count(*)::int as n from services where unit_id=$1 and id = any($2::uuid[])", [ctx.unitId, serviceIds]);
+      if (n !== serviceIds.length) throw new DomainError("not_found", "Serviço não encontrado.");
+    }
     // item com serviço escolhido e sem descrição/preço usa o nome e o preço atual do serviço
     const items: { serviceId: string | null; description: string; quantity: number; unitPriceCents: number }[] = [];
     for (const it of input.items ?? []) {
@@ -221,8 +232,9 @@ export async function saveQuote(db: Db, ctx: Ctx, input: SaveQuoteInput): Promis
     if (!items.length && !txt(input.servicesText)) throw new DomainError("invalid", "Descreva os serviços a serem realizados ou inclua pelo menos um item.");
     if (!items.length && input.valueCents == null) throw new DomainError("invalid", "Informe o valor do orçamento.");
     const texts = TEXT_KEYS.map((k) => txt(input[k]));
-    const base = [input.customerId, input.serviceAddress?.trim() || null, input.validUntil || null, discount, input.paymentTerms?.trim() || null, input.conditions?.trim() || null, input.notes?.trim() || null, input.valueCents ?? null, ...texts];
-    const setCols = ["customer_id", "service_address", "valid_until", "discount_cents", "payment_terms", "conditions", "notes", "value_cents", ...TEXT_COLS];
+    const base = [input.customerId, input.serviceAddress?.trim() || null, input.validUntil || null, discount, input.paymentTerms?.trim() || null, input.conditions?.trim() || null, input.notes?.trim() || null, input.valueCents ?? null,
+      input.scheduledDate || null, input.scheduledDate ? input.scheduledTime || null : null, serviceIds.length ? serviceIds : null, ...texts];
+    const setCols = ["customer_id", "service_address", "valid_until", "discount_cents", "payment_terms", "conditions", "notes", "value_cents", "scheduled_date", "scheduled_time", "service_ids", ...TEXT_COLS];
 
     let id = input.id || null;
     if (id) {
@@ -264,17 +276,22 @@ export async function setQuoteStatus(db: Db, ctx: Ctx, id: string, status: strin
 }
 
 /** Textos padrão do orçamento, guardados em Configurações. */
-export async function quoteDefaults(db: Db, unitId: string): Promise<Required<{ [K in keyof QuoteTexts]: string }> & { paymentTerms: string }> {
+export async function quoteDefaults(db: Db, unitId: string): Promise<Required<{ [K in keyof QuoteTexts]: string }> & { paymentTerms: string; productsIntro: string }> {
   const [s] = await db.query<Record<string, string | null>>(
     `select quote_application_default, quote_products_default, quote_payment_default, quote_execution_default, quote_validity_default, quote_includes_default,
-            quote_scheduling_default, quote_attention_default, quote_cancellation_default, quote_signature_name, quote_signature_role, quote_signature_phone, quote_city
+            quote_scheduling_default, quote_attention_default, quote_cancellation_default, quote_signature_name, quote_signature_role, quote_signature_phone, quote_city,
+            quote_products_intro
      from unit_settings where unit_id=$1`, [unitId]);
   const v = (k: string) => s?.[k] ?? "";
+  // aplicação, produtos, acompanha, agendamento, pagamento, prazo e validade vêm das opções marcadas como padrão em Serviços e preços
+  const o = defaultTexts(await listDocOptions(db, unitId), v("quote_products_intro"));
   return {
-    servicesText: "", applicationText: v("quote_application_default"), productsText: v("quote_products_default"), paymentTerms: v("quote_payment_default"),
-    executionTime: v("quote_execution_default"), validityText: v("quote_validity_default"), includesText: v("quote_includes_default"),
-    schedulingText: v("quote_scheduling_default"), attentionText: v("quote_attention_default"), cancellationText: v("quote_cancellation_default"),
+    servicesText: "", applicationText: o.applicationText || v("quote_application_default"), productsText: o.productsText || v("quote_products_default"),
+    paymentTerms: o.paymentTerms || v("quote_payment_default"), executionTime: o.executionTime || v("quote_execution_default"),
+    validityText: o.validityText || v("quote_validity_default"), includesText: o.includesText || v("quote_includes_default"),
+    schedulingText: o.schedulingText || v("quote_scheduling_default"), attentionText: v("quote_attention_default"), cancellationText: v("quote_cancellation_default"),
     signatureName: v("quote_signature_name"), signatureRole: v("quote_signature_role"), signaturePhone: v("quote_signature_phone"), city: v("quote_city"),
+    productsIntro: v("quote_products_intro"),
   };
 }
 
@@ -410,20 +427,60 @@ const orderValue = (i: OrderFields, k: keyof OrderFields) => {
   return typeof v === "string" ? v.replace(/\r\n/g, "\n").trim() || null : v ?? null;
 };
 
-/** OS avulsa (sem agendamento), por exemplo importada de um arquivo. */
-export async function createStandaloneOrder(db: Db, ctx: Ctx, customerId: string, fields: OrderFields, opts: { fileId?: string | null } = {}): Promise<string> {
+/**
+ * OS criada pelo formulário (ou importada de um arquivo). Com `appointmentId`, fica ligada ao agendamento do mesmo cliente:
+ * data, horário, serviços e valor que não vierem preenchidos saem do agendamento.
+ */
+export async function createStandaloneOrder(db: Db, ctx: Ctx, customerId: string, fields: OrderFields, opts: { fileId?: string | null; appointmentId?: string | null } = {}): Promise<string> {
   need(ctx, "agenda.manage");
   checkOrderFields(fields);
   return db.tx(async (q) => {
     const [c] = await q("select 1 from customers where id=$1 and unit_id=$2", [requireUuid(customerId, "Cliente"), ctx.unitId]);
     if (!c) throw new DomainError("not_found", "Cliente não encontrado.");
+    const f: OrderFields = { ...fields };
+    let appointmentId: string | null = null;
+    if (opts.appointmentId) {
+      const [a] = await q<{ customer_id: string; status: string; d: string; t: string; services: string | null; total: number | null; warranty: number | null }>(
+        `select ap.customer_id, ap.status, to_char(ap.starts_at at time zone 'America/Sao_Paulo','YYYY-MM-DD') as d, to_char(ap.starts_at at time zone 'America/Sao_Paulo','HH24:MI') as t,
+                (select string_agg(ai.name_snapshot, ', ') from appointment_services ai where ai.appointment_id=ap.id) as services,
+                (select sum(ai.price_cents) from appointment_services ai where ai.appointment_id=ap.id)::bigint as total,
+                (select max(s.warranty_days) from appointment_services ai join services s on s.id=ai.service_id where ai.appointment_id=ap.id) as warranty
+         from appointments ap where ap.id=$1 and ap.unit_id=$2 for update of ap`, [requireUuid(opts.appointmentId, "Agendamento"), ctx.unitId]);
+      if (!a) throw new DomainError("not_found", "Agendamento não encontrado.");
+      if (a.customer_id !== customerId) throw new DomainError("invalid", "O agendamento escolhido é de outro cliente.");
+      if (a.status === "cancelado") throw new DomainError("invalid", "Agendamento cancelado não gera ordem de serviço.");
+      const [dup] = await q<{ number: number }>("select number from service_orders where appointment_id=$1", [opts.appointmentId]);
+      if (dup) throw new DomainError("duplicate", `Este agendamento já tem a OS nº ${dup.number}.`);
+      appointmentId = opts.appointmentId;
+      f.serviceDate ||= a.d;
+      f.serviceTime ||= a.t;
+      f.servicesText ||= a.services;
+      f.valueCents ??= a.total;
+      f.warrantyDays ??= a.warranty;
+    }
     const n = await nextOrderNumber(q, ctx.unitId);
-    const cols = ["unit_id", "number", "customer_id", "created_by", "file_id", "payment_status", ...ORDER_COLS.map(([, col]) => col)];
-    const vals = [ctx.unitId, n, customerId, ctx.userId, opts.fileId ?? null, fields.paymentStatus ?? "pendente", ...ORDER_COLS.map(([k]) => orderValue(fields, k))];
+    const cols = ["unit_id", "number", "customer_id", "created_by", "file_id", "appointment_id", "payment_status", ...ORDER_COLS.map(([, col]) => col)];
+    const vals = [ctx.unitId, n, customerId, ctx.userId, opts.fileId ?? null, appointmentId, f.paymentStatus ?? "pendente", ...ORDER_COLS.map(([k]) => orderValue(f, k))];
     const [r] = await q<{ id: string }>(`insert into service_orders(${cols.join(",")}) values (${cols.map((_, i) => `$${i + 1}`).join(",")}) returning id`, vals);
-    await audit(q, ctx, "OS_CRIADA", "service_order", r.id, null, { numero: n, avulsa: true });
+    await audit(q, ctx, "OS_CRIADA", "service_order", r.id, null, { numero: n, avulsa: !appointmentId, agendamento: appointmentId });
     return r.id;
   });
+}
+
+export interface OpenAppointment { id: string; customer_id: string; date: string; time: string; services: string; service_ids: string[]; total_cents: number; staff_name: string }
+
+/** Agendamentos (últimos 30 dias e próximos 6 meses) que ainda não têm OS, para a OS nova puxar data e serviços. */
+export async function appointmentsWithoutOrder(db: Db, ctx: Ctx): Promise<OpenAppointment[]> {
+  need(ctx, "agenda.manage");
+  return db.query<OpenAppointment>(
+    `select ap.id, ap.customer_id, to_char(ap.starts_at at time zone 'America/Sao_Paulo','YYYY-MM-DD') as date, to_char(ap.starts_at at time zone 'America/Sao_Paulo','HH24:MI') as time,
+            coalesce((select string_agg(ai.name_snapshot, ', ' order by ai.name_snapshot) from appointment_services ai where ai.appointment_id=ap.id), '') as services,
+            coalesce((select array_agg(ai.service_id) from appointment_services ai where ai.appointment_id=ap.id and ai.service_id is not null), '{}') as service_ids,
+            coalesce((select sum(ai.price_cents) from appointment_services ai where ai.appointment_id=ap.id), 0)::bigint as total_cents, st.name as staff_name
+     from appointments ap join staff st on st.id=ap.staff_id
+     where ap.unit_id=$1 and ap.status <> 'cancelado' and ap.starts_at >= now() - interval '30 days' and ap.starts_at < now() + interval '183 days'
+       and not exists (select 1 from service_orders so where so.appointment_id=ap.id)
+     order by ap.starts_at`, [ctx.unitId]);
 }
 
 export async function updateServiceOrder(db: Db, ctx: Ctx, id: string, i: OrderFields) {
@@ -533,7 +590,7 @@ export const DOC_SETTING_COLS = [
   "company_name", "company_cnpj", "company_phone", "company_email", "company_site", "company_address",
   "quote_application_default", "quote_products_default", "quote_payment_default", "quote_execution_default", "quote_validity_default",
   "quote_includes_default", "quote_scheduling_default", "quote_attention_default", "quote_cancellation_default",
-  "quote_signature_name", "quote_signature_role", "quote_signature_phone", "quote_city", "quote_closing",
+  "quote_signature_name", "quote_signature_role", "quote_signature_phone", "quote_city", "quote_closing", "quote_products_intro",
 ] as const;
 export type DocSettingCol = (typeof DOC_SETTING_COLS)[number];
 

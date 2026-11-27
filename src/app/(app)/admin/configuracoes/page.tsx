@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getDb } from "@/server/db";
 import { requirePerm } from "@/server/session";
 import { getSettings } from "@/server/core";
@@ -31,7 +32,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </section>
       <form action={saveDocumentSettingsAction} className="card form" id="documentos">
         <h2>Empresa e textos do orçamento</h2>
-        <p>Aparecem nas ordens de serviço e nos orçamentos. Os textos do orçamento entram já preenchidos em cada orçamento novo, e dá para ajustar caso a caso.</p>
+        <p>Aparecem nas ordens de serviço e nos orçamentos. Os textos abaixo entram já preenchidos em cada orçamento novo, e dá para ajustar caso a caso.</p>
         <div className="fields">
           <Field label="Nome da empresa"><input name="company_name" defaultValue={doc.company_name ?? ""} /></Field>
           <Field label="CNPJ"><input name="company_cnpj" defaultValue={doc.company_cnpj ?? ""} /></Field>
@@ -42,15 +43,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <Field label="Site"><input name="company_site" defaultValue={doc.company_site ?? ""} /></Field>
           <Field label="Endereço"><input name="company_address" defaultValue={doc.company_address ?? ""} /></Field>
         </div>
-        <Field label="Formas de aplicação"><textarea name="quote_application_default" rows={3} defaultValue={doc.quote_application_default ?? ""} /></Field>
-        <Field label="Descrição dos produtos"><textarea name="quote_products_default" rows={8} defaultValue={doc.quote_products_default ?? ""} /></Field>
-        <div className="fields">
-          <Field label="Formas de pagamento"><input name="quote_payment_default" defaultValue={doc.quote_payment_default ?? ""} /></Field>
-          <Field label="Prazo de execução"><input name="quote_execution_default" defaultValue={doc.quote_execution_default ?? ""} /></Field>
-          <Field label="Validade"><input name="quote_validity_default" defaultValue={doc.quote_validity_default ?? ""} /></Field>
-        </div>
-        <Field label="Acompanha"><textarea name="quote_includes_default" rows={2} defaultValue={doc.quote_includes_default ?? ""} /></Field>
-        <Field label="Agendamento"><textarea name="quote_scheduling_default" rows={2} defaultValue={doc.quote_scheduling_default ?? ""} /></Field>
+        <p className="muted">Aplicação, produtos, acompanha, agendamento, pagamento, prazo e validade são escolhidos entre as opções de <Link href="/admin/servicos#opcoes">Serviços e preços</Link>.</p>
+        <Field label="Frase antes da lista de produtos"><textarea name="quote_products_intro" rows={2} defaultValue={doc.quote_products_intro ?? ""} /></Field>
         <Field label="Atenção"><textarea name="quote_attention_default" rows={3} defaultValue={doc.quote_attention_default ?? ""} /></Field>
         <Field label="Obs. (cancelamento)"><textarea name="quote_cancellation_default" rows={3} defaultValue={doc.quote_cancellation_default ?? ""} /></Field>
         <Field label="Fecho do orçamento"><textarea name="quote_closing" rows={4} defaultValue={doc.quote_closing ?? ""} /></Field>

@@ -1,10 +1,11 @@
 import { Field } from "@/components/ui";
+import { OptionChecklist } from "@/components/doc-pickers";
 import { CLIENT_SITUATION_LABEL, OS_PAYMENT_LABEL, type ServiceOrderRow } from "@/server/services/eagle";
 
 const brl = (c: number | null | undefined) => (c == null ? "" : (c / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
-/** Campos da OS na ordem do modelo da Eagle. Usado para criar (sem `o`) e editar. */
-export function OrderFieldsForm({ o }: { o?: ServiceOrderRow }) {
+/** Campos da OS na ordem do modelo da Eagle. Usado para criar (sem `o`) e editar. Os serviços são marcados entre os cadastrados. */
+export function OrderFieldsForm({ o, services }: { o?: ServiceOrderRow; services: { id: string; name: string }[] }) {
   return (
     <>
       <fieldset>
@@ -13,7 +14,10 @@ export function OrderFieldsForm({ o }: { o?: ServiceOrderRow }) {
           <Field label="Data"><input type="date" name="serviceDate" defaultValue={o?.service_date ?? ""} /></Field>
           <Field label="Horário"><input type="time" name="serviceTime" defaultValue={o?.service_time ?? ""} /></Field>
         </div>
-        <Field label="Serviços"><textarea name="servicesText" defaultValue={o?.services ?? ""} placeholder="Ex.: Dedetização geral, desratização, limpeza de 3 caixas d'água de 500 litros cada." /></Field>
+        <OptionChecklist name="svc_os" kind="servico_os" label="Serviços" isNew={!o} current={o?.services}
+          options={services.map((s) => ({ key: s.id, id: s.id, text: s.name }))} attrs={(s) => ({ "data-service": s.id ?? "" })}
+          empty="Nenhum serviço cadastrado. Cadastre em Serviços e preços." />
+        <Field label="Detalhes dos serviços (opcional)"><input name="servicesDetails" placeholder="Ex.: limpeza de 3 caixas d'água de 500 litros cada" /></Field>
       </fieldset>
       <fieldset>
         <legend>Valor e pagamento</legend>

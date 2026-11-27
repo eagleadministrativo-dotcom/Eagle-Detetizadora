@@ -7,6 +7,7 @@ import { listServices } from "@/server/services/catalog";
 import { getQuote, quoteDefaults } from "@/server/services/eagle";
 import { Flash, PageHead } from "@/components/ui";
 import { QuoteForm } from "@/components/quote-form";
+import { agendaForPicker, listDocOptions } from "@/server/services/doc-options";
 
 export const metadata = { title: "Editar orçamento" };
 
@@ -18,14 +19,15 @@ export default async function EditQuote({ params, searchParams }: { params: Prom
   const data = await getQuote(db, ctx, id).catch(() => null);
   if (!data) notFound();
   if (data.quote.status === "aprovado" || data.quote.status === "recusado") redirect(`/orcamentos/${id}?erro=${encodeURIComponent("Volte o orçamento para rascunho antes de editar.")}`);
-  const [customers, services, defaults] = await Promise.all([listCustomers(db, ctx, { limit: 1000 }), listServices(db, ctx.unitId), quoteDefaults(db, ctx.unitId)]);
+  const [customers, services, defaults, options, agenda] = await Promise.all([
+    listCustomers(db, ctx, { limit: 1000 }), listServices(db, ctx.unitId), quoteDefaults(db, ctx.unitId), listDocOptions(db, ctx.unitId), agendaForPicker(db, ctx)]);
   return (
     <>
       <PageHead title={`Orçamento nº ${data.quote.number}`} sub="Editando itens e condições.">
         <Link className="btn ghost" href={`/orcamentos/${id}`}>Voltar</Link>
       </PageHead>
       <Flash ok={sp.ok} erro={sp.erro} />
-      <QuoteForm customers={customers.rows} services={services} quote={data.quote} items={data.items} defaults={defaults} />
+      <QuoteForm customers={customers.rows} services={services} quote={data.quote} items={data.items} defaults={defaults} options={options} agenda={agenda} />
     </>
   );
 }

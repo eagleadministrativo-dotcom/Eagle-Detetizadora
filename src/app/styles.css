@@ -1294,3 +1294,28 @@ a.signal:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); }
   .card { background: #fff !important; box-shadow: none !important; border: 1px solid #ccc; backdrop-filter: none !important; }
   .card::before, .card::after { display: none; }
 }
+
+/* Opções para marcar (orçamento e OS) */
+.optlist { display: grid; gap: 2px; }
+.optlist .opt { align-items: flex-start; padding: 6px 4px; border-radius: 10px; line-height: 1.35; }
+.optlist .opt input { margin-top: 2px; flex: none; width: 18px; height: 18px; accent-color: var(--accent); }
+.optlist .opt:hover { background: var(--accent-soft); }
+.optlist .optgroup { margin: 10px 0 2px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.optrow { align-items: center; }
+
+/* Mini agenda do orçamento */
+.minical { display: grid; gap: 10px; max-width: 460px; }
+.minical-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.minical-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.minical-wd { text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); padding: 2px 0; }
+.minical-day { position: relative; aspect-ratio: 1; min-height: 38px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink);
+  font: 600 14px var(--sans); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background var(--t-micro), border-color var(--t-micro); }
+.minical-day:hover:not(:disabled) { border-color: var(--accent); }
+.minical-day:disabled { opacity: 0.35; cursor: default; }
+.minical-day.today { border-color: var(--ink); }
+.minical-day.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.minical-day i { position: absolute; top: 2px; right: 3px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--ink); color: var(--bg);
+  font: 700 10px/16px var(--sans); font-style: normal; }
+.minical-day.on i { background: var(--accent-ink); color: var(--accent); }
+.minical-sel { display: grid; gap: 8px; }
+.minical-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }

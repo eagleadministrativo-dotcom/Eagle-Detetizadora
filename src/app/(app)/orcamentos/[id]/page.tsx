@@ -24,7 +24,8 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   const manage = can(ctx, "quotes.manage");
   const editable = q.status === "rascunho" || q.status === "enviado";
   const expired = q.valid_until && q.valid_until < todayYmd() && editable;
-  const services = [...new Set(items.map((i) => i.service_id).filter(Boolean))].join(",");
+  const services = [...new Set([...(q.service_ids ?? []), ...items.map((i) => i.service_id)].filter(Boolean))].join(",");
+  const when = `${q.scheduled_date ? `&d=${q.scheduled_date}` : ""}${q.scheduled_date && q.scheduled_time ? `&t=${q.scheduled_time}` : ""}`;
   const status = (value: string, label: string, cls = "btn") => (
     <form action={quoteStatusAction}><input type="hidden" name="id" value={q.id} /><input type="hidden" name="status" value={value} /><button className={cls} type="submit">{label}</button></form>
   );
@@ -44,7 +45,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
         {manage && editable ? status("aprovado", "Cliente aprovou", "btn accent") : null}
         {manage && editable ? status("recusado", "Cliente recusou", "btn ghost") : null}
         {manage && !editable ? status("rascunho", "Voltar para rascunho", "btn ghost") : null}
-        {q.status === "aprovado" && can(ctx, "agenda.create") ? <Link className="btn accent" href={`/agenda/novo?cust=${q.customer_id}${services ? `&svc=${services}` : ""}`}>Agendar o serviço</Link> : null}
+        {q.status === "aprovado" && can(ctx, "agenda.create") ? <Link className="btn accent" href={`/agenda/novo?cust=${q.customer_id}${services ? `&svc=${services}` : ""}${when}`}>{q.scheduled_date ? `Agendar para ${fmtYmd(q.scheduled_date)}` : "Agendar o serviço"}</Link> : null}
         {can(ctx, "customers.view") ? <Link className="btn ghost" href={`/clientes/${q.customer_id}`}>Ficha do cliente</Link> : null}
         {q.file_id ? <a className="btn ghost" href={`/api/arquivo/cliente/${q.file_id}`}>Arquivo original</a> : null}
       </section>

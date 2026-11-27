@@ -4,6 +4,7 @@ import { getDb } from "@/server/db";
 import { requirePerm } from "@/server/session";
 import { can } from "@/server/core";
 import { CLIENT_SITUATION_LABEL, getServiceOrder } from "@/server/services/eagle";
+import { listServices } from "@/server/services/catalog";
 import { fmtYmd } from "@/lib/dates";
 import { docPhone } from "@/lib/doc-format";
 import { ConfirmAction, Field, Flash, PageHead } from "@/components/ui";
@@ -18,8 +19,10 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const { id } = await params;
   const sp = await searchParams;
   const { ctx } = await requirePerm("agenda.manage", "agenda.view_all", "agenda.manage_own", "agenda.view_own");
-  const o = await getServiceOrder(await getDb(), ctx, id).catch(() => null);
+  const db = await getDb();
+  const o = await getServiceOrder(db, ctx, id).catch(() => null);
   if (!o) notFound();
+  const services = await listServices(db, ctx.unitId);
   const office = can(ctx, "agenda.manage");
   const mine = office || (can(ctx, "agenda.manage_own") && !!o.staff_id && ctx.staffId === o.staff_id);
   const editable = mine && (o.status === "aberta" || (o.status === "executada" && office));
@@ -39,7 +42,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           {editable ? (
             <form action={updateServiceOrderAction} className="form">
               <input type="hidden" name="id" value={o.id} />
-              <OrderFieldsForm o={o} />
+              <OrderFieldsForm o={o} services={services} />
               <div><button className="btn accent" type="submit">Salvar</button></div>
             </form>
           ) : (
