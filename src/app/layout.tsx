@@ -6,6 +6,8 @@ import "@fontsource-variable/inter";
 import "./styles.css";
 import { cookies } from "next/headers";
 import { THEME_COOKIE } from "@/server/session";
+import { Suspense } from "react";
+import { FormGuard } from "@/components/form-guard";
 
 export const metadata: Metadata = {
   title: { default: "Eagle Detetizadora", template: "%s · Eagle Detetizadora" },
@@ -26,7 +28,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {/* eslint-disable-next-line @next/next/no-sync-scripts */}
         <script src="/theme.js" />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* trava o botão enquanto salva, para não gravar duas vezes no clique duplo */}
+        <Suspense fallback={null}><FormGuard /></Suspense>
+      </body>
     </html>
   );
 }

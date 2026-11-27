@@ -71,6 +71,12 @@ export async function saveCustomer(db: Db, ctx: Ctx, input: SaveCustomerInput): 
       await audit(q, ctx, "CLIENTE_EDITADO", "customer", input.id, { name: old.name, phone: old.phone }, { name, phone });
       return input.id;
     }
+    // mesmo cliente enviado de novo em seguida (clique duplo, rede lenta): devolve o cadastro que acabou de ser criado
+    await q("select pg_advisory_xact_lock(hashtext('customer-new:' || $1::text))", [ctx.unitId]);
+    const [recent] = await q<{ id: string }>(
+      `select id from customers where unit_id=$1 and lower(name)=lower($2) and coalesce(phone,'')=coalesce($3,'') and created_at > now() - interval '2 minutes'
+       order by created_at desc limit 1`, [ctx.unitId, name, phone]);
+    if (recent) return recent.id;
     const [r] = await q<{ id: string }>(
       "insert into customers(unit_id,name,phone,email,cpf,birthdate,notes,updated_by,legal_name,trade_name,address,cep,contact_name) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning id",
       [ctx.unitId, name, phone, sensitive ? input.email || null : null, sensitive ? input.cpf || null : null, sensitive ? input.birthdate || null : null, input.notes ?? null, ctx.userId,
