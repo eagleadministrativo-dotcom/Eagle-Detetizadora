@@ -2,15 +2,16 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "./db";
 import { getSession, type SessionInfo } from "./auth";
+import { COOKIE, SESSION_COOKIE_OPTIONS } from "./session-cookie";
 import { isDomainError } from "./errors";
 import type { Permission } from "./permissions";
 
-export const COOKIE = "marfim_session";
+export { COOKIE };
 /** Falhas de senha neste aparelho (só para a tela destacar "Esqueceu a senha?"; o bloqueio real é no servidor). */
 export const FAILS_COOKIE = "marfim_falhas";
 
 export async function setSessionCookie(token: string) {
-  (await cookies()).set(COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 12 * 3600 });
+  (await cookies()).set(COOKIE, token, SESSION_COOKIE_OPTIONS);
 }
 /** Tema em cookie: o servidor já entrega a página no tema certo, sem clarão. */
 export const THEME_COOKIE = "marfim_theme";
@@ -25,17 +26,14 @@ export async function sessionToken() {
   return (await cookies()).get(COOKIE)?.value;
 }
 
-/** Sessão válida (inclusive a que ainda aguarda MFA). */
 export async function currentSession(): Promise<SessionInfo | null> {
   const token = await sessionToken(); // lê o cookie primeiro: torna a rota dinâmica antes de tocar no banco
   return getSession(await getDb(), token);
 }
 
-/** Exige login e MFA concluído. */
 export async function requireSession(): Promise<SessionInfo> {
   const s = await currentSession();
-  if (!s) redirect("/login");
-  if (!s.mfaVerified) redirect(s.user.mfaEnabled ? "/login/mfa" : "/login/mfa/setup");
+  if (!s || !s.mfaVerified) redirect("/login");
   return s;
 }
 

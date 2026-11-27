@@ -42,10 +42,9 @@ export async function setupInitial(db: Db, input: SetupInput): Promise<{ unitId:
     const [org] = await q<{ id: string }>("insert into organizations(name,is_demo) values ($1,$2) returning id", [orgName, !!input.demo]);
     const [unit] = await q<{ id: string }>("insert into units(organization_id,name) values ($1,$2) returning id", [org.id, unitName]);
     const unitId = unit.id;
-    await q("insert into unit_settings(unit_id, business_hours, mfa_required) values ($1,$2,$3)", [
+    await q("insert into unit_settings(unit_id, business_hours) values ($1,$2)", [
       unitId,
       JSON.stringify({ "1": [["09:00", "19:00"]], "2": [["09:00", "19:00"]], "3": [["09:00", "19:00"]], "4": [["09:00", "19:00"]], "5": [["09:00", "19:00"]], "6": [["09:00", "17:00"]] }),
-      process.env.NODE_ENV === "production",
     ]);
     const [owner] = await q<{ id: string }>("insert into users(email,full_name,password_hash) values ($1,$2,$3) returning id", [email, ownerName, hashPassword(input.password)]);
     await q("insert into user_units(user_id,unit_id,role) values ($1,$2,'administrador')", [owner.id, unitId]);
@@ -74,12 +73,12 @@ export async function setupInitial(db: Db, input: SetupInput): Promise<{ unitId:
 }
 
 // ---------- usuários ----------
-export interface UserRow { id: string; email: string; full_name: string; is_active: boolean; role: Role; mfa_enabled: boolean; last_login_at: Date | null; overrides: string[]; staff_name: string | null }
+export interface UserRow { id: string; email: string; full_name: string; is_active: boolean; role: Role; email_verified: boolean; last_login_at: Date | null; overrides: string[]; staff_name: string | null }
 
 export async function listUsers(db: Db, ctx: Ctx): Promise<UserRow[]> {
   need(ctx, "users.manage");
   return db.query<UserRow>(
-    `select u.id, u.email, u.full_name, u.is_active, uu.role, u.mfa_enabled, u.last_login_at,
+    `select u.id, u.email, u.full_name, u.is_active, uu.role, u.email_verified_at is not null as email_verified, u.last_login_at,
        coalesce((select array_agg(po.permission) from permission_overrides po where po.user_id=u.id and po.unit_id=uu.unit_id and po.granted),'{}') as overrides,
        (select s.name from staff s where s.user_id=u.id and s.unit_id=uu.unit_id limit 1) as staff_name
      from users u join user_units uu on uu.user_id=u.id where uu.unit_id=$1 order by u.full_name`,
@@ -161,7 +160,7 @@ export async function resetUserPassword(db: Db, ctx: Ctx, userId: string, newPas
     const [u] = await q<{ role: Role }>("select role from user_units where user_id=$1 and unit_id=$2", [userId, ctx.unitId]);
     if (!u) throw new DomainError("not_found", "Usuário não encontrado.");
     if (ctx.role !== "administrador" && u.role === "administrador") throw new ForbiddenError("Só o administrador redefine a senha do administrador.");
-    await q("update users set password_hash=$2, failed_attempts=0, locked_until=null, mfa_enabled=false, mfa_secret=null where id=$1", [userId, hashPassword(newPassword)]);
+    await q("update users set password_hash=$2, failed_attempts=0, locked_until=null where id=$1", [userId, hashPassword(newPassword)]);
     await q("delete from sessions where user_id=$1", [userId]);
     await audit(q, ctx, "SENHA_REDEFINIDA", "user", userId);
   });

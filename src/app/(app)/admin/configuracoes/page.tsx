@@ -70,8 +70,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <small>O regime é informativo: os impostos são lançados manualmente como contas a pagar na categoria &quot;Impostos&quot;. Defina a retenção com orientação jurídica/contábil (LGPD).</small>
         </section>
         <section className="card form">
-          <h2>Segurança e notificações</h2>
-          <label className="check"><input type="checkbox" name="mfa" defaultChecked={st.mfa_required} />Exigir verificação em duas etapas para administrador e gerente</label>
+          <h2>Acesso e notificações</h2>
+          <small>Cada pessoa confirma o e-mail com um código no primeiro acesso; depois o login fica lembrado no aparelho até ela tocar em Sair.</small>
           <small>Canal de alertas: dentro do sistema. E-mail e WhatsApp dependem de serviços externos e só serão ativados com sua autorização.</small>
         </section>
         <div className="sticky-actions"><button className="btn accent" type="submit">Salvar configurações</button></div>

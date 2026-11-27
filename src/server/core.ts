@@ -36,7 +36,6 @@ export interface UnitSettings {
   tax_regime: string | null;
   customer_retention_months: number | null;
   notification_channels: string[];
-  mfa_required: boolean;
 }
 
 export async function getSettings(q: Q, unitId: string): Promise<UnitSettings> {

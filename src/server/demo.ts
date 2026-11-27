@@ -42,6 +42,7 @@ export async function seedDemo(db: Db) {
   await createUser(db, owner, { email: DEMO_USERS.tech2, fullName: "Técnico 2 (demo)", role: "tecnico", password: DEMO_PASSWORD, staffId: tech2 });
   await createUser(db, owner, { email: DEMO_USERS.manager, fullName: "Gerente Demo", role: "gerente", password: DEMO_PASSWORD });
   await createUser(db, owner, { email: DEMO_USERS.seller, fullName: "Vendedor Demo", role: "vendedor", password: DEMO_PASSWORD });
+  await db.query("update users set email_verified_at=now() where email like '%@demo.eagle.local'"); // contas de demonstração não recebem e-mail
 
   const cat0 = await listCatalog(db, unitId);
   const geral = cat0.svcCats.find((c) => c.name === "Dedetização geral")!.id, especifica = cat0.svcCats.find((c) => c.name === "Dedetização específica")!.id, manutencao = cat0.svcCats.find((c) => c.name === "Manutenção")!.id;

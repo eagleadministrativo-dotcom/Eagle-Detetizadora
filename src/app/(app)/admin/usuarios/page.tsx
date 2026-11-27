@@ -31,7 +31,7 @@ export default async function UsersAdmin({ searchParams }: { searchParams: Promi
       <div className="stack">
         {users.map((u) => (
           <details className="card" key={u.id}>
-            <summary><b>{u.full_name}</b> · {u.email} <Badge tone="solid">{ROLE_LABEL[u.role]}</Badge> {!u.is_active ? <Badge>inativo</Badge> : null} {u.mfa_enabled ? <Badge tone="ok">2FA</Badge> : <Badge tone="warn">sem 2FA</Badge>} {u.staff_name ? <small>· profissional: {u.staff_name}</small> : null}</summary>
+            <summary><b>{u.full_name}</b> · {u.email} <Badge tone="solid">{ROLE_LABEL[u.role]}</Badge> {!u.is_active ? <Badge>inativo</Badge> : null} {u.email_verified ? null : <Badge tone="warn">e-mail a confirmar</Badge>} {u.staff_name ? <small>· profissional: {u.staff_name}</small> : null}</summary>
             <div className="stack" style={{ marginTop: 12 }}>
               <small>Último acesso: {u.last_login_at ? fmtDateTime(u.last_login_at) : "nunca"}</small>
               <form action={updateUserAction} className="form">
@@ -42,7 +42,7 @@ export default async function UsersAdmin({ searchParams }: { searchParams: Promi
                 </div>
                 <div className="row"><button className="btn" type="submit">Salvar</button><Link className="btn accent" href={`/admin/usuarios/${u.id}`}>Permissões individuais</Link></div>
               </form>
-              <ConfirmAction label="Redefinir senha e 2FA" action={resetPasswordAction} submit="Redefinir" warn="Encerra todas as sessões do usuário e reinicia o autenticador.">
+              <ConfirmAction label="Redefinir senha" action={resetPasswordAction} submit="Redefinir" warn="Encerra todas as sessões do usuário, em todos os aparelhos.">
                 <input type="hidden" name="id" value={u.id} />
                 <Field label="Nova senha provisória (mín. 10, letras e números)"><input name="password" type="password" minLength={10} required autoComplete="new-password" /></Field>
               </ConfirmAction>

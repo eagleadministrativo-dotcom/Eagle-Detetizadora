@@ -1,15 +1,13 @@
 import { requireSession } from "@/server/session";
 import { ROLE_LABEL } from "@/server/permissions";
-import { changePasswordAction, mfaSetupStartAction } from "@/app/actions/auth";
-import { Badge, Flash, PageHead } from "@/components/ui";
+import { changePasswordAction } from "@/app/actions/auth";
+import { Flash, PageHead } from "@/components/ui";
 import { getDb } from "@/server/db";
 import { getPrefs } from "@/server/services/access";
 import { NOTIFY_GROUPS } from "@/server/services/notify";
 import { savePrefsAction } from "@/app/actions/account";
 import { ThemeChoice } from "@/components/client";
 import { PushToggle } from "@/components/push-toggle";
-import { RecoveryCodes } from "@/components/recovery";
-import { recoveryCodesLeft } from "@/server/auth";
 
 export const metadata = { title: "Minha conta" };
 
@@ -30,20 +28,7 @@ export default async function Account({ searchParams }: { searchParams: Promise<
             <label>Repita a nova senha<input name="next2" type="password" minLength={10} autoComplete="new-password" required /></label>
             <div><button className="btn" type="submit">Alterar senha</button></div>
           </form>
-          <small>Ao alterar a senha, todas as sessões são encerradas.</small>
-        </section>
-        <section className="card stack" id="seguranca">
-          <h2>Verificação em duas etapas</h2>
-          <p>{s.user.mfaEnabled ? <Badge tone="ok">Ativa</Badge> : <Badge tone="warn">Desativada</Badge>}</p>
-          {!s.user.mfaEnabled ? (
-            <form action={mfaSetupStartAction}><button className="btn accent" type="submit">Ativar agora</button></form>
-          ) : (
-            <>
-              <small>Para trocar de aparelho, peça ao administrador para redefinir sua senha (isso reinicia o autenticador).</small>
-              <h3>Códigos de recuperação</h3>
-              <RecoveryCodes left={await recoveryCodesLeft(await getDb(), s.user.id)} />
-            </>
-          )}
+          <small>Ao alterar a senha, todas as sessões são encerradas. Nos outros casos, o login fica lembrado neste aparelho até você tocar em Sair.</small>
         </section>
         <section className="card stack" id="preferencias">
           <h2>Preferências</h2>

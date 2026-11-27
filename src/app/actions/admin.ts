@@ -126,7 +126,6 @@ export async function updateSettingsAction(fd: FormData) {
       no_show_fee_cents: str(fd, "noShowFee") ? need$(fd, "noShowFee", "Taxa de não comparecimento") : null,
       tax_regime: optStr(fd, "tax"),
       customer_retention_months: str(fd, "retention") ? Number(str(fd, "retention")) : null,
-      mfa_required: bool(fd, "mfa"),
     });
     return "Configurações salvas.";
   });
@@ -172,7 +171,7 @@ export async function resetPasswordAction(fd: FormData) {
   const { ctx } = await requireSession();
   await run("/admin/usuarios", async () => {
     await resetUserPassword(await getDb(), ctx, str(fd, "id"), str(fd, "password"));
-    return "Senha redefinida; o autenticador do usuário foi reiniciado e as sessões encerradas.";
+    return "Senha redefinida e sessões do usuário encerradas.";
   });
 }
 

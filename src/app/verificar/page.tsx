@@ -12,8 +12,8 @@ export default async function VerifyPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   const info = await flowInfo(await getDb(), (await cookies()).get("marfim_fluxo")?.value);
   if (!info) redirect("/bem-vindo");
-  if (info.verified) redirect("/definir-senha");
-  const restart = info.purpose === "senha" ? { href: "/esqueci", label: "Usar outro e-mail" } : { href: "/cadastro", label: "Usar outro e-mail" };
+  if (info.verified) redirect(info.purpose === "login" ? "/login" : "/definir-senha");
+  const restart = info.purpose === "login" ? { href: "/login", label: "Voltar para Entrar" } : info.purpose === "senha" ? { href: "/esqueci", label: "Usar outro e-mail" } : { href: "/cadastro", label: "Usar outro e-mail" };
   return (
     <AuthCard title="Digite o código" sub={<>Enviado para <b>{info.email}</b>. Ele vale por 15 minutos.</>} ok={sp.ok} erro={sp.erro} back={restart}>
       <form action={verifyCodeAction} className="form">

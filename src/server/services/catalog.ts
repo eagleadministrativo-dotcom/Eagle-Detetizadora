@@ -234,9 +234,9 @@ export async function updateSettings(db: Db, ctx: Ctx, patch: SettingsPatch) {
     if (next.retroactive_edit_days < 0) throw new DomainError("invalid", "Janela retroativa inválida.");
     await q(
       `update unit_settings set business_hours=$2, retroactive_edit_days=$3, discount_owner_only=$4, discount_limit_bps=$5, no_show_policy=$6, no_show_fee_cents=$7,
-         tax_regime=$8, customer_retention_months=$9, notification_channels=$10, mfa_required=$11, updated_at=now(), updated_by=$12 where unit_id=$1`,
+         tax_regime=$8, customer_retention_months=$9, notification_channels=$10, updated_at=now(), updated_by=$11 where unit_id=$1`,
       [ctx.unitId, JSON.stringify(next.business_hours), next.retroactive_edit_days, next.discount_owner_only, next.discount_limit_bps, next.no_show_policy, next.no_show_fee_cents,
-        next.tax_regime, next.customer_retention_months, JSON.stringify(next.notification_channels), next.mfa_required, ctx.userId],
+        next.tax_regime, next.customer_retention_months, JSON.stringify(next.notification_channels), ctx.userId],
     );
     await audit(q, ctx, "CONFIGURACAO_ALTERADA", "unit_settings", ctx.unitId, before, next);
   });

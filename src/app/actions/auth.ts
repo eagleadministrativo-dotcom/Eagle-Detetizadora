@@ -3,8 +3,8 @@ import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { rateLimit } from "@/server/services/health";
 import { getDb } from "@/server/db";
-import { changePassword, beginMfaSetup, completeMfaSetup, generateRecoveryCodes, login, logout, verifyMfaForSession, LOGIN_LOCK_MINUTES, LOGIN_MAX_FAILS } from "@/server/auth";
-import { finishPasswordReset, finishSignup, flowInfo, maskEmail, resendCode, sendAccessLink, setTempPassword, startPasswordReset, startSignup, verifyCode } from "@/server/services/invites";
+import { changePassword, login, logout, LOGIN_LOCK_MINUTES, LOGIN_MAX_FAILS, type LoginResult } from "@/server/auth";
+import { finishLoginCheck, finishPasswordReset, finishSignup, flowInfo, maskEmail, resendCode, sendAccessLink, setTempPassword, startLoginCheck, startPasswordReset, startSignup, verifyCode } from "@/server/services/invites";
 import { FAILS_COOKIE } from "@/server/session";
 import { isDomainError } from "@/server/errors";
 import { setupInitial, isSetupDone } from "@/server/services/bootstrap";
@@ -21,14 +21,24 @@ const TOO_MANY = "Muitas tentativas a partir desta conexão. Aguarde alguns minu
 
 const back = (path: string, erro: string) => redirect(`${path}?erro=${encodeURIComponent(erro)}`);
 
-async function afterLogin(r: { token: string; needsMfa: boolean; needsMfaSetup: boolean }) {
-  await setSessionCookie(r.token);
+async function afterLogin(token: string) {
+  await setSessionCookie(token);
   const db = await getDb();
-  const s = await getSession(db, r.token);
+  const s = await getSession(db, token);
   if (s) await setThemeCookie((await getPrefs(db, s.user.id)).theme);
-  if (r.needsMfa) redirect("/login/mfa");
-  if (r.needsMfaSetup) redirect("/login/mfa/setup");
   redirect("/");
+}
+
+/** Primeiro acesso: manda o código ao e-mail e leva à tela do código. */
+async function startEmailCheck(from: string, check: NonNullable<LoginResult["emailCheck"]>) {
+  const db = await getDb();
+  if (!(await rateLimit(db, `codigo:email:${check.email.slice(0, 190)}`, 5, 3600))) return back(from, TOO_MANY);
+  try {
+    await setFlow(await startLoginCheck(db, check));
+  } catch (e) {
+    return back(from, isDomainError(e) ? e.message : "Não foi possível enviar o código. Tente novamente.");
+  }
+  redirect("/verificar?ok=" + encodeURIComponent(`Primeiro acesso: enviamos um código de 6 dígitos para ${maskEmail(check.email)}. Confira também a caixa de spam.`));
 }
 
 export async function loginAction(fd: FormData) {
@@ -56,7 +66,8 @@ export async function loginAction(fd: FormData) {
     }
     redirect("/login?ok=" + encodeURIComponent(`Primeiro acesso: enviamos um link para ${maskEmail(r.emailLink.email)}. Abra o e-mail, crie sua senha nova e depois volte aqui para entrar com ela.`));
   }
-  return afterLogin(r);
+  if (r.emailCheck) return startEmailCheck("/login", r.emailCheck);
+  return afterLogin(r.token);
 }
 
 // ---------- primeiro acesso, cadastro por convite e "esqueci a senha" ----------
@@ -107,10 +118,20 @@ export async function resetStartAction(fd: FormData) {
 export async function verifyCodeAction(fd: FormData) {
   const db = await getDb();
   if (!(await rateLimit(db, `verificar:ip:${await clientIp()}`, 20, 900))) return back("/verificar", TOO_MANY);
+  const flow = await flowToken();
+  let token: string | null = null;
   try {
-    await verifyCode(db, await flowToken(), str(fd, "code"));
+    const purpose = await verifyCode(db, flow, str(fd, "code"));
+    if (purpose === "login") token = await finishLoginCheck(db, flow);
   } catch (e) {
     return back("/verificar", isDomainError(e) ? e.message : "Não foi possível conferir o código.");
+  }
+  if (token) {
+    const jar = await cookies();
+    jar.delete(FLOW_COOKIE);
+    jar.delete(FAILS_COOKIE);
+    await knownDevice();
+    return afterLogin(token);
   }
   redirect("/definir-senha");
 }
@@ -176,38 +197,8 @@ export async function setupAction(fd: FormData) {
   } catch (e) {
     return back("/setup", isDomainError(e) ? e.message : "Não foi possível concluir a configuração.");
   }
-  return afterLogin(r);
-}
-
-export async function mfaVerifyAction(fd: FormData) {
-  const token = await sessionToken();
-  if (!token) redirect("/login");
-  if (!(await rateLimit(await getDb(), `mfa:ip:${await clientIp()}`, 15, 900))) return back("/login/mfa", TOO_MANY);
-  try {
-    await verifyMfaForSession(await getDb(), token, str(fd, "code"));
-  } catch (e) {
-    return back("/login/mfa", isDomainError(e) ? e.message : "Erro ao validar o código.");
-  }
-  redirect("/");
-}
-
-export async function mfaSetupStartAction() {
-  const s = await currentSession();
-  if (!s) redirect("/login");
-  await beginMfaSetup(await getDb(), s.user.id);
-  redirect("/login/mfa/setup");
-}
-
-export async function mfaSetupFinishAction(fd: FormData) {
-  const s = await currentSession();
-  const token = await sessionToken();
-  if (!s || !token) redirect("/login");
-  try {
-    await completeMfaSetup(await getDb(), token, s.user.id, str(fd, "code"));
-  } catch (e) {
-    return back("/login/mfa/setup", isDomainError(e) ? e.message : "Erro ao ativar o autenticador.");
-  }
-  redirect("/conta?ok=" + encodeURIComponent("Autenticador ativado. Gere agora seus códigos de recuperação.") + "#seguranca");
+  if (r.emailCheck) return startEmailCheck("/login", r.emailCheck);
+  return afterLogin(r.token);
 }
 
 export async function logoutAction() {
@@ -228,16 +219,4 @@ export async function changePasswordAction(fd: FormData) {
   }
   await clearSessionCookie();
   redirect("/login?ok=" + encodeURIComponent("Senha alterada. Entre novamente."));
-}
-
-
-/** Gera códigos de recuperação e devolve para exibir uma única vez (useActionState). */
-export async function recoveryCodesAction(_prev: { codes?: string[]; erro?: string } | null): Promise<{ codes?: string[]; erro?: string }> {
-  const s = await currentSession();
-  if (!s) redirect("/login");
-  try {
-    return { codes: await generateRecoveryCodes(await getDb(), s.user.id) };
-  } catch (e) {
-    return { erro: isDomainError(e) ? e.message : "Não foi possível gerar os códigos." };
-  }
 }

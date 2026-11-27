@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { createDb, type Db } from "./db";
 import { setupInitial } from "./services/bootstrap";
-import { login, getSession, totpAt, beginMfaSetup, completeMfaSetup, verifyMfaForSession, generateRecoveryCodes, recoveryCodesLeft } from "./auth";
 import { rateLimit, recordJob, logError, healthReport, pruneOps } from "./services/health";
 import { buildPerms } from "./permissions";
 
@@ -14,31 +13,6 @@ beforeAll(async () => {
   ownerId = r.ownerId; unitId = r.unitId;
 });
 const owner = () => ({ userId: ownerId, unitId, role: "administrador" as const, staffId: null, perms: buildPerms("administrador", []) });
-
-describe("códigos de recuperação do MFA", () => {
-  it("só gera com MFA ativo, cada código vale uma vez e gerar de novo invalida os antigos", async () => {
-    await expect(generateRecoveryCodes(db, ownerId)).rejects.toThrow(/Ative/);
-    const l = await login(db, "dono@ops.com", "SenhaForte123");
-    const secret = await beginMfaSetup(db, ownerId);
-    await completeMfaSetup(db, l.token, ownerId, totpAt(secret, Date.now()));
-    const codes = await generateRecoveryCodes(db, ownerId);
-    expect(codes).toHaveLength(8);
-    expect(codes.every((c) => /^[A-Z][A-Z0-9]{3}-[A-Z0-9]{4}$/.test(c))).toBe(true);
-    expect(await recoveryCodesLeft(db, ownerId)).toBe(8);
-
-    const l2 = await login(db, "dono@ops.com", "SenhaForte123");
-    await verifyMfaForSession(db, l2.token, codes[0].toLowerCase().replace("-", ""));
-    expect((await getSession(db, l2.token))?.mfaVerified).toBe(true);
-    expect(await recoveryCodesLeft(db, ownerId)).toBe(7);
-
-    const l3 = await login(db, "dono@ops.com", "SenhaForte123");
-    await expect(verifyMfaForSession(db, l3.token, codes[0])).rejects.toThrow(/incorreto/);
-    const fresh = await generateRecoveryCodes(db, ownerId);
-    await expect(verifyMfaForSession(db, l3.token, codes[1])).rejects.toThrow(/incorreto/);
-    await verifyMfaForSession(db, l3.token, fresh[0]);
-    expect((await getSession(db, l3.token))?.mfaVerified).toBe(true);
-  });
-});
 
 describe("limite de tentativas", () => {
   it("barra depois do máximo dentro da janela e libera chaves diferentes", async () => {

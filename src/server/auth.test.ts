@@ -1,9 +1,19 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, it, expect, beforeAll } from "vitest";
 import { createDb, type Db } from "./db";
 import { setupInitial, createUser, updateUser, listUsers } from "./services/bootstrap";
-import { login, getSession, verifyTotp, totpAt, base32Encode, newTotpSecret, beginMfaSetup, completeMfaSetup, verifyMfaForSession, hashPassword, verifyPassword, changePassword, logout } from "./auth";
+import { login, getSession, hashPassword, verifyPassword, changePassword, logout } from "./auth";
 import { buildPerms, ROLE_PERMISSIONS } from "./permissions";
-import { updateSettings } from "./services/catalog";
+import { finishLoginCheck, startLoginCheck, verifyCode } from "./services/invites";
+
+const OUT = fs.mkdtempSync(path.join(os.tmpdir(), "eagle-mail-"));
+process.env.MAIL_OUTBOX_DIR = OUT;
+const lastCode = (email: string) => {
+  const f = fs.readdirSync(OUT).filter((x) => x.endsWith(`-${email}.txt`)).sort().pop();
+  return f ? /\b(\d{6})\b/.exec(fs.readFileSync(path.join(OUT, f), "utf8").split("\n").find((l) => l.startsWith("Assunto"))!)?.[1] ?? null : null;
+};
 
 let db: Db;
 let ownerId: string;
@@ -17,7 +27,7 @@ beforeAll(async () => {
   unitId = r.unitId;
 });
 
-describe("senha e TOTP", () => {
+describe("senha", () => {
   it("hash não é reversível e verifica; senha fraca é recusada", async () => {
     const h = hashPassword("abc12345678");
     expect(h).not.toContain("abc12345678");
@@ -27,18 +37,9 @@ describe("senha e TOTP", () => {
     expect(await msg(createUser(db, owner, { email: "x@t.com", fullName: "X", role: "tecnico", password: "curta" }))).toMatch(/10 caracteres/);
     expect(await msg(createUser(db, owner, { email: "x@t.com", fullName: "X", role: "tecnico", password: "somenteletras" }))).toMatch(/letras e números/);
   });
-  it("TOTP bate com o vetor da RFC 6238", () => {
-    const secret = base32Encode(Buffer.from("12345678901234567890"));
-    expect(totpAt(secret, 59000)).toBe("287082");
-    expect(totpAt(secret, 1111111109000)).toBe("081804");
-    const s = newTotpSecret();
-    expect(verifyTotp(s, totpAt(s, Date.now()))).toBe(true);
-    expect(verifyTotp(s, "000000")).toBe(false);
-    expect(verifyTotp(s, "abc")).toBe(false);
-  });
 });
 
-describe("login, bloqueio, MFA e sessão", () => {
+describe("login, bloqueio, primeiro acesso e sessão", () => {
   it("credenciais erradas devolvem mensagem genérica e bloqueiam por 10 minutos na 3ª tentativa", async () => {
     for (let i = 0; i < 2; i++) expect(await msg(login(db, "naoexiste@t.com", "qualquer"))).toBe("E-mail ou senha incorretos.");
     expect(await msg(login(db, "naoexiste@t.com", "qualquer"))).toMatch(/bloqueadas por 10 minutos/); // igual a uma conta real
@@ -54,44 +55,43 @@ describe("login, bloqueio, MFA e sessão", () => {
     await db.query("update users set locked_until=null, failed_attempts=0 where id=$1", [ownerId]);
   });
 
-  it("proprietário em produção precisa ativar MFA; sessão só vale depois do código", async () => {
-    const owner = { userId: ownerId, unitId, role: "administrador" as const, perms: buildPerms("administrador", []) };
-    await updateSettings(db, owner, { mfa_required: true });
-    const l = await login(db, "dono@t.com", "SenhaForte123");
-    expect(l.needsMfaSetup).toBe(true);
-    let s = await getSession(db, l.token);
-    expect(s?.mfaVerified).toBe(false);
-    const secret = await beginMfaSetup(db, ownerId);
-    expect(await msg(completeMfaSetup(db, l.token, ownerId, "000000"))).toMatch(/incorreto/);
-    await completeMfaSetup(db, l.token, ownerId, totpAt(secret, Date.now()));
-    s = await getSession(db, l.token);
-    expect(s?.mfaVerified).toBe(true);
+  it("primeiro acesso confirma o e-mail por código uma única vez; depois a senha basta e o login fica lembrado", async () => {
+    const first = await login(db, "dono@t.com", "SenhaForte123");
+    expect(first.token).toBe(""); // sem sessão antes de confirmar o e-mail
+    expect(first.emailCheck).toMatchObject({ email: "dono@t.com", userId: ownerId });
 
-    const l2 = await login(db, "dono@t.com", "SenhaForte123");
-    expect(l2.needsMfa).toBe(true);
-    expect((await getSession(db, l2.token))?.mfaVerified).toBe(false);
-    expect(await msg(verifyMfaForSession(db, l2.token, "123456"))).toMatch(/incorreto/);
-    await verifyMfaForSession(db, l2.token, totpAt(secret, Date.now()));
-    expect((await getSession(db, l2.token))?.mfaVerified).toBe(true);
+    const flow = await startLoginCheck(db, first.emailCheck!);
+    const code = lastCode("dono@t.com")!;
+    expect(code).toMatch(/^\d{6}$/);
+    expect(await msg(finishLoginCheck(db, flow))).toMatch(/Confirme o código/);
+    expect(await msg(verifyCode(db, flow, code === "000000" ? "111111" : "000000"))).toMatch(/incorreto/);
+    expect(await verifyCode(db, flow, code)).toBe("login");
+    const token = await finishLoginCheck(db, flow);
+    expect((await getSession(db, token))?.ctx.role).toBe("administrador");
+    expect(await msg(finishLoginCheck(db, flow))).toMatch(/Confirme o código|expirou/); // o código não abre outra sessão
 
-    await logout(db, l2.token);
-    expect(await getSession(db, l2.token)).toBeNull();
+    const again = await login(db, "dono@t.com", "SenhaForte123");
+    expect(again.emailCheck).toBeUndefined();
+    expect((await getSession(db, again.token))?.mfaVerified).toBe(true);
+    const [s] = await db.query<{ days: number }>("select (extract(epoch from expires_at - now())/86400)::float as days from sessions where user_id=$1 order by expires_at desc limit 1", [ownerId]);
+    expect(s.days).toBeGreaterThan(399);
+
+    // sessão antiga em uso é renovada
+    await db.query("update sessions set expires_at = now() + interval '10 days'");
+    await getSession(db, again.token);
+    const [r] = await db.query<{ days: number }>("select max(extract(epoch from expires_at - now())/86400)::float as days from sessions where user_id=$1", [ownerId]);
+    expect(r.days).toBeGreaterThan(399);
+
+    await logout(db, again.token);
+    expect(await getSession(db, again.token)).toBeNull();
     expect(await getSession(db, undefined)).toBeNull();
     expect(await getSession(db, "token-inventado")).toBeNull();
-  });
-
-  it("código MFA errado repetido bloqueia a conta e derruba a sessão", async () => {
-    const l = await login(db, "dono@t.com", "SenhaForte123");
-    for (let i = 0; i < 4; i++) expect(await msg(verifyMfaForSession(db, l.token, "000000"))).toMatch(/incorreto/);
-    expect(await msg(verifyMfaForSession(db, l.token, "000000"))).toMatch(/Muitas tentativas/);
-    expect(await getSession(db, l.token)).toBeNull();
-    expect(await msg(login(db, "dono@t.com", "SenhaForte123"))).toMatch(/bloqueado/);
-    await db.query("update users set locked_until=null, failed_attempts=0 where id=$1", [ownerId]);
   });
 
   it("trocar a senha encerra todas as sessões; usuário desativado perde o acesso", async () => {
     const owner = { userId: ownerId, unitId, role: "administrador" as const, perms: buildPerms("administrador", []) };
     const uid = await createUser(db, owner, { email: "b@t.com", fullName: "B", role: "tecnico", password: "SenhaForte123" });
+    await db.query("update users set email_verified_at=now() where id=$1", [uid]);
     const l = await login(db, "b@t.com", "SenhaForte123");
     expect((await getSession(db, l.token))?.ctx.role).toBe("tecnico");
     await changePassword(db, uid, "SenhaForte123", "NovaSenha4567");

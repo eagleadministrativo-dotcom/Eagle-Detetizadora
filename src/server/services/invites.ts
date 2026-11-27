@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import type { Db, Q } from "../db";
 import { audit, need, requireText, requireUuid } from "../core";
-import { checkPasswordStrength, hashPassword, verifyPassword } from "../auth";
+import { checkPasswordStrength, createSession, hashPassword, verifyPassword } from "../auth";
 import { DomainError } from "../errors";
 import { PERMISSIONS, ROLE_LABEL, ROLE_PERMISSIONS, type Ctx, type Permission, type Role } from "../permissions";
 import { appUrl, mailHtml, sendMail } from "../mail";
@@ -129,18 +129,18 @@ export async function resendInvite(db: Db, ctx: Ctx, id: string): Promise<boolea
 }
 
 // ---------- código por e-mail ----------
-type Purpose = "cadastro" | "senha";
+type Purpose = "cadastro" | "senha" | "login";
 interface FlowRow { id: string; purpose: Purpose; email: string; invite_id: string | null; user_id: string | null; code_hash: string | null; attempts: number; sends: number; last_sent_at: Date | null; expires_at: Date; verified_at: Date | null; used_at: Date | null }
 
 const newCode = () => String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
 
 async function sendCode(email: string, purpose: Purpose, code: string) {
-  const what = purpose === "cadastro" ? "criar seu acesso" : "redefinir sua senha";
+  const what = purpose === "cadastro" ? "criar seu acesso" : purpose === "login" ? "confirmar seu e-mail no primeiro acesso" : "redefinir sua senha";
   await sendMail({
     to: email,
     subject: `${code} é o seu código Eagle`,
     text: `Seu código para ${what} no Eagle Detetizadora é: ${code}\n\nEle vale por ${CODE_MIN} minutos. Se você não pediu, ignore este e-mail.`,
-    html: mailHtml(purpose === "cadastro" ? "Confirme seu e-mail" : "Redefinir senha", [`Use o código abaixo para ${what}. Ele vale por ${CODE_MIN} minutos.`], code),
+    html: mailHtml(purpose === "senha" ? "Redefinir senha" : "Confirme seu e-mail", [`Use o código abaixo para ${what}. Ele vale por ${CODE_MIN} minutos.`], code),
   });
 }
 
@@ -212,6 +212,26 @@ export async function startSignup(db: Db, choice: string, emailIn: string): Prom
     "select id from user_invites where lower(email)=$1 and role = any($2) and accepted_at is null and revoked_at is null and expires_at > now() and not exists (select 1 from users u where lower(u.email)=$1)",
     [email, SIGNUP_CHOICES[choice].roles]);
   return openFlow(db, "cadastro", email, inv ? { inviteId: inv.id } : null);
+}
+
+/** Primeiro acesso: senha já conferida; manda o código ao e-mail da conta. */
+export async function startLoginCheck(db: Db, l: { email: string; userId: string }): Promise<string> {
+  return openFlow(db, "login", normEmail(l.email), { userId: l.userId });
+}
+
+/** Código do primeiro acesso confirmado: marca o e-mail como confirmado e abre a sessão. Devolve o token. */
+export async function finishLoginCheck(db: Db, flow: string | undefined): Promise<string> {
+  return db.tx(async (q) => {
+    const r = await verifiedRow(q, flow, "login");
+    const [u] = await q<{ id: string; unit_id: string }>(
+      "select u.id, uu.unit_id from users u join user_units uu on uu.user_id=u.id where u.id=$1 and u.is_active order by uu.role limit 1", [r.user_id]);
+    if (!u) throw new DomainError("expired", "Conta não encontrada ou inativa.");
+    await q("update users set email_verified_at=coalesce(email_verified_at, now()), last_login_at=now() where id=$1", [u.id]);
+    await q("update email_codes set used_at=now() where id=$1", [r.id]);
+    const token = await createSession(q, u.id, u.unit_id);
+    await audit(q, { userId: u.id, unitId: u.unit_id }, "EMAIL_CONFIRMADO", "user", u.id);
+    return token;
+  });
 }
 
 export async function startPasswordReset(db: Db, emailIn: string): Promise<string> {
@@ -295,7 +315,7 @@ export async function finishSignup(db: Db, flow: string | undefined, i: { fullNa
     const [dup] = await q("select 1 from users where lower(email)=lower($1)", [inv.email]);
     if (dup) throw new DomainError("duplicate", "Já existe um acesso com este e-mail. Use Entrar.");
     await notTempPassword(q, inv.unit_id, i.password);
-    const [u] = await q<{ id: string }>("insert into users(email,full_name,password_hash) values ($1,$2,$3) returning id", [inv.email.toLowerCase(), fullName, hashPassword(i.password)]);
+    const [u] = await q<{ id: string }>("insert into users(email,full_name,password_hash,email_verified_at) values ($1,$2,$3,now()) returning id", [inv.email.toLowerCase(), fullName, hashPassword(i.password)]);
     await q("insert into user_units(user_id,unit_id,role,profile_id) values ($1,$2,$3,$4)", [u.id, inv.unit_id, inv.role, inv.profile_id]);
     if (inv.permissions && inv.role !== "administrador") {
       const want = new Set<string>(inv.permissions);
@@ -315,14 +335,14 @@ export async function finishSignup(db: Db, flow: string | undefined, i: { fullNa
   });
 }
 
-/** Conclui o "esqueci a senha": troca a senha, desbloqueia a conta e encerra as sessões abertas. A verificação em duas etapas continua valendo. */
+/** Conclui o "esqueci a senha": troca a senha, desbloqueia a conta, confirma o e-mail e encerra as sessões abertas. */
 export async function finishPasswordReset(db: Db, flow: string | undefined, password: string): Promise<string> {
   checkPasswordStrength(password);
   return db.tx(async (q) => {
     const r = await verifiedRow(q, flow, "senha");
     const [uu] = await q<{ unit_id: string }>("select unit_id from user_units where user_id=$1 limit 1", [r.user_id]);
     if (uu) await notTempPassword(q, uu.unit_id, password);
-    const [u] = await q<{ id: string; email: string }>("update users set password_hash=$2, failed_attempts=0, locked_until=null, must_change_password=false where id=$1 and is_active returning id, email", [r.user_id, hashPassword(password)]);
+    const [u] = await q<{ id: string; email: string }>("update users set password_hash=$2, failed_attempts=0, locked_until=null, must_change_password=false, email_verified_at=coalesce(email_verified_at, now()) where id=$1 and is_active returning id, email", [r.user_id, hashPassword(password)]);
     if (!u) throw new DomainError("expired", "Conta não encontrada ou inativa.");
     await q("delete from sessions where user_id=$1", [u.id]);
     await q("update email_codes set used_at=now() where id=$1", [r.id]);
