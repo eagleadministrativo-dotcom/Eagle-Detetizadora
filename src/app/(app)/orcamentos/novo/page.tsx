@@ -4,7 +4,7 @@ import { can } from "@/server/core";
 import { listCustomers } from "@/server/services/customers";
 import { saveQuoteAction } from "@/app/actions/eagle";
 
-export const metadata = { title: "Novo Orçamento" };
+export const metadata = { title: "Novo orçamento" };
 
 export default async function NewQuote() {
   const { ctx } = await requireSession();
@@ -14,7 +14,7 @@ export default async function NewQuote() {
 
   return (
     <div className="page">
-      <h1>Novo Orçamento</h1>
+      <h1>Novo orçamento</h1>
       <form action={saveQuoteAction} style={{ maxWidth: "600px" }}>
         <div style={{ marginBottom: "16px" }}>
           <label>Cliente *</label>
@@ -65,7 +65,7 @@ export default async function NewQuote() {
         </div>
 
         <button type="submit" style={{ padding: "10px 20px", background: "#0066cc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "14px" }}>
-          Salvar Orçamento
+          Salvar orçamento
         </button>
       </form>
     </div>

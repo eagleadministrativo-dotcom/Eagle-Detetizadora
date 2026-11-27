@@ -29,7 +29,7 @@ export async function validateSlot(q: Q, s: Slot) {
   const [staff] = await q<{ is_active: boolean; name: string }>("select is_active, name from staff where id=$1 and unit_id=$2", [s.staffId, s.unitId]);
   if (!staff || !staff.is_active) throw new DomainError("invalid_staff", "Profissional inexistente ou inativo.");
   const [chair] = await q<{ is_active: boolean; name: string }>("select is_active, name from chairs where id=$1 and unit_id=$2", [s.chairId, s.unitId]);
-  if (!chair || !chair.is_active) throw new DomainError("invalid_chair", "Cadeira inexistente ou inativa.");
+  if (!chair || !chair.is_active) throw new DomainError("invalid_chair", "Local inexistente ou inativo.");
 
   const scheds = await q<{ day_of_week: number; st: string; en: string }>(
     "select day_of_week, to_char(start_time,'HH24:MI') as st, to_char(end_time,'HH24:MI') as en from staff_schedules where staff_id=$1",
@@ -105,7 +105,7 @@ export async function createAppointmentTx(q: Q, ctx: Ctx, input: CreateAppointme
   if (chairId) await validateSlot(q, { unitId: ctx.unitId, staffId: input.staffId, chairId, startsAt: input.startsAt, endsAt });
   else {
     const chairs = await q<{ id: string }>("select id from chairs where unit_id=$1 and is_active order by name", [ctx.unitId]);
-    let lastErr: unknown = new DomainError("no_chair", "Não há cadeira ativa cadastrada.");
+    let lastErr: unknown = new DomainError("no_chair", "Não há local ativo cadastrado.");
     for (const c of chairs) {
       try {
         await validateSlot(q, { unitId: ctx.unitId, staffId: input.staffId, chairId: c.id, startsAt: input.startsAt, endsAt });

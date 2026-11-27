@@ -20,7 +20,7 @@ export default async function ServicesAdmin({ searchParams }: { searchParams: Pr
         <Link className="btn accent" href="/admin/servicos/novo">+ Novo serviço</Link>
       </PageHead>
       <Flash ok={sp.ok} erro={sp.erro} />
-      {services.length === 0 ? <Empty title="Nenhum serviço cadastrado">Comece cadastrando o primeiro serviço (ex.: Corte) com duração e preço.</Empty> : (
+      {services.length === 0 ? <Empty title="Nenhum serviço cadastrado">Comece cadastrando o primeiro serviço (ex.: Dedetização residencial) com duração e preço.</Empty> : (
         <div className="tablewrap"><table>
           <thead><tr><th>Serviço</th><th>Categoria</th><th className="n">Duração</th><th className="n">Preço atual</th><th>Situação</th></tr></thead>
           <tbody>{services.map((s) => (

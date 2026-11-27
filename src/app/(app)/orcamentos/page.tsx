@@ -17,7 +17,7 @@ export default async function QuotesPage() {
         <h1>Orçamentos</h1>
         {can(ctx, "quotes.manage") ? (
           <Link href="/orcamentos/novo" style={{ padding: "8px 16px", background: "#0066cc", color: "white", borderRadius: "4px", textDecoration: "none" }}>
-            + Novo Orçamento
+            + Novo orçamento
           </Link>
         ) : null}
       </div>
@@ -32,8 +32,7 @@ export default async function QuotesPage() {
               <th style={{ textAlign: "left", padding: "12px" }}>Cliente</th>
               <th style={{ textAlign: "left", padding: "12px" }}>Data</th>
               <th style={{ textAlign: "right", padding: "12px" }}>Total</th>
-              <th style={{ textAlign: "center", padding: "12px" }}>Status</th>
-              <th style={{ textAlign: "center", padding: "12px" }}>Ações</th>
+              <th style={{ textAlign: "center", padding: "12px" }}>Situação</th>
             </tr>
           </thead>
           <tbody>
@@ -55,11 +54,6 @@ export default async function QuotesPage() {
                           ? "Aprovado"
                           : "Recusado"}
                   </span>
-                </td>
-                <td style={{ padding: "12px", textAlign: "center" }}>
-                  <Link href={`/orcamentos/${r.id}`} style={{ color: "#0066cc", textDecoration: "none" }}>
-                    Ver
-                  </Link>
                 </td>
               </tr>
             ))}

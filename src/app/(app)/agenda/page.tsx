@@ -124,7 +124,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
             );
           })}
         </div>
-      ) : cols.length === 0 ? <Empty title="Nada para mostrar">Cadastre profissionais e cadeiras em Administração.</Empty> : (
+      ) : cols.length === 0 ? <Empty title="Nada para mostrar">Cadastre técnicos e locais em Administração.</Empty> : (
         <Calendar cols={cols} events={events} blocks={calBlocks} start={start} end={end} canBook={canBook} canBlock={can(ctx, "agenda.block")} />
       )}
       {view !== "mes" && canBook ? <small>Arraste um horário para reagendar, puxe a borda de baixo para mudar a duração ou selecione um espaço livre. No celular, segure o horário antes de arrastar.</small> : null}

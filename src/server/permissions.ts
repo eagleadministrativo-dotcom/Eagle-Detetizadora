@@ -136,7 +136,7 @@ export const PERMISSION_LABEL: Partial<Record<Permission, string>> = {
 /** Catálogo completo para a tela de permissões individuais (recurso → ações). */
 export const PERMISSION_GROUPS: { title: string; items: [Permission, string][] }[] = [
   { title: "Painel", items: [["dashboard.own", "Ver o próprio painel"], ["dashboard.full", "Ver painel da empresa"]] },
-  { title: "Clientes", items: [["customers.view", "Ver clientes"], ["customers.manage", "Criar e editar"], ["customers.history", "Consultar histórico"], ["customers.edit_sensitive", "Editar dados sensíveis (email, CPF)"], ["customers.deactivate", "Desativar cliente"]] },
+  { title: "Clientes", items: [["customers.view", "Ver clientes"], ["customers.manage", "Criar e editar"], ["customers.history", "Consultar histórico"], ["customers.edit_sensitive", "Editar dados sensíveis (e-mail, CPF)"], ["customers.deactivate", "Desativar cliente"]] },
   { title: "Agendamentos", items: [["agenda.view_own", "Ver a própria agenda"], ["agenda.view_all", "Ver agenda da equipe"], ["agenda.manage_own", "Operar a própria agenda"], ["agenda.manage", "Operar agenda de todos"], ["agenda.create", "Criar agendamento"], ["agenda.edit", "Editar e reagendar"], ["agenda.cancel", "Cancelar agendamento"], ["agenda.block", "Bloquear horários"], ["agenda.retroactive", "Lançar no passado"]] },
   { title: "Retornos (Garantia, Manutenção, Outros)", items: [["returns.own", "Ver os próprios retornos"], ["returns.view_all", "Ver retornos da equipe"], ["returns.contact", "Registrar contato com cliente"], ["returns.rules", "Definir regras automáticas"], ["returns.manage", "Gerenciar todos os retornos"]] },
   { title: "Orçamentos", items: [["quotes.view", "Ver orçamentos"], ["quotes.manage", "Criar, editar, enviar e aprovar"]] },

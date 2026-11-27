@@ -85,7 +85,7 @@ export default async function Purchases({ searchParams }: { searchParams: Promis
         <div className="grid">
           <form action={savePurchaseAction} className="card form lit" id="nova">
             <h2>Adicionar à lista</h2>
-            <div className="fields"><Field label="O que comprar"><input name="name" required minLength={2} placeholder="Ex.: Máquina de corte" /></Field><Field label="Quantidade"><input name="quantity" type="number" min={1} defaultValue={1} /></Field></div>
+            <div className="fields"><Field label="O que comprar"><input name="name" required minLength={2} placeholder="Ex.: Pulverizador costal" /></Field><Field label="Quantidade"><input name="quantity" type="number" min={1} defaultValue={1} /></Field></div>
             <PaymentFields />
             <div className="fields">
               <Field label="1ª fatura / vencimento (opcional)"><input type="date" name="firstDue" /></Field>

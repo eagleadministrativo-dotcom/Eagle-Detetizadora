@@ -65,7 +65,7 @@ export async function setupInitial(db: Db, input: SetupInput): Promise<{ unitId:
     for (const [i, name] of ["Dedetização geral", "Dedetização específica", "Manutenção", "Outros"].entries()) {
       await q("insert into service_categories(unit_id,name,sort_order) values ($1,$2,$3)", [unitId, name, i]);
     }
-    await q("insert into chairs(unit_id,name) values ($1,'Cadeira 1')", [unitId]);
+    await q("insert into chairs(unit_id,name) values ($1,'Local 1')", [unitId]);
     const [staff] = await q<{ id: string }>("insert into staff(unit_id,user_id,name,contract_type) values ($1,$2,$3,'administrador') returning id", [unitId, owner.id, ownerName]);
     await audit(q, { userId: owner.id, unitId }, "SISTEMA_CONFIGURADO", "organization", org.id, null, { orgName, unitName });
     return { unitId, ownerId: owner.id, staffId: staff.id };

@@ -65,7 +65,7 @@ export async function saveChairAction(fd: FormData) {
   await run("/admin/cadeiras", async () => {
     const id = optStr(fd, "id");
     await saveChair(await getDb(), ctx, { id: id ?? undefined, name: str(fd, "name"), isActive: id ? bool(fd, "isActive") : true });
-    return "Cadeira salva.";
+    return "Local salvo.";
   });
 }
 

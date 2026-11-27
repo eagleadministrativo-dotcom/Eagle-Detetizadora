@@ -39,7 +39,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <Field label="Intervalo mínimo entre contatos (dias)"><input name="gapDays" type="number" min={1} max={365} defaultValue={(st as unknown as { return_contact_gap_days: number }).return_contact_gap_days} required /></Field>
           <Field label="Mostrar como próximo com (dias)"><input name="soonDays" type="number" min={0} max={60} defaultValue={(st as unknown as { return_soon_days: number }).return_soon_days} required /></Field>
         </div>
-        <label className="switch">Avisar o barbeiro sobre clientes na hora de voltar<input type="checkbox" role="switch" name="notify" defaultChecked={(st as unknown as { return_notify: boolean }).return_notify} /></label>
+        <label className="switch">Avisar o técnico sobre clientes na hora do retorno<input type="checkbox" role="switch" name="notify" defaultChecked={(st as unknown as { return_notify: boolean }).return_notify} /></label>
         <div><button className="btn" type="submit">Salvar regras de retorno</button></div>
       </form>
       <form action={updateSettingsAction} className="form">
@@ -47,7 +47,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <h2>Descontos</h2>
           <label className="check"><input type="checkbox" name="ownerOnly" defaultChecked={st.discount_owner_only} />Somente o administrador concede desconto</label>
           <div className="fields"><Field label="Limite para quem tem permissão de desconto limitado (%)"><input name="limit" inputMode="decimal" defaultValue={st.discount_limit_bps != null ? (st.discount_limit_bps / 100).toString().replace(".", ",") : ""} placeholder="Ex.: 10" /></Field></div>
-          <small>Se a opção acima estiver marcada, o limite é ignorado. O limite vale para gerente e para barbeiros com permissão individual.</small>
+          <small>Se a opção acima estiver marcada, o limite é ignorado. O limite vale para gerente e para técnicos com permissão individual.</small>
         </section>
         <section className="card form">
           <h2>Correções retroativas</h2>
@@ -72,7 +72,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <section className="card form">
           <h2>Acesso e notificações</h2>
           <small>Cada pessoa confirma o e-mail com um código no primeiro acesso; depois o login fica lembrado no aparelho até ela tocar em Sair.</small>
-          <small>Canal de alertas: dentro do sistema. E-mail e WhatsApp dependem de serviços externos e só serão ativados com sua autorização.</small>
+          <small>Os avisos aparecem dentro do sistema e, para quem ativar, como notificação no celular. O e-mail é usado para convites e códigos de acesso.</small>
         </section>
         <div className="sticky-actions"><button className="btn accent" type="submit">Salvar configurações</button></div>
       </form>

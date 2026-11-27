@@ -17,7 +17,7 @@ export function Flash({ ok, erro }: { ok?: string; erro?: string }) {
 
 /** Título em movimento: cada palavra entra em sequência (desliga com "reduzir movimento"). accent vira a palavra em itálico. */
 export function PageHead({ title, accent, sub, eyebrow, children }: { title: string; accent?: string; sub?: ReactNode; eyebrow?: string; children?: ReactNode }) {
-  const words = title.split(/s+/).filter(Boolean);
+  const words = title.split(/\s+/).filter(Boolean);
   return (
     <div className="pagehead">
       <div>

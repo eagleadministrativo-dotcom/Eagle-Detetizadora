@@ -37,7 +37,7 @@ export default async function StaffAdmin({ searchParams }: { searchParams: Promi
           </div>
         </fieldset>
         {canInvite && !p?.user_id ? (
-          <Field label="E-mail para convidar ao app (opcional)"><input name="inviteEmail" type="email" autoComplete="off" placeholder="barbeiro@email.com" /></Field>
+          <Field label="E-mail para convidar ao app (opcional)"><input name="inviteEmail" type="email" autoComplete="off" placeholder="tecnico@email.com" /></Field>
         ) : null}
         {p ? <label className="check"><input type="checkbox" name="isActive" defaultChecked={p.is_active} />Ativo</label> : null}
         <div><button className="btn accent" type="submit">{p ? "Salvar" : "Adicionar profissional"}</button></div>
@@ -46,7 +46,7 @@ export default async function StaffAdmin({ searchParams }: { searchParams: Promi
   };
   return (
     <>
-      <PageHead title="Equipe" sub="Profissionais que atendem. Informe o e-mail para convidar o barbeiro: ele cria o próprio acesso em Cadastrar, com código enviado ao e-mail." />
+      <PageHead title="Equipe" sub="Profissionais que atendem. Informe o e-mail para convidar o técnico: ele cria o próprio acesso em Cadastrar, com código enviado ao e-mail." />
       <Flash ok={sp.ok} erro={sp.erro} />
       <div className="stack">
         {cat.staff.map((p) => (

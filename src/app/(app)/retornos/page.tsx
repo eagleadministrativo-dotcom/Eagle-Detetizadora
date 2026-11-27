@@ -21,11 +21,6 @@ export default async function Returns() {
     <div className="page">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
         <h1>Retornos (Garantia, Manutenção, Outros)</h1>
-        {can(ctx, "returns.manage") ? (
-          <Link href="/retornos/novo" style={{ padding: "8px 16px", background: "#0066cc", color: "white", borderRadius: "4px", textDecoration: "none" }}>
-            + Novo Retorno
-          </Link>
-        ) : null}
       </div>
 
       {rows.length === 0 ? (
@@ -39,8 +34,7 @@ export default async function Returns() {
               <th style={{ textAlign: "left", padding: "12px" }}>Cliente</th>
               <th style={{ textAlign: "left", padding: "12px" }}>Tipo</th>
               <th style={{ textAlign: "left", padding: "12px" }}>Vencimento</th>
-              <th style={{ textAlign: "center", padding: "12px" }}>Status</th>
-              <th style={{ textAlign: "center", padding: "12px" }}>Ações</th>
+              <th style={{ textAlign: "center", padding: "12px" }}>Situação</th>
             </tr>
           </thead>
           <tbody>
@@ -80,11 +74,6 @@ export default async function Returns() {
                           ? "Concluído"
                           : "Cancelado"}
                   </span>
-                </td>
-                <td style={{ padding: "12px", textAlign: "center" }}>
-                  <Link href={`/retornos/${r.id}`} style={{ padding: "4px 8px", textDecoration: "none", color: "#0066cc", fontSize: "14px" }}>
-                    Ver
-                  </Link>
                 </td>
               </tr>
             ))}

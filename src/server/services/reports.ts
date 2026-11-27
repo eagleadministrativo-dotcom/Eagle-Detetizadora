@@ -276,7 +276,7 @@ export async function getDashboard(db: Db, ctx: Ctx, p: Period, staffFilter?: st
   kpis.push({
     key: "occupancy", label: "Ocupação", value: occ.configured && occ.availableMin > 0 ? (occ.occupied / occ.availableMin) * 100 : null, unit: "pct",
     previous: occPrev.availableMin > 0 ? (occPrev.occupied / occPrev.availableMin) * 100 : null,
-    definition: "Tempo efetivamente ocupado dividido pelo tempo disponibilizado para atendimento (horário de funcionamento × cadeiras ativas, até agora). Horas reservadas são mostradas à parte.",
+    definition: "Tempo efetivamente ocupado dividido pelo tempo disponibilizado para atendimento (horário de funcionamento × locais ativos, até agora). Horas reservadas são mostradas à parte.",
     formula: "minutos de atendimentos concluídos/em andamento ÷ minutos disponíveis", source: "appointments, unit_settings.business_hours, chairs",
     exclusions: "Agendamentos futuros, cancelados e ausências.", warning: occ.configured ? (occ.reserved ? `${Math.round(occ.reserved / 60)} h reservadas ainda por realizar` : undefined) : "Cadastre o horário de funcionamento para calcular a ocupação.", ...base,
   });

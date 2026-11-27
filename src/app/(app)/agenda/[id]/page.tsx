@@ -60,7 +60,7 @@ export default async function AppointmentPage({ params, searchParams }: { params
                 {can(ctx, "agenda.manage") ? (
                   <>
                     <Field label="Profissional"><select name="staffId" defaultValue={a.staff_id}>{cat.staff.filter((s) => s.is_active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
-                    <Field label="Cadeira"><select name="chairId" defaultValue={a.chair_id}>{cat.chairs.filter((c) => c.is_active).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+                    <Field label="Local"><select name="chairId" defaultValue={a.chair_id}>{cat.chairs.filter((c) => c.is_active).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
                   </>
                 ) : null}
               </div>

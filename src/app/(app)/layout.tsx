@@ -51,7 +51,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const fv = can(ctx, "finance.view");
   add("Financeiro", [
     fv && { href: "/financeiro", label: "Resumo" },
-    can(ctx, "charts.view") && { href: "/graficos", label: "Gráficos" },
+    can(ctx, "reports.view") && { href: "/relatorios", label: "Relatórios" },
   ]);
   add("Configurações", [
     can(ctx, "admin.catalog") && { href: "/admin/servicos", label: "Serviços" },
@@ -76,7 +76,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     can(ctx, "customers.manage") && { title: "Novo cliente", href: "/clientes/novo" },
     can(ctx, "tasks.create") && { title: "Nova tarefa", href: "/tarefas/nova" },
     can(ctx, "quotes.manage") && { title: "Novo orçamento", href: "/orcamentos/novo" },
-    seesReturns && { title: "Novo retorno", href: "/retornos/novo" },
     fv && { title: "Novo lançamento financeiro", href: "/financeiro#nova" },
   ].filter((x): x is { title: string; href: string } => !!x).map((x) => ({ type: "Ações rápidas", sub: "", ...x }));
 

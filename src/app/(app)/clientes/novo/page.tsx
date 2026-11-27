@@ -30,7 +30,7 @@ export default async function NewCustomer({ searchParams }: { searchParams: Prom
             <Field label="Nascimento (opcional)"><input name="birthdate" type="date" /></Field>
           </div>
         ) : null}
-        <Field label="Observações (preferências, alergias, cuidados)"><textarea name="notes" /></Field>
+        <Field label="Observações (animais, alergias, acesso ao local)"><textarea name="notes" /></Field>
         <small>Dados pessoais são coletados só para atender o cliente e podem ser corrigidos ou removidos a pedido dele (LGPD).</small>
         <div><button className="btn accent" type="submit">Cadastrar</button></div>
       </form>

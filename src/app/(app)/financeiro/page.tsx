@@ -45,7 +45,7 @@ export default async function Finance() {
 
       {can(ctx, "finance.manage") ? (
         <details style={{ marginBottom: "24px", padding: "12px", border: "1px solid #ddd", borderRadius: "4px" }}>
-          <summary style={{ cursor: "pointer", fontWeight: "bold" }}>+ Novo Lançamento</summary>
+          <summary style={{ cursor: "pointer", fontWeight: "bold" }}>+ Novo lançamento</summary>
           <form action={saveFinanceEntryAction} style={{ marginTop: "12px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
               <select name="kind" defaultValue="receita" required style={{ padding: "6px", borderRadius: "4px", border: "1px solid #ddd" }}>

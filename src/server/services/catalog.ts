@@ -151,12 +151,12 @@ export async function savePaymentMethod(db: Db, ctx: Ctx, input: PaymentMethodIn
 
 export async function saveChair(db: Db, ctx: Ctx, input: { id?: string; name: string; isActive?: boolean }) {
   need(ctx, "admin.schedules");
-  const name = requireText(input.name, "Nome da cadeira");
+  const name = requireText(input.name, "Nome do local");
   await db.tx(async (q) => {
     if (input.id) {
       if (input.isActive === false) {
         const [f] = await q<{ n: number }>("select count(*) as n from appointments where chair_id=$1 and status in ('agendado','em_atendimento') and starts_at > now()", [input.id]);
-        if (f.n > 0) throw new DomainError("has_future", `Há ${f.n} agendamento(s) futuro(s) nesta cadeira. Remaneje-os antes de desativar.`);
+        if (f.n > 0) throw new DomainError("has_future", `Há ${f.n} agendamento(s) futuro(s) neste local. Remaneje-os antes de desativar.`);
       }
       await q("update chairs set name=$2, is_active=$3 where id=$1 and unit_id=$4", [input.id, name, input.isActive ?? true, ctx.unitId]);
     } else await q("insert into chairs(unit_id,name,is_active) values ($1,$2,$3)", [ctx.unitId, name, input.isActive ?? true]);

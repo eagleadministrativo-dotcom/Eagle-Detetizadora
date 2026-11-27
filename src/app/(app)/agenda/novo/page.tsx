@@ -62,9 +62,9 @@ export default async function NewAppointment({ searchParams }: { searchParams: P
           {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
       </Field>
-      <Field label="Cadeira">
+      <Field label="Local">
         <select name="chairId" defaultValue={sp.c ?? ""}>
-          <option value="">Automática (primeira livre)</option>
+          <option value="">Automático (primeiro livre)</option>
           {chairs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </Field>
@@ -93,7 +93,7 @@ export default async function NewAppointment({ searchParams }: { searchParams: P
           </div>
           <Field label="Observações (opcional)"><textarea name="notes" /></Field>
           <ReturnPlan />
-          <small>O sistema impede conflito de cadeira e de profissional, respeita a escala e os bloqueios e calcula o término pela duração dos serviços.</small>
+          <small>O sistema impede que o mesmo técnico tenha dois serviços no mesmo horário, respeita a escala e os bloqueios e calcula o término pela duração dos serviços.</small>
           <div className="sticky-actions"><button className="btn accent" type="submit">Confirmar agendamento</button></div>
         </form>
       ) : null}
@@ -116,7 +116,7 @@ export default async function NewAppointment({ searchParams }: { searchParams: P
             <Field label="Até (mesma data)"><input type="time" name="to" step={900} defaultValue={sp.te ?? ""} required /></Field>
           </div>
           <div className="fields">
-            <Field label="Cadeira (opcional)">
+            <Field label="Local (opcional)">
               <select name="chairId" defaultValue={sp.c ?? ""}><option value="">Todas</option>{chairs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
             </Field>
             <Field label="Profissional (opcional)">

@@ -41,7 +41,7 @@ export default async function Health() {
             </tbody>
           </table></div>
         )}
-        <small>Se uma rotina falhar, o administrador recebe um aviso crítico (e push no celular, se ativado).</small>
+        <small>Se uma rotina falhar, o administrador recebe um aviso crítico (e notificação no celular, se ativada).</small>
       </section>
 
       <section className="card">

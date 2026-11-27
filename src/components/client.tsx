@@ -32,7 +32,7 @@ export function ThemePicker({ initial }: { initial: Theme }) {
 export function ThemeChoice({ initial }: { initial: Theme }) {
   const [t, setT] = useState<Theme>(initial);
   const pick = (v: Theme) => { setT(v); applyTheme(v); void saveThemeAction(v); };
-  const opts = [["claro", "sun", "Claro", "Fundo creme, ideal de dia"], ["escuro", "moon", "Escuro", "Fundo grafite, ideal à noite"], ["auto", "auto", "Automático", "Segue o tema do aparelho"]] as const;
+  const opts = [["claro", "sun", "Claro", "Fundo branco, ideal de dia"], ["escuro", "moon", "Escuro", "Fundo preto, ideal à noite"], ["auto", "auto", "Automático", "Segue o tema do aparelho"]] as const;
   return (
     <div className="themechoice" role="radiogroup" aria-label="Tema do aplicativo">
       {opts.map(([v, ic, label, hint]) => (

@@ -82,7 +82,7 @@ export default async function UsersAdmin({ searchParams }: { searchParams: Promi
         <div className="fields">
           <Field label="Nome"><input name="name" required /></Field>
           <Field label="E-mail"><input name="email" type="email" required autoComplete="off" /></Field>
-          <Field label="Perfil"><select name="role" defaultValue="barbeiro">{ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select></Field>
+          <Field label="Perfil"><select name="role" defaultValue="tecnico">{ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select></Field>
           <Field label="Vincular ao profissional"><select name="staffId" defaultValue=""><option value="">—</option>{freeStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
         </div>
         <fieldset>

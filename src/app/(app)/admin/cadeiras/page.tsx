@@ -5,7 +5,7 @@ import { listCatalog } from "@/server/services/catalog";
 import { Flash, PageHead } from "@/components/ui";
 import { saveBusinessHoursAction, saveChairAction } from "@/app/actions/admin";
 
-export const metadata = { title: "Cadeiras e horários" };
+export const metadata = { title: "Locais e horários" };
 const DAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
 export default async function ChairsAdmin({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string }> }) {
@@ -16,19 +16,19 @@ export default async function ChairsAdmin({ searchParams }: { searchParams: Prom
   const st = await getSettings(db.query, ctx.unitId);
   return (
     <>
-      <PageHead title="Cadeiras e horários" sub="Quantas cadeiras existem e quando a unidade funciona. A ocupação é calculada sobre esses horários." />
+      <PageHead title="Locais e horários" sub="Locais internos de atendimento e quando a empresa funciona. A ocupação é calculada sobre esses horários." />
       <Flash ok={sp.ok} erro={sp.erro} />
       <div className="grid cols-2">
         <section className="card stack">
-          <h2>Cadeiras</h2>
+          <h2>Locais</h2>
           {cat.chairs.map((c) => (
             <form key={c.id} action={saveChairAction} className="editrow">
-              <input type="hidden" name="id" value={c.id} /><input name="name" defaultValue={c.name} aria-label="Nome da cadeira" />
+              <input type="hidden" name="id" value={c.id} /><input name="name" defaultValue={c.name} aria-label="Nome do local" />
               <label className="check"><input type="checkbox" name="isActive" defaultChecked={c.is_active} />ativa</label><button className="btn small ghost" type="submit">Salvar</button>
             </form>
           ))}
-          <form action={saveChairAction} className="editrow"><input name="name" placeholder="Nova cadeira" required /><button className="btn small" type="submit">Adicionar</button></form>
-          <small>Uma cadeira só pode ser desativada sem agendamentos futuros.</small>
+          <form action={saveChairAction} className="editrow"><input name="name" placeholder="Novo local" required /><button className="btn small" type="submit">Adicionar</button></form>
+          <small>Um local só pode ser desativado sem agendamentos futuros.</small>
         </section>
         <section className="card stack">
           <h2>Horário de funcionamento</h2>
