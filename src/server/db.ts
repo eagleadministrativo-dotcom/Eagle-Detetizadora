@@ -36,11 +36,20 @@ function pgliteDb(dataDir: string): Db {
   };
 }
 
-// Caminho de produção (Supabase/Postgres). Ainda não validado contra um Postgres real.
-async function postgresDb(url: string): Promise<Db> {
+/**
+ * Na Vercel cada cópia do servidor abre conexões próprias; o pooler do Supabase em modo sessão (porta 5432) prende uma
+ * conexão do banco por cliente e esgota rápido. O modo transação (porta 6543) libera a conexão a cada operação.
+ */
+export function serverlessDbUrl(url: string): string {
+  return url.replace(/(\.pooler\.supabase\.com):5432(?=\/|$|\?)/, "$1:6543");
+}
+
+// Caminho de produção (Supabase/Postgres).
+async function postgresDb(rawUrl: string): Promise<Db> {
   const { Pool, types } = await import("pg");
   types.setTypeParser(INT8, toNumber);
-  const pool = new Pool({ connectionString: url, max: 5, application_name: "marfim-app", ssl: url.includes("localhost") ? undefined : { rejectUnauthorized: false } });
+  const url = serverlessDbUrl(rawUrl);
+  const pool = new Pool({ connectionString: url, max: 3, idleTimeoutMillis: 5000, application_name: "marfim-app", ssl: url.includes("localhost") ? undefined : { rejectUnauthorized: false } });
   return {
     async query<T>(sql: string, params: unknown[] = []) {
       return (await pool.query(sql, params as any[])).rows as T[];
