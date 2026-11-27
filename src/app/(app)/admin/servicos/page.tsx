@@ -3,7 +3,7 @@ import { getDb } from "@/server/db";
 import { requirePerm } from "@/server/session";
 import { listCatalog, listServices } from "@/server/services/catalog";
 import { fmtBRL } from "@/lib/money";
-import { Badge, Empty, Field, Flash, PageHead } from "@/components/ui";
+import { Badge, Empty, Flash, PageHead } from "@/components/ui";
 import { saveServiceCategoryAction } from "@/app/actions/admin";
 
 export const metadata = { title: "Serviços e preços" };

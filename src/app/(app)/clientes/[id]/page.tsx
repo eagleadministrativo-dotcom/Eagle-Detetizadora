@@ -63,6 +63,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
             <div className="fields">
               <Field label="Nome"><input name="name" defaultValue={c.name} required readOnly={!edit} /></Field>
               <Field label="Telefone"><input name="phone" defaultValue={c.phone ?? ""} readOnly={!edit} /></Field>
+              <Field label="Contato"><input name="contactName" defaultValue={c.contact_name ?? ""} readOnly={!edit} placeholder="Quem atende (ex.: Rose, síndico)" /></Field>
             </div>
             <div className="fields">
               <Field label="Razão social"><input name="legalName" defaultValue={c.legal_name ?? ""} readOnly={!edit} /></Field>
@@ -156,7 +157,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
               <input type="hidden" name="customerId" value={c.id} />
               <div className="fields">
                 <Field label="Anexar arquivo (até 5 MB)"><input type="file" name="file" accept=".pdf,.docx,.doc,.xlsx,.png,.jpg,.jpeg,.webp,.txt" required /></Field>
-                <Field label="É"><select name="kind" defaultValue="outro"><option value="os">Ordem de serviço</option><option value="orcamento">Orçamento</option><option value="outro">Outro (laudo, foto, contrato…)</option></select></Field>
+                <Field label="Tipo de arquivo"><select name="kind" defaultValue="outro"><option value="os">Ordem de serviço</option><option value="orcamento">Orçamento</option><option value="outro">Outro (laudo, foto, contrato…)</option></select></Field>
               </div>
               <div><button className="btn small" type="submit">Anexar</button></div>
             </form>

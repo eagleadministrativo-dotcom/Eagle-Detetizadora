@@ -34,7 +34,7 @@ export async function orderDocx(o: ServiceOrderRow): Promise<Buffer> {
       children: [
         p([new ImageRun({ type: "png", data: brand("logo-os.png"), transformation: { width: 80, height: 80 } })], { center: true }),
         p(runs({ text: `ORDEM DE SERVIÇO: Nº ${o.number}`, bold: true }), { center: true, after: 360 }),
-        p([...runs({ text: `CLIENTE: ${o.trade_name || o.customer_name}`, bold: true }), ...runs({ text: "\tFONE: ", bold: true }), ...runs({ text: docPhone(o.customer_phone), ...small })], { tabs: [5200] }),
+        p([...runs({ text: `CLIENTE: ${o.trade_name || o.customer_name}`, bold: true }), ...runs({ text: "\tFONE: ", bold: true }), ...runs({ text: `${docPhone(o.customer_phone)}${o.contact_name ? ` ${o.contact_name}` : ""}`, ...small })], { tabs: [5200] }),
         p([...runs({ text: `DATA: ${docDateWithWeekday(o.service_date)}`, bold: true, highlight: "yellow" }), ...runs({ text: "\t" }), ...runs({ text: `HORÁRIO: ${o.service_time ? `${o.service_time}hs` : ""}`, bold: true, highlight: "yellow" })], { tabs: [5200], after: 360 }),
         p(runs({ text: "SERVIÇOS:", bold: true })),
         p([...runs({ text: "- ", bold: true }), ...runs({ text: o.services || "", bold: true, highlight: "yellow" })], { after: 360 }),
@@ -71,7 +71,7 @@ export async function quoteDocx(q: QuoteRow, s: DocSettings, items: { descriptio
         p([new ImageRun({ type: "jpg", data: brand("cabecalho-orcamento.jpg"), transformation: { width: 600, height: 193 } })], { center: true, after: 200 }),
         p(runs({ text: `ORÇAMENTO: Nº ${q.number}`, bold: true }), { center: true, after: 300 }),
         p(runs({ text: `CLIENTE: ${q.customer_name}`, bold: true })),
-        p(runs({ text: `FONE: ${docPhone(q.customer_phone)}`, bold: true }), { after: q.service_address ? 60 : 300 }),
+        p(runs({ text: `FONE: ${docPhone(q.customer_phone)}${q.contact_name ? ` - ${q.contact_name}` : ""}`, bold: true }), { after: q.service_address ? 60 : 300 }),
         ...(q.service_address ? [p([...runs({ text: "LOCAL: ", bold: true }), ...runs({ text: q.service_address })], { after: 300 })] : []),
         ...block("SERVIÇOS A SEREM REALIZADOS:", services),
         ...block("FORMAS DE APLICAÇÃO:", q.application_text),

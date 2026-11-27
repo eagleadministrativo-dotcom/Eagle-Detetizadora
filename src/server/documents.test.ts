@@ -118,6 +118,7 @@ describe("documentos em Word e importação", () => {
   });
 
   it("orçamento: Word gerado e importado de volta cadastra o cliente novo e mantém os textos", async () => {
+    await w.db.query("update customers set contact_name='Síndico João' where id=$1", [w.customer2Id]);
     const id = await saveQuote(w.db, w.owner, {
       customerId: w.customer2Id, servicesText: "Desratização das áreas externas", applicationText: "Iscas em caixas de segurança", valueCents: 85000,
       paymentTerms: "Pix", executionTime: "2 horas", validityText: "15 dias", attentionText: "Acompanhar a equipe", city: "Curitiba", issueDate: "2026-11-20",
@@ -128,6 +129,8 @@ describe("documentos em Word e importação", () => {
     await w.db.query("update customers set name='Outro nome', phone=null where id=$1", [w.customer2Id]); // força cadastrar cliente novo
     const r = await importQuoteFile(w.db, w.owner, { name: "orcamento.docx", mime: "", bytes });
     expect(r.customerCreated).toBe(true);
+    const [novo] = await w.db.query<{ contact_name: string }>("select contact_name from customers where id=$1", [r.customerId]);
+    expect(novo.contact_name).toBe("Síndico João"); // o contato ao lado do FONE volta na importação
     expect((await getQuote(w.db, w.owner, r.id))!.quote).toMatchObject({
       customer_name: "Cliente B", services_text: "Desratização das áreas externas", application_text: "Iscas em caixas de segurança", doc_value_cents: 85000,
       payment_terms: "Pix", execution_time: "2 horas", validity_text: "15 dias", attention_text: "Acompanhar a equipe", city: "Curitiba", issue_date: "2026-11-20", status: "rascunho",

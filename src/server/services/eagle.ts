@@ -127,7 +127,7 @@ export const QUOTE_STATUS_LABEL: Record<QuoteStatus, string> = { rascunho: "Rasc
 const QUOTE_STATUSES = Object.keys(QUOTE_STATUS_LABEL) as QuoteStatus[];
 
 export interface QuoteRow {
-  id: string; number: number; customer_id: string; customer_name: string; customer_phone: string | null; customer_email: string | null;
+  id: string; number: number; customer_id: string; customer_name: string; customer_phone: string | null; customer_email: string | null; contact_name: string | null;
   service_address: string | null; issue_date: string; valid_until: string | null; status: QuoteStatus; discount_cents: number;
   payment_terms: string | null; conditions: string | null; notes: string | null; appointment_id: string | null;
   services_text: string | null; application_text: string | null; products_text: string | null; value_cents: number | null;
@@ -139,7 +139,7 @@ export interface QuoteRow {
 export interface QuoteItemRow { id: string; service_id: string | null; description: string; quantity: number; unit_price_cents: number; total_cents: number }
 
 const QUOTE_SELECT = `
-  select q.id, q.number, q.customer_id, c.name as customer_name, c.phone as customer_phone, c.email as customer_email,
+  select q.id, q.number, q.customer_id, c.name as customer_name, c.phone as customer_phone, c.email as customer_email, c.contact_name,
          coalesce(q.service_address, c.address) as service_address, to_char(q.issue_date,'YYYY-MM-DD') as issue_date,
          to_char(q.valid_until,'YYYY-MM-DD') as valid_until, q.status, q.discount_cents, q.payment_terms, q.conditions, q.notes, q.appointment_id,
          q.services_text, q.application_text, q.products_text, q.value_cents, q.execution_time, q.validity_text, q.includes_text, q.scheduling_text,
@@ -290,7 +290,7 @@ export interface ServiceOrderRow {
   id: string; number: number; appointment_id: string | null; quote_id: string | null; quote_number: number | null; status: OSStatus;
   pests: string | null; products_used: string | null; areas: string | null; payment_method: string | null; payment_status: OSPayment;
   notes: string | null; customer_confirmed: boolean; technician_confirmed: boolean; warranty_days: number | null;
-  customer_id: string; customer_name: string; customer_phone: string | null; legal_name: string | null; trade_name: string | null;
+  customer_id: string; customer_name: string; customer_phone: string | null; contact_name: string | null; legal_name: string | null; trade_name: string | null;
   document: string | null; cep: string | null; service_address: string | null;
   staff_id: string | null; staff_name: string | null; service_date: string | null; service_time: string | null;
   services: string; total_cents: number; bank: string | null; report_months: number | null; client_situation: ClientSituation | null;
@@ -301,7 +301,7 @@ export interface ServiceOrderRow {
 const OS_SELECT = `
   select so.id, so.number, so.appointment_id, so.quote_id, qt.number as quote_number, so.status, so.pests, so.products_used, so.areas,
          so.payment_method, so.payment_status, so.notes, so.customer_confirmed, so.technician_confirmed, so.warranty_days,
-         so.customer_id, c.name as customer_name, c.phone as customer_phone, c.legal_name, c.trade_name, c.cpf as document, c.cep,
+         so.customer_id, c.name as customer_name, c.phone as customer_phone, c.contact_name, c.legal_name, c.trade_name, c.cpf as document, c.cep,
          coalesce(a.service_address, c.address) as service_address, a.staff_id, st.name as staff_name,
          coalesce(to_char(so.service_date,'YYYY-MM-DD'), to_char(a.starts_at at time zone 'America/Sao_Paulo','YYYY-MM-DD')) as service_date,
          coalesce(so.service_time, to_char(a.starts_at at time zone 'America/Sao_Paulo','HH24:MI')) as service_time,

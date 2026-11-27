@@ -21,7 +21,7 @@ export function OrderDocument({ o }: { o: ServiceOrderRow }) {
         <p className="title">ORDEM DE SERVIÇO: Nº {o.number}</p>
       </header>
       <section className="gap">
-        <p><B>CLIENTE: {o.trade_name || o.customer_name}</B>&nbsp;&nbsp;&nbsp;&nbsp; <B>FONE: </B><span className="small-b">{docPhone(o.customer_phone)}</span></p>
+        <p><B>CLIENTE: {o.trade_name || o.customer_name}</B>&nbsp;&nbsp;&nbsp;&nbsp; <B>FONE: </B><span className="small-b">{docPhone(o.customer_phone)}{o.contact_name ? ` ${o.contact_name}` : ""}</span></p>
         <p><span className="hl"><B>DATA: {docDateWithWeekday(o.service_date)}</B></span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span className="hl"><B>HORÁRIO: {o.service_time ? `${o.service_time}hs` : ""}</B></span></p>
       </section>
       <section className="gap">
@@ -68,7 +68,7 @@ export function QuoteDocument({ q, s, items }: { q: QuoteRow; s: DocSettings; it
       <p className="title">ORÇAMENTO: Nº {q.number}</p>
       <section className="gap">
         <p><B>CLIENTE: {q.customer_name}</B></p>
-        <p><B>FONE: {docPhone(q.customer_phone)}</B></p>
+        <p><B>FONE: {docPhone(q.customer_phone)}{q.contact_name ? ` - ${q.contact_name}` : ""}</B></p>
         {q.service_address ? <p><B>LOCAL: </B>{q.service_address}</p> : null}
       </section>
       {block("SERVIÇOS A SEREM REALIZADOS:", services)}

@@ -3,7 +3,7 @@ import { audit, need } from "../core";
 import type { Ctx } from "../permissions";
 import { extractDocumentText, parseOrderText, parseQuoteText, type ParsedOrder } from "../documents/extract";
 import { insertCustomerFile } from "./files";
-import { createStandaloneOrder, saveQuote } from "./eagle";
+import { createStandaloneOrder, quoteDefaults, saveQuote } from "./eagle";
 
 const digits = (v: string | null | undefined) => (v ?? "").replace(/\D/g, "");
 const COMBINING = /[̀-ͯ]/g;
@@ -22,14 +22,14 @@ async function findOrCreateCustomer(q: Q, ctx: Ctx, d: { name: string | null; ph
     // completa o que faltar na ficha, sem sobrescrever o que já existe
     await q(
       `update customers set legal_name=coalesce(legal_name,$2), trade_name=coalesce(trade_name,$3), cpf=coalesce(cpf,$4), address=coalesce(address,$5), cep=coalesce(cep,$6),
-         phone=coalesce(phone,$7), updated_at=now(), updated_by=$8 where id=$1`,
-      [hit.id, d.legalName ?? null, d.tradeName ?? null, d.document ?? null, d.address ?? null, d.cep ?? null, d.phone ?? null, ctx.userId]);
+         phone=coalesce(phone,$7), contact_name=coalesce(contact_name,$9), updated_at=now(), updated_by=$8 where id=$1`,
+      [hit.id, d.legalName ?? null, d.tradeName ?? null, d.document ?? null, d.address ?? null, d.cep ?? null, d.phone ?? null, ctx.userId, d.contact ?? null]);
     return { id: hit.id, created: false };
   }
   const name = d.tradeName || d.name || d.legalName || "Cliente importado";
   const [r] = await q<{ id: string }>(
-    "insert into customers(unit_id,name,phone,cpf,legal_name,trade_name,address,cep,notes,updated_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning id",
-    [ctx.unitId, name, d.phone ?? null, d.document ?? null, d.legalName ?? null, d.tradeName ?? null, d.address ?? null, d.cep ?? null, d.contact ? `Contato: ${d.contact}` : null, ctx.userId]);
+    "insert into customers(unit_id,name,phone,cpf,legal_name,trade_name,address,cep,contact_name,updated_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning id",
+    [ctx.unitId, name, d.phone ?? null, d.document ?? null, d.legalName ?? null, d.tradeName ?? null, d.address ?? null, d.cep ?? null, d.contact ?? null, ctx.userId]);
   await audit(q, ctx, "CLIENTE_CRIADO", "customer", r.id, null, { name, origem: "importação de arquivo" });
   return { id: r.id, created: true };
 }
@@ -63,11 +63,15 @@ export async function importQuoteFile(db: Db, ctx: Ctx, file: { name: string; mi
     const fileId = await insertCustomerFile(q, ctx, { customerId: customer.id, kind: "orcamento", name: file.name, mime: file.mime, bytes: file.bytes });
     return { customer, fileId };
   });
+  const d = await quoteDefaults(db, ctx.unitId);
+  // no modelo, a lista de produtos costuma ser imagem: sem lista no texto, entra a lista padrão de Configurações
+  const products = p.productsText && p.productsText.length >= 200 ? p.productsText : d.productsText || p.productsText;
   const id = await saveQuote(db, ctx, {
-    customerId: customer.id, issueDate: p.issueDate, fileId, valueCents: p.valueCents ?? 0, paymentTerms: p.paymentTerms,
-    servicesText: p.servicesText || "Serviços conforme arquivo importado.", applicationText: p.applicationText, productsText: p.productsText, executionTime: p.executionTime,
-    validityText: p.validityText, includesText: p.includesText, schedulingText: p.schedulingText, attentionText: p.attentionText, cancellationText: p.cancellationText,
-    city: p.city,
+    customerId: customer.id, issueDate: p.issueDate, fileId, valueCents: p.valueCents ?? 0, paymentTerms: p.paymentTerms ?? d.paymentTerms,
+    servicesText: p.servicesText || "Serviços conforme arquivo importado.", applicationText: p.applicationText ?? d.applicationText, productsText: products,
+    executionTime: p.executionTime ?? d.executionTime, validityText: p.validityText ?? d.validityText, includesText: p.includesText ?? d.includesText,
+    schedulingText: p.schedulingText ?? d.schedulingText, attentionText: p.attentionText ?? d.attentionText, cancellationText: p.cancellationText ?? d.cancellationText,
+    city: p.city ?? d.city, signatureName: d.signatureName, signatureRole: d.signatureRole, signaturePhone: d.signaturePhone,
   });
   return { id, customerId: customer.id, customerCreated: customer.created };
 }

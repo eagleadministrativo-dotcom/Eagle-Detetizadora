@@ -11,7 +11,6 @@ import { runDailyJobs } from "@/server/services/ops";
 import { unreadCount } from "@/server/services/notify";
 import { getPrefs } from "@/server/services/access";
 import { taskCounts } from "@/server/services/tasks";
-import { returnCounts } from "@/server/services/returns";
 import { processEvents } from "@/server/services/events";
 import { CommandPalette, CountUp, Spotlight, ThemePicker } from "@/components/client";
 import { logoutAction } from "@/app/actions/auth";
@@ -25,7 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const db = await getDb();
   if (can(ctx, "finance.view")) await runDailyJobs(db, ctx.unitId).catch((e) => console.error("[rotina diaria]", e));
   const seesReturns = can(ctx, "returns.view_all") || can(ctx, "returns.own");
-  const [unread, tasks, returns, prefs] = await Promise.all([unreadCount(db, ctx), taskCounts(db, ctx), seesReturns ? returnCounts(db, ctx) : Promise.resolve({} as Record<string, number>), getPrefs(db, ctx.userId)]);
+  const [unread, tasks, prefs] = await Promise.all([unreadCount(db, ctx), taskCounts(db, ctx), getPrefs(db, ctx.userId)]);
   // Envia por push os avisos novos, depois que a página já respondeu (não atrasa a tela).
   after(async () => {
     await processEvents(db).catch((e) => console.error("[eventos]", e));

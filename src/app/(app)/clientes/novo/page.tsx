@@ -22,6 +22,7 @@ export default async function NewCustomer({ searchParams }: { searchParams: Prom
         <div className="fields">
           <Field label="Nome"><input name="name" required /></Field>
           <Field label="Telefone"><input name="phone" inputMode="tel" placeholder="41 99999-0000" /></Field>
+          <Field label="Contato (opcional)"><input name="contactName" placeholder="Quem atende (ex.: Rose, síndico)" /></Field>
         </div>
         <div className="fields">
           <Field label="Razão social (opcional)"><input name="legalName" /></Field>
