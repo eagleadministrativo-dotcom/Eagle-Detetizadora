@@ -11,6 +11,8 @@ import { ApptBadge, ConfirmAction, Field, Flash, PageHead } from "@/components/u
 import { seriesOf } from "@/server/services/series";
 import { seriesAction } from "@/app/actions/agenda";
 import { cancelAppointmentAction, noShowAction, rescheduleAction, startAttendanceAction } from "@/app/actions/agenda";
+import { orderOfAppointment } from "@/server/services/eagle";
+import { createServiceOrderAction } from "@/app/actions/eagle";
 
 export const metadata = { title: "Agendamento" };
 
@@ -29,6 +31,7 @@ export default async function AppointmentPage({ params, searchParams }: { params
   const cat = await listCatalog(db, ctx.unitId);
   const mine = can(ctx, "agenda.manage") || (can(ctx, "agenda.manage_own") && ctx.staffId === a.staff_id);
   const canRun = can(ctx, "attendance.run") || (can(ctx, "attendance.run_own") && ctx.staffId === a.staff_id);
+  const os = await orderOfAppointment(db, ctx.unitId, id);
   const [h] = await db.query<{ cancelled_by_name: string | null; cancelled_at: Date | null }>("select u.full_name as cancelled_by_name, ap.cancelled_at from appointments ap left join users u on u.id=ap.cancelled_by where ap.id=$1", [id]);
 
   return (
@@ -47,6 +50,11 @@ export default async function AppointmentPage({ params, searchParams }: { params
           {a.notes ? <div><small>Observações do agendamento</small><br />{a.notes}</div> : null}
           {a.status === "cancelado" ? <div className="alert">Cancelado: {a.cancellation_reason}{h?.cancelled_by_name ? ` (por ${h.cancelled_by_name} em ${h.cancelled_at ? fmtDateTime(h.cancelled_at) : ""})` : ""}</div> : null}
           {a.attendance_id ? <Link className="btn" href={`/atendimentos/${a.attendance_id}`}>Abrir atendimento</Link> : null}
+          {os ? (
+            <Link className="btn" href={`/os/${os.id}`}>Ordem de serviço nº {os.number}</Link>
+          ) : mine && a.status !== "cancelado" ? (
+            <form action={createServiceOrderAction}><input type="hidden" name="appointmentId" value={a.id} /><button className="btn accent" type="submit">Abrir ordem de serviço</button></form>
+          ) : null}
         </section>
         {mine && a.status === "agendado" ? (
           <section className="card stack">

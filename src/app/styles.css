@@ -1257,3 +1257,9 @@ a.signal:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); }
   --line: rgba(0, 0, 0, 0.12); --line-strong: rgba(0, 0, 0, 0.22); --accent: var(--eg-gold); --accent-ink: var(--eg-black); --focus: #111111;
 }
 .login .legal { color: var(--muted); }
+@media print {
+  .noprint, .pagehead .row, .flash, .alert, .seg { display: none !important; }
+  body::before { display: none; }
+  .card { background: #fff !important; box-shadow: none !important; border: 1px solid #ccc; backdrop-filter: none !important; }
+  .card::before, .card::after { display: none; }
+}

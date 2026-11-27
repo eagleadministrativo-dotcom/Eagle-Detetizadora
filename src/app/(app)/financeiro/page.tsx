@@ -1,104 +1,111 @@
+import Link from "next/link";
 import { getDb } from "@/server/db";
-import { requireSession } from "@/server/session";
-import { can, need } from "@/server/core";
+import { requirePerm } from "@/server/session";
+import { can } from "@/server/core";
 import { listFinanceEntries } from "@/server/services/eagle";
-import { saveFinanceEntryAction } from "@/app/actions/eagle";
+import { fmtYmd, monthEnd, monthStart, todayYmd, addMonths } from "@/lib/dates";
+import { Badge, ConfirmAction, Empty, Field, Flash, PageHead, Stat, money } from "@/components/ui";
+import { deleteFinanceEntryAction, saveFinanceEntryAction } from "@/app/actions/eagle";
 
 export const metadata = { title: "Financeiro" };
+const CATS = { receita: ["Serviços avulsos", "Contrato de manutenção", "Venda de produtos", "Outras receitas"], gasto: ["Produtos e insumos", "Combustível", "Veículo", "Equipamentos e EPIs", "Salários", "Impostos", "Aluguel", "Marketing", "Outras despesas"] };
+const MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
-export default async function Finance() {
-  const { ctx } = await requireSession();
-  need(ctx, "finance.view");
-  const db = await getDb();
-  const { rows } = await listFinanceEntries(db, ctx, { limit: 50 });
-
-  const receitas = rows.filter((r) => r.kind === "receita");
-  const gastos = rows.filter((r) => r.kind === "gasto");
-  const totalReceitas = receitas.reduce((sum, r) => sum + r.amountCents, 0);
-  const totalGastos = gastos.reduce((sum, r) => sum + r.amountCents, 0);
-  const saldo = totalReceitas - totalGastos;
+export default async function Finance({ searchParams }: { searchParams: Promise<{ m?: string; ok?: string; erro?: string }> }) {
+  const sp = await searchParams;
+  const { ctx } = await requirePerm("finance.view");
+  const today = todayYmd();
+  const m = /^\d{4}-\d{2}$/.test(sp.m ?? "") ? sp.m! : today.slice(0, 7);
+  const start = monthStart(`${m}-01`);
+  const end = monthEnd(`${m}-01`);
+  const { rows, income, expense, balance, categories } = await listFinanceEntries(await getDb(), ctx, { start, end });
+  const manage = can(ctx, "finance.manage");
+  const label = `${MONTHS[Number(m.slice(5)) - 1]} de ${m.slice(0, 4)}`;
+  const prev = addMonths(start, -1).slice(0, 7);
+  const next = addMonths(start, 1).slice(0, 7);
+  const links: [string, string, boolean][] = [
+    ["/financeiro/caixa", "Caixa do dia", can(ctx, "cash.manage") || can(ctx, "finance.view")],
+    ["/financeiro/receber", "Contas a receber", true],
+    ["/financeiro/pagar", "Contas a pagar", true],
+    ["/financeiro/conciliacao", "Conciliação", true],
+    ["/financeiro/fluxo", "Fluxo de caixa", true],
+    ["/financeiro/dre", "DRE (resultado)", true],
+    ["/financeiro/fechamento", "Fechamento do mês", true],
+    ["/financeiro/metas", "Metas", true],
+    ["/relatorios", "Indicadores e relatórios", can(ctx, "reports.view")],
+  ];
 
   return (
-    <div className="page">
-      <h1>Financeiro</h1>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px", marginBottom: "24px" }}>
-        <div style={{ padding: "16px", background: "#e8f5e9", borderRadius: "4px" }}>
-          <div style={{ fontSize: "12px", color: "#666" }}>Receitas</div>
-          <div style={{ fontSize: "24px", fontWeight: "bold", color: "#2e7d32" }}>
-            {(totalReceitas / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-          </div>
-        </div>
-        <div style={{ padding: "16px", background: "#ffebee", borderRadius: "4px" }}>
-          <div style={{ fontSize: "12px", color: "#666" }}>Gastos</div>
-          <div style={{ fontSize: "24px", fontWeight: "bold", color: "#c62828" }}>
-            {(totalGastos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-          </div>
-        </div>
-        <div style={{ padding: "16px", background: "#f3e5f5", borderRadius: "4px" }}>
-          <div style={{ fontSize: "12px", color: "#666" }}>Saldo</div>
-          <div style={{ fontSize: "24px", fontWeight: "bold", color: saldo >= 0 ? "#2e7d32" : "#c62828" }}>
-            {(saldo / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-          </div>
-        </div>
+    <>
+      <PageHead title="Financeiro" sub={`Resumo de ${label}: lançamentos avulsos e atalhos para caixa, contas, DRE e fechamento.`}>
+        <Link className="btn ghost" href={`/financeiro?m=${prev}`}>‹ Mês anterior</Link>
+        {m !== today.slice(0, 7) ? <Link className="btn ghost" href="/financeiro">Mês atual</Link> : null}
+        <Link className="btn ghost" href={`/financeiro?m=${next}`}>Próximo mês ›</Link>
+      </PageHead>
+      <Flash ok={sp.ok} erro={sp.erro} />
+      <div className="grid cols-3">
+        <Stat label="Receitas lançadas" value={money(income)} />
+        <Stat label="Gastos lançados" value={money(expense)} />
+        <Stat label="Saldo dos lançamentos" value={money(balance)} tone={balance >= 0 ? "ol" : "hi"} hint="Só os lançamentos desta tela. Atendimentos e contas estão no DRE." />
       </div>
-
-      {can(ctx, "finance.manage") ? (
-        <details style={{ marginBottom: "24px", padding: "12px", border: "1px solid #ddd", borderRadius: "4px" }}>
-          <summary style={{ cursor: "pointer", fontWeight: "bold" }}>+ Novo lançamento</summary>
-          <form action={saveFinanceEntryAction} style={{ marginTop: "12px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
-              <select name="kind" defaultValue="receita" required style={{ padding: "6px", borderRadius: "4px", border: "1px solid #ddd" }}>
-                <option value="receita">Receita</option>
-                <option value="gasto">Gasto</option>
-              </select>
-              <input name="category" type="text" placeholder="Categoria" required style={{ padding: "6px", borderRadius: "4px", border: "1px solid #ddd" }} />
+      <section className="card stack">
+        <h2>Atalhos</h2>
+        <div className="row">{links.filter(([, , ok]) => ok).map(([href, text]) => <Link key={href} className="btn ghost" href={href}>{text}</Link>)}</div>
+      </section>
+      <div className="grid asym">
+        <section className="card stack">
+          <h2>Lançamentos de {label}</h2>
+          {rows.length === 0 ? <Empty title="Nenhum lançamento neste mês">{manage ? "Use o formulário ao lado para lançar receitas e gastos avulsos." : null}</Empty> : (
+            <div className="tablewrap">
+              <table>
+                <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th className="n">Valor</th>{manage ? <th /> : null}</tr></thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.id}>
+                      <td className="nowrap">{fmtYmd(r.entry_date)}</td>
+                      <td>{r.description}{r.created_by_name ? <><br /><small>por {r.created_by_name}</small></> : null}</td>
+                      <td><Badge tone={r.kind === "receita" ? "ok" : "bad"}>{r.kind === "receita" ? "Receita" : "Gasto"}</Badge> <small>{r.category}</small></td>
+                      <td className="n">{r.kind === "gasto" ? "− " : ""}{money(r.amount_cents)}</td>
+                      {manage ? (
+                        <td>
+                          <ConfirmAction label="Excluir" action={deleteFinanceEntryAction} submit="Excluir lançamento" warn="A exclusão fica registrada na auditoria.">
+                            <input type="hidden" name="id" value={r.id} /><input type="hidden" name="m" value={m} />
+                          </ConfirmAction>
+                        </td>
+                      ) : null}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "8px", marginBottom: "12px" }}>
-              <input name="description" type="text" placeholder="Descrição" required style={{ padding: "6px", borderRadius: "4px", border: "1px solid #ddd" }} />
-              <input name="entryDate" type="date" defaultValue={new Date().toISOString().split("T")[0]} required style={{ padding: "6px", borderRadius: "4px", border: "1px solid #ddd" }} />
-            </div>
-            <div style={{ marginBottom: "12px" }}>
-              <input name="amount" type="text" placeholder="Valor (ex: 100,00)" required style={{ width: "100%", padding: "6px", borderRadius: "4px", border: "1px solid #ddd" }} />
-            </div>
-            <button type="submit" style={{ padding: "8px 16px", background: "#0066cc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}>
-              Lançar
-            </button>
-          </form>
-        </details>
-      ) : null}
-
-      <div style={{ marginBottom: "24px" }}>
-        <h2>Últimos lançamentos</h2>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ borderBottom: "2px solid #ddd" }}>
-              <th style={{ textAlign: "left", padding: "8px" }}>Data</th>
-              <th style={{ textAlign: "left", padding: "8px" }}>Tipo</th>
-              <th style={{ textAlign: "left", padding: "8px" }}>Descrição</th>
-              <th style={{ textAlign: "left", padding: "8px" }}>Categoria</th>
-              <th style={{ textAlign: "right", padding: "8px" }}>Valor</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.slice(0, 20).map((r) => (
-              <tr key={r.id} style={{ borderBottom: "1px solid #eee" }}>
-                <td style={{ padding: "8px" }}>{new Date(r.entryDate).toLocaleDateString("pt-BR")}</td>
-                <td style={{ padding: "8px" }}>
-                  <span style={{ padding: "2px 6px", borderRadius: "3px", fontSize: "11px", backgroundColor: r.kind === "receita" ? "#c8e6c9" : "#ffcdd2", color: r.kind === "receita" ? "#1b5e20" : "#b71c1c" }}>
-                    {r.kind === "receita" ? "Receita" : "Gasto"}
-                  </span>
-                </td>
-                <td style={{ padding: "8px" }}>{r.description}</td>
-                <td style={{ padding: "8px" }}>{r.category}</td>
-                <td style={{ padding: "8px", textAlign: "right", color: r.kind === "receita" ? "#2e7d32" : "#c62828" }}>
-                  {(r.amountCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          )}
+          {categories.length ? (
+            <>
+              <h3>Por categoria</h3>
+              <div className="stack">{categories.map((c) => <div key={c.kind + c.category} className="row" style={{ justifyContent: "space-between" }}><span>{c.category} <small>· {c.kind}</small></span><b className="mono">{money(c.cents)}</b></div>)}</div>
+            </>
+          ) : null}
+        </section>
+        {manage ? (
+          <section className="card form" id="novo">
+            <h2>Novo lançamento</h2>
+            <form action={saveFinanceEntryAction} className="form">
+              <input type="hidden" name="m" value={m} />
+              <Field label="Tipo"><select name="kind" defaultValue="gasto"><option value="gasto">Gasto</option><option value="receita">Receita</option></select></Field>
+              <Field label="Descrição"><input name="description" required placeholder="Ex.: Inseticida gel, 10 unidades" /></Field>
+              <Field label="Categoria">
+                <input name="category" list="fin-cats" required placeholder="Escolha ou digite" />
+                <datalist id="fin-cats">{[...CATS.gasto, ...CATS.receita].map((c) => <option key={c} value={c} />)}</datalist>
+              </Field>
+              <div className="fields">
+                <Field label="Valor (R$)"><input name="amount" inputMode="decimal" required placeholder="0,00" /></Field>
+                <Field label="Data"><input type="date" name="entryDate" defaultValue={m === today.slice(0, 7) ? today : start} required /></Field>
+              </div>
+              <div><button className="btn accent" type="submit">Lançar</button></div>
+            </form>
+          </section>
+        ) : null}
       </div>
-    </div>
+    </>
   );
 }

@@ -259,3 +259,7 @@ export function CountUp() {
   }, [path]);
   return null;
 }
+
+export function PrintButton({ label = "Imprimir" }: { label?: string }) {
+  return <button className="btn ghost" type="button" onClick={() => window.print()}>{label}</button>;
+}

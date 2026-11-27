@@ -42,7 +42,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     can(ctx, "customers.view") && { href: "/clientes", label: "Clientes" },
     seesReturns && { href: "/retornos", label: "Retornos" },
     (can(ctx, "quotes.view") || can(ctx, "quotes.manage")) && { href: "/orcamentos", label: "Orçamentos" },
-    can(ctx, "agenda.manage") && { href: "/os", label: "Ordens de Serviço" },
+    (can(ctx, "agenda.manage") || can(ctx, "agenda.view_all") || can(ctx, "agenda.manage_own")) && { href: "/os", label: "Ordens de serviço" },
   ]);
   add("Equipe", [
     { href: "/tarefas", label: "Tarefas", count: tasks.open },
@@ -76,7 +76,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     can(ctx, "customers.manage") && { title: "Novo cliente", href: "/clientes/novo" },
     can(ctx, "tasks.create") && { title: "Nova tarefa", href: "/tarefas/nova" },
     can(ctx, "quotes.manage") && { title: "Novo orçamento", href: "/orcamentos/novo" },
-    fv && { title: "Novo lançamento financeiro", href: "/financeiro#nova" },
+    can(ctx, "returns.manage") && { title: "Novo retorno", href: "/retornos/novo" },
+    can(ctx, "finance.manage") && { title: "Novo lançamento financeiro", href: "/financeiro#novo" },
   ].filter((x): x is { title: string; href: string } => !!x).map((x) => ({ type: "Ações rápidas", sub: "", ...x }));
 
   return (

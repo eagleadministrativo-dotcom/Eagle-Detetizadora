@@ -1,65 +1,54 @@
-import { getDb } from "@/server/db";
-import { requireSession } from "@/server/session";
-import { can } from "@/server/core";
-import { listQuotes } from "@/server/services/eagle";
 import Link from "next/link";
+import { getDb } from "@/server/db";
+import { requirePerm } from "@/server/session";
+import { can } from "@/server/core";
+import { listQuotes, QUOTE_STATUS_LABEL } from "@/server/services/eagle";
+import { fmtYmd, todayYmd } from "@/lib/dates";
+import { Badge, Empty, Flash, PageHead, Pager, Seg, money } from "@/components/ui";
+import { QuoteStatusBadge } from "@/components/eagle-ui";
 
 export const metadata = { title: "Orçamentos" };
+const SIZE = 40;
 
-export default async function QuotesPage() {
-  const { ctx } = await requireSession();
-  if (!can(ctx, "quotes.view")) throw new Error("Sem permissão");
-  const { rows } = await listQuotes(await getDb(), ctx, { limit: 50 });
-
+export default async function Quotes({ searchParams }: { searchParams: Promise<{ s?: string; p?: string; ok?: string; erro?: string }> }) {
+  const sp = await searchParams;
+  const { ctx } = await requirePerm("quotes.view", "quotes.manage");
+  const s = sp.s && sp.s in QUOTE_STATUS_LABEL ? sp.s : "";
+  const page = Math.max(1, Number(sp.p) || 1);
+  const { rows, total } = await listQuotes(await getDb(), ctx, { status: s || undefined, limit: SIZE, offset: (page - 1) * SIZE });
+  const today = todayYmd();
   return (
-    <div className="page">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-        <h1>Orçamentos</h1>
-        {can(ctx, "quotes.manage") ? (
-          <Link href="/orcamentos/novo" style={{ padding: "8px 16px", background: "#0066cc", color: "white", borderRadius: "4px", textDecoration: "none" }}>
-            + Novo orçamento
-          </Link>
-        ) : null}
-      </div>
-
+    <>
+      <PageHead title="Orçamentos" sub="Propostas para o cliente, com itens, desconto e validade. Aprovado, vira agendamento.">
+        {can(ctx, "quotes.manage") ? <Link className="btn accent" href="/orcamentos/novo">+ Novo orçamento</Link> : null}
+      </PageHead>
+      <Flash ok={sp.ok} erro={sp.erro} />
+      <Seg items={[{ href: "/orcamentos", label: "Todos", active: !s }, ...Object.entries(QUOTE_STATUS_LABEL).map(([k, v]) => ({ href: `/orcamentos?s=${k}`, label: v, active: s === k }))]} />
       {rows.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "40px", color: "#666" }}>Nenhum orçamento criado.</div>
+        <Empty title={s ? "Nenhum orçamento nesta situação" : "Nenhum orçamento ainda"}>{can(ctx, "quotes.manage") && !s ? "Crie o primeiro em Novo orçamento." : null}</Empty>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ borderBottom: "2px solid #ddd" }}>
-              <th style={{ textAlign: "left", padding: "12px" }}>Nº</th>
-              <th style={{ textAlign: "left", padding: "12px" }}>Cliente</th>
-              <th style={{ textAlign: "left", padding: "12px" }}>Data</th>
-              <th style={{ textAlign: "right", padding: "12px" }}>Total</th>
-              <th style={{ textAlign: "center", padding: "12px" }}>Situação</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} style={{ borderBottom: "1px solid #eee" }}>
-                <td style={{ padding: "12px" }}>#{r.number}</td>
-                <td style={{ padding: "12px" }}>{r.customer_name}</td>
-                <td style={{ padding: "12px" }}>{r.issueDate ? new Date(r.issueDate).toLocaleDateString("pt-BR") : "-"}</td>
-                <td style={{ padding: "12px", textAlign: "right" }}>
-                  {((r.total_items_cents - r.discountCents) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                </td>
-                <td style={{ padding: "12px", textAlign: "center" }}>
-                  <span style={{ padding: "4px 8px", borderRadius: "4px", fontSize: "12px", backgroundColor: "#ffc107", color: "white" }}>
-                    {r.status === "rascunho"
-                      ? "Rascunho"
-                      : r.status === "enviado"
-                        ? "Enviado"
-                        : r.status === "aprovado"
-                          ? "Aprovado"
-                          : "Recusado"}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th>Nº</th><th>Cliente</th><th>Emissão</th><th>Validade</th><th className="n">Total</th><th>Situação</th></tr></thead>
+            <tbody>
+              {rows.map((q) => {
+                const expired = q.valid_until && q.valid_until < today && (q.status === "rascunho" || q.status === "enviado");
+                return (
+                  <tr key={q.id}>
+                    <td className="mono"><Link href={`/orcamentos/${q.id}`}>#{q.number}</Link></td>
+                    <td><Link href={`/orcamentos/${q.id}`}>{q.customer_name}</Link></td>
+                    <td className="nowrap">{fmtYmd(q.issue_date)}</td>
+                    <td className="nowrap">{q.valid_until ? fmtYmd(q.valid_until) : "—"} {expired ? <Badge tone="bad">vencido</Badge> : null}</td>
+                    <td className="n">{money(q.total_cents)}</td>
+                    <td><QuoteStatusBadge s={q.status} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
-    </div>
+      <Pager base={s ? `/orcamentos?s=${s}` : "/orcamentos"} page={page} total={total} size={SIZE} />
+    </>
   );
 }
