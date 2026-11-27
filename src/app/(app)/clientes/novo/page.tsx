@@ -23,10 +23,18 @@ export default async function NewCustomer({ searchParams }: { searchParams: Prom
           <Field label="Nome"><input name="name" required /></Field>
           <Field label="Telefone"><input name="phone" inputMode="tel" placeholder="41 99999-0000" /></Field>
         </div>
+        <div className="fields">
+          <Field label="Razão social (opcional)"><input name="legalName" /></Field>
+          <Field label="Nome fantasia (opcional)"><input name="tradeName" /></Field>
+        </div>
+        <div className="fields">
+          <Field label="Endereço completo (opcional)"><input name="address" placeholder="Rua, número, bairro, cidade/UF" /></Field>
+          <Field label="CEP (opcional)"><input name="cep" inputMode="numeric" /></Field>
+        </div>
         {sensitive ? (
           <div className="fields">
             <Field label="E-mail (opcional)"><input name="email" type="email" /></Field>
-            <Field label="CPF (opcional)"><input name="cpf" inputMode="numeric" /></Field>
+            <Field label="CNPJ/CPF (opcional)"><input name="cpf" inputMode="numeric" /></Field>
             <Field label="Nascimento (opcional)"><input name="birthdate" type="date" /></Field>
           </div>
         ) : null}

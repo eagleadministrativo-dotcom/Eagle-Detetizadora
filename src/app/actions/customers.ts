@@ -10,6 +10,7 @@ export async function saveCustomerAction(fd: FormData) {
   await run(id ? `/clientes/${id}` : "/clientes/novo", async () => {
     const savedId = await saveCustomer(await getDb(), ctx, {
       id: id ?? undefined, name: str(fd, "name"), phone: optStr(fd, "phone"), email: optStr(fd, "email"), cpf: optStr(fd, "cpf"), birthdate: optStr(fd, "birthdate"), notes: optStr(fd, "notes"),
+      legalName: optStr(fd, "legalName"), tradeName: optStr(fd, "tradeName"), address: optStr(fd, "address"), cep: optStr(fd, "cep"),
       isActive: id ? bool(fd, "isActive") : undefined,
     });
     return { to: `/clientes/${savedId}`, ok: id ? "Cliente atualizado." : "Cliente cadastrado." };

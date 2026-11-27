@@ -9,4 +9,4 @@ export function proxy(req: NextRequest) {
   return res;
 }
 
-export const config = { matcher: ["/((?!_next/|api/|icons/|sw.js|theme.js|manifest.webmanifest|wallpaper.jpg|favicon.ico).*)"] };
+export const config = { matcher: ["/((?!_next/|api/|icons/|brand/|sw.js|theme.js|manifest.webmanifest|wallpaper.jpg|favicon.ico).*)"] };

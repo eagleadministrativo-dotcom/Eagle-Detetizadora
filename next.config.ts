@@ -13,7 +13,7 @@ const csp = [
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["@electric-sql/pglite", "pg"],
-  outputFileTracingIncludes: { "/**": ["./db/migrations/**/*"] },
+  outputFileTracingIncludes: { "/**": ["./db/migrations/**/*", "./public/brand/**/*"] },
   poweredByHeader: false,
   experimental: { serverActions: { bodySizeLimit: "11mb" } }, // anexos: até 5 arquivos de 2 MB (validado no servidor)
   async headers() {

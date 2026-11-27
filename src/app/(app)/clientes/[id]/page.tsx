@@ -14,6 +14,11 @@ import { fmtDateTime, fmtYmd } from "@/lib/dates";
 import { FrequencyFields } from "@/components/client";
 import { contactPrefsAction, returnRuleAction } from "@/app/actions/returns";
 import { saveCustomerAction } from "@/app/actions/customers";
+import { listQuotes, listServiceOrders } from "@/server/services/eagle";
+import { listCustomerFiles } from "@/server/services/files";
+import { OSStatusBadge, QuoteStatusBadge } from "@/components/eagle-ui";
+import { ConfirmAction } from "@/components/ui";
+import { addCustomerFileAction, deleteCustomerFileAction } from "@/app/actions/eagle";
 
 export const metadata = { title: "Cliente" };
 
@@ -36,6 +41,13 @@ export default async function CustomerPage({ params, searchParams }: { params: P
   const canRules = can(ctx, "returns.rules") || can(ctx, "returns.contact");
   const edit = can(ctx, "customers.manage");
   const sensitive = can(ctx, "customers.edit_sensitive");
+  const seesOrders = can(ctx, "agenda.manage") || can(ctx, "agenda.view_all");
+  const seesQuotes = can(ctx, "quotes.view") || can(ctx, "quotes.manage");
+  const [orders, quotes, files] = await Promise.all([
+    seesOrders ? listServiceOrders(db, ctx, { customerId: id, limit: 100 }).then((r) => r.rows) : Promise.resolve(null),
+    seesQuotes ? listQuotes(db, ctx, { customerId: id, limit: 100 }).then((r) => r.rows) : Promise.resolve(null),
+    listCustomerFiles(db, ctx, id),
+  ]);
   return (
     <>
       <PageHead title={c.name} sub={showHistory ? <>{c.visits} visita(s) · total gasto {money(c.total_spent_cents)}</> : undefined}>
@@ -52,10 +64,18 @@ export default async function CustomerPage({ params, searchParams }: { params: P
               <Field label="Nome"><input name="name" defaultValue={c.name} required readOnly={!edit} /></Field>
               <Field label="Telefone"><input name="phone" defaultValue={c.phone ?? ""} readOnly={!edit} /></Field>
             </div>
+            <div className="fields">
+              <Field label="Razão social"><input name="legalName" defaultValue={c.legal_name ?? ""} readOnly={!edit} /></Field>
+              <Field label="Nome fantasia"><input name="tradeName" defaultValue={c.trade_name ?? ""} readOnly={!edit} /></Field>
+            </div>
+            <div className="fields">
+              <Field label="Endereço completo"><input name="address" defaultValue={c.address ?? ""} readOnly={!edit} placeholder="Rua, número, bairro, cidade/UF" /></Field>
+              <Field label="CEP"><input name="cep" defaultValue={c.cep ?? ""} readOnly={!edit} inputMode="numeric" /></Field>
+            </div>
             {sensitive ? (
               <div className="fields">
                 <Field label="E-mail"><input name="email" type="email" defaultValue={c.email ?? ""} /></Field>
-                <Field label="CPF"><input name="cpf" defaultValue={c.cpf ?? ""} /></Field>
+                <Field label="CNPJ/CPF"><input name="cpf" defaultValue={c.cpf ?? ""} /></Field>
                 <Field label="Nascimento"><input name="birthdate" type="date" defaultValue={c.birthdate ?? ""} /></Field>
               </div>
             ) : null}
@@ -92,6 +112,55 @@ export default async function CustomerPage({ params, searchParams }: { params: P
             </form>
           ) : null}
           {ret.contacts.length ? <><h3>Contatos</h3>{ret.contacts.map((k) => <small key={k.id}>{fmtDateTime(k.created_at)} · {k.user_name} · {k.outcome.replace("_", " ")}{k.note ? `: ${k.note}` : ""}</small>)}</> : null}
+        </section>
+        {orders ? (
+          <section className="card stack">
+            <div className="row" style={{ justifyContent: "space-between" }}><h2>Ordens de serviço</h2>{can(ctx, "agenda.manage") ? <Link className="btn small" href={`/os/nova?cust=${c.id}`}>+ Nova OS</Link> : null}</div>
+            {orders.length === 0 ? <Empty title="Nenhuma ordem de serviço" /> : (
+              <div className="tablewrap"><table>
+                <thead><tr><th>Nº</th><th>Data</th><th>Serviços</th><th className="n">Valor</th><th>Situação</th></tr></thead>
+                <tbody>{orders.map((o) => <tr key={o.id}><td className="mono"><Link href={`/os/${o.id}`}>#{o.number}</Link></td><td className="nowrap">{o.service_date ? fmtYmd(o.service_date) : "—"}</td><td>{o.services || "—"}</td><td className="n">{money(o.total_cents)}</td><td><OSStatusBadge s={o.status} /> <Link href={`/documento/os/${o.id}`}>documento</Link></td></tr>)}</tbody>
+              </table></div>
+            )}
+          </section>
+        ) : null}
+        {quotes ? (
+          <section className="card stack">
+            <div className="row" style={{ justifyContent: "space-between" }}><h2>Orçamentos</h2>{can(ctx, "quotes.manage") ? <Link className="btn small" href={`/orcamentos/novo?cust=${c.id}`}>+ Novo orçamento</Link> : null}</div>
+            {quotes.length === 0 ? <Empty title="Nenhum orçamento" /> : (
+              <div className="tablewrap"><table>
+                <thead><tr><th>Nº</th><th>Data</th><th className="n">Valor</th><th>Situação</th></tr></thead>
+                <tbody>{quotes.map((q) => <tr key={q.id}><td className="mono"><Link href={`/orcamentos/${q.id}`}>#{q.number}</Link></td><td className="nowrap">{fmtYmd(q.issue_date)}</td><td className="n">{money(q.doc_value_cents)}</td><td><QuoteStatusBadge s={q.status} /> <Link href={`/documento/orcamento/${q.id}`}>documento</Link></td></tr>)}</tbody>
+              </table></div>
+            )}
+          </section>
+        ) : null}
+        <section className="card stack">
+          <h2>Arquivos</h2>
+          {files.length === 0 ? <small>Nenhum arquivo. Os arquivos importados de OS e orçamentos ficam guardados aqui.</small> : (
+            <div className="stack">
+              {files.map((f) => (
+                <div key={f.id} className="row" style={{ justifyContent: "space-between" }}>
+                  <span><a href={`/api/arquivo/cliente/${f.id}`}>{f.name}</a> <Badge>{f.kind === "os" ? "OS" : f.kind === "orcamento" ? "orçamento" : "outro"}</Badge><br /><small>{fmtDateTime(f.created_at)} · {(f.size_bytes / 1024).toFixed(0)} KB{f.created_by_name ? ` · ${f.created_by_name}` : ""}</small></span>
+                  {edit ? (
+                    <ConfirmAction label="Excluir" action={deleteCustomerFileAction} submit="Excluir arquivo" warn="O arquivo sai da ficha. A OS ou o orçamento continuam.">
+                      <input type="hidden" name="id" value={f.id} /><input type="hidden" name="customerId" value={c.id} />
+                    </ConfirmAction>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+          {edit ? (
+            <form action={addCustomerFileAction} className="form">
+              <input type="hidden" name="customerId" value={c.id} />
+              <div className="fields">
+                <Field label="Anexar arquivo (até 5 MB)"><input type="file" name="file" accept=".pdf,.docx,.doc,.xlsx,.png,.jpg,.jpeg,.webp,.txt" required /></Field>
+                <Field label="É"><select name="kind" defaultValue="outro"><option value="os">Ordem de serviço</option><option value="orcamento">Orçamento</option><option value="outro">Outro (laudo, foto, contrato…)</option></select></Field>
+              </div>
+              <div><button className="btn small" type="submit">Anexar</button></div>
+            </form>
+          ) : null}
         </section>
         {showHistory ? <section className="card stack">
           <h2>Últimos atendimentos</h2>

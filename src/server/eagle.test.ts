@@ -72,7 +72,9 @@ describe("ordens de serviço", () => {
     const ret = await executeServiceOrder(w.db, w.barber, os);
     expect(ret).toBeTruthy();
     expect(await getReturn(w.db, w.owner, ret!)).toMatchObject({ kind: "garantia", status: "pendente", due_date: addDays(todayYmd(), 60), staff_id: w.barberStaffId, service_order_id: os });
-    expect(await msg(updateServiceOrder(w.db, w.barber, os, { pests: "Ratos" }))).toMatch(/Só a OS aberta/);
+    expect(await msg(updateServiceOrder(w.db, w.barber, os, { pests: "Ratos" }))).toMatch(/Só o escritório/);
+    await updateServiceOrder(w.db, w.owner, os, { nfNumber: "1234", receiptNumber: "77", technicianConfirmed: true }); // escritório completa a NF depois
+    expect(await getServiceOrder(w.db, w.owner, os)).toMatchObject({ nf_number: "1234", receipt_number: "77", status: "executada" });
     expect(await msg(executeServiceOrder(w.db, w.barber, os))).toMatch(/já foi encerrada/);
   });
 

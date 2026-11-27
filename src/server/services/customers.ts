@@ -4,7 +4,7 @@ import { DomainError } from "../errors";
 import type { Ctx } from "../permissions";
 import { cleanRow, normalizePhone, MAX_IMPORT_ROWS, type ImportRow } from "@/lib/contact-import";
 
-export interface CustomerRow { id: string; name: string; phone: string | null; email: string | null; cpf: string | null; birthdate: string | null; notes: string | null; is_active: boolean; visits: number; last_visit: Date | null; total_spent_cents: number }
+export interface CustomerRow { id: string; name: string; phone: string | null; email: string | null; cpf: string | null; birthdate: string | null; notes: string | null; is_active: boolean; visits: number; last_visit: Date | null; total_spent_cents: number; legal_name?: string | null; trade_name?: string | null; address?: string | null; cep?: string | null }
 
 export async function listCustomers(db: Db, ctx: Ctx, opts: { search?: string; limit?: number; offset?: number; includeInactive?: boolean } = {}) {
   need(ctx, "customers.view");
@@ -31,6 +31,7 @@ export async function getCustomer(db: Db, ctx: Ctx, id: string) {
   const sensitive = can(ctx, "customers.edit_sensitive") || can(ctx, "finance.view");
   const [c] = await db.query<CustomerRow>(
     `select c.id,c.name,c.phone, case when $3 then c.email end as email, case when $3 then c.cpf end as cpf, case when $3 then to_char(c.birthdate,'YYYY-MM-DD') end as birthdate, c.notes, c.is_active,
+       c.legal_name, c.trade_name, c.address, c.cep,
        (select count(*) from attendances a where a.customer_id=c.id and a.status='concluido')::bigint as visits,
        (select max(a.finished_at) from attendances a where a.customer_id=c.id and a.status='concluido') as last_visit,
        coalesce((select sum(a.total_cents) from attendances a where a.customer_id=c.id and a.status='concluido'),0)::bigint as total_spent_cents
@@ -47,7 +48,7 @@ export async function getCustomer(db: Db, ctx: Ctx, id: string) {
   return { customer: c, history };
 }
 
-export interface SaveCustomerInput { id?: string; name: string; phone?: string | null; email?: string | null; cpf?: string | null; birthdate?: string | null; notes?: string | null; isActive?: boolean }
+export interface SaveCustomerInput { id?: string; name: string; phone?: string | null; email?: string | null; cpf?: string | null; birthdate?: string | null; notes?: string | null; isActive?: boolean; legalName?: string | null; tradeName?: string | null; address?: string | null; cep?: string | null }
 
 export async function saveCustomer(db: Db, ctx: Ctx, input: SaveCustomerInput): Promise<string> {
   need(ctx, "customers.manage");
@@ -63,15 +64,17 @@ export async function saveCustomer(db: Db, ctx: Ctx, input: SaveCustomerInput): 
       await q(
         `update customers set name=$2, phone=$3, notes=$4, is_active=$5,
            email = case when $6 then $7 else email end, cpf = case when $6 then $8 else cpf end, birthdate = case when $6 then $9::date else birthdate end,
-           updated_at=now(), updated_by=$10 where id=$1`,
-        [input.id, name, phone, input.notes ?? null, input.isActive ?? (old.is_active as boolean), sensitive, input.email || null, input.cpf || null, input.birthdate || null, ctx.userId],
+           legal_name=$11, trade_name=$12, address=$13, cep=$14, updated_at=now(), updated_by=$10 where id=$1`,
+        [input.id, name, phone, input.notes ?? null, input.isActive ?? (old.is_active as boolean), sensitive, input.email || null, input.cpf || null, input.birthdate || null, ctx.userId,
+          input.legalName?.trim() || null, input.tradeName?.trim() || null, input.address?.trim() || null, input.cep?.trim() || null],
       );
       await audit(q, ctx, "CLIENTE_EDITADO", "customer", input.id, { name: old.name, phone: old.phone }, { name, phone });
       return input.id;
     }
     const [r] = await q<{ id: string }>(
-      "insert into customers(unit_id,name,phone,email,cpf,birthdate,notes,updated_by) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id",
-      [ctx.unitId, name, phone, sensitive ? input.email || null : null, sensitive ? input.cpf || null : null, sensitive ? input.birthdate || null : null, input.notes ?? null, ctx.userId],
+      "insert into customers(unit_id,name,phone,email,cpf,birthdate,notes,updated_by,legal_name,trade_name,address,cep) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning id",
+      [ctx.unitId, name, phone, sensitive ? input.email || null : null, sensitive ? input.cpf || null : null, sensitive ? input.birthdate || null : null, input.notes ?? null, ctx.userId,
+        input.legalName?.trim() || null, input.tradeName?.trim() || null, input.address?.trim() || null, input.cep?.trim() || null],
     );
     await audit(q, ctx, "CLIENTE_CRIADO", "customer", r.id, null, { name });
     return r.id;

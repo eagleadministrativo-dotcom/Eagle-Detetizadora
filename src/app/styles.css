@@ -1257,6 +1257,37 @@ a.signal:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); }
   --line: rgba(0, 0, 0, 0.12); --line-strong: rgba(0, 0, 0, 0.22); --accent: var(--eg-gold); --accent-ink: var(--eg-black); --focus: #111111;
 }
 .login .legal { color: var(--muted); }
+/* ───────── documentos (OS e orçamento) no modelo da Eagle: sempre papel branco, em qualquer tema ───────── */
+.docpage { min-height: 100vh; padding: 24px 12px 48px; position: relative; z-index: 0; background: #d9d9d6; color: #111; }
+.docpage .toolbar { max-width: 794px; margin: 0 auto 14px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; align-items: center; }
+.docpage .toolbar .grow { flex: 1; }
+.paper { max-width: 794px; margin: 0 auto; background: #fff; color: #000; padding: 56px 72px; box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.35); font: 15px/1.5 Arial, Helvetica, sans-serif; }
+.paper p { margin: 0; }
+.paper b { font-weight: 700; }
+.paper .center { text-align: center; }
+.paper .title { font-weight: 700; text-align: center; margin: 6px 0 28px; }
+.paper .doc-logo { width: 80px; height: 80px; object-fit: contain; display: block; margin: 0 auto; }
+.paper .doc-banner { width: 100%; height: auto; display: block; margin-bottom: 18px; }
+.paper .gap { margin-top: 22px; }
+.paper .gap-s { margin-top: 14px; }
+.paper .hl { background: #ffff00; }
+.paper .red { color: #e00000; }
+.paper .big { font-size: 18px; }
+.paper .small-b { font-size: 13.5px; font-weight: 700; }
+.paper .split { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; }
+.paper .rule { border: 0; border-top: 2px solid #000; margin: 6px 0 18px; }
+.paper .obs { min-height: 190px; }
+.paper .foot { margin-top: 26px; font-size: 12.5px; font-weight: 700; display: grid; gap: 14px; }
+@media (max-width: 700px) { .paper { padding: 28px 20px; font-size: 14px; } }
+.doc-preview { border-radius: var(--radius); overflow: hidden; }
+.doc-preview .paper { max-width: none; border-radius: var(--radius); }
+@media print {
+  @page { size: A4; margin: 16mm 18mm; }
+  .docpage { background: #fff; padding: 0; }
+  .docpage .toolbar { display: none !important; }
+  .paper { box-shadow: none; padding: 0; max-width: none; }
+  .paper .hl { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
 @media print {
   .noprint, .pagehead .row, .flash, .alert, .seg { display: none !important; }
   body::before { display: none; }

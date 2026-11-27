@@ -7,6 +7,8 @@ import { ThemeChoice } from "@/components/client";
 import { getPrefs } from "@/server/services/access";
 import { returnSettingsAction } from "@/app/actions/returns";
 import { updateSettingsAction } from "@/app/actions/admin";
+import { saveDocumentSettingsAction } from "@/app/actions/eagle";
+import { getDocumentSettings } from "@/server/services/eagle";
 
 export const metadata = { title: "Configurações" };
 const brl = (c: number) => (c / 100).toFixed(2).replace(".", ",");
@@ -17,6 +19,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const db = await getDb();
   const st = await getSettings(db.query, ctx.unitId);
   const prefs = await getPrefs(db, ctx.userId);
+  const doc = await getDocumentSettings(db, ctx);
   return (
     <>
       <PageHead title="Configurações" sub="Políticas da unidade. Cada alteração fica registrada na auditoria." />
@@ -26,6 +29,40 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <p>Escolha entre claro e escuro. Muda na hora e fica salvo no seu usuário, em todos os aparelhos.</p>
         <ThemeChoice initial={prefs.theme} />
       </section>
+      <form action={saveDocumentSettingsAction} className="card form" id="documentos">
+        <h2>Empresa e textos do orçamento</h2>
+        <p>Aparecem nas ordens de serviço e nos orçamentos. Os textos do orçamento entram já preenchidos em cada orçamento novo, e dá para ajustar caso a caso.</p>
+        <div className="fields">
+          <Field label="Nome da empresa"><input name="company_name" defaultValue={doc.company_name ?? ""} /></Field>
+          <Field label="CNPJ"><input name="company_cnpj" defaultValue={doc.company_cnpj ?? ""} /></Field>
+          <Field label="Telefones"><input name="company_phone" defaultValue={doc.company_phone ?? ""} /></Field>
+        </div>
+        <div className="fields">
+          <Field label="E-mail"><input name="company_email" defaultValue={doc.company_email ?? ""} /></Field>
+          <Field label="Site"><input name="company_site" defaultValue={doc.company_site ?? ""} /></Field>
+          <Field label="Endereço"><input name="company_address" defaultValue={doc.company_address ?? ""} /></Field>
+        </div>
+        <Field label="Formas de aplicação"><textarea name="quote_application_default" rows={3} defaultValue={doc.quote_application_default ?? ""} /></Field>
+        <Field label="Descrição dos produtos"><textarea name="quote_products_default" rows={8} defaultValue={doc.quote_products_default ?? ""} /></Field>
+        <div className="fields">
+          <Field label="Formas de pagamento"><input name="quote_payment_default" defaultValue={doc.quote_payment_default ?? ""} /></Field>
+          <Field label="Prazo de execução"><input name="quote_execution_default" defaultValue={doc.quote_execution_default ?? ""} /></Field>
+          <Field label="Validade"><input name="quote_validity_default" defaultValue={doc.quote_validity_default ?? ""} /></Field>
+        </div>
+        <Field label="Acompanha"><textarea name="quote_includes_default" rows={2} defaultValue={doc.quote_includes_default ?? ""} /></Field>
+        <Field label="Agendamento"><textarea name="quote_scheduling_default" rows={2} defaultValue={doc.quote_scheduling_default ?? ""} /></Field>
+        <Field label="Atenção"><textarea name="quote_attention_default" rows={3} defaultValue={doc.quote_attention_default ?? ""} /></Field>
+        <Field label="Obs. (cancelamento)"><textarea name="quote_cancellation_default" rows={3} defaultValue={doc.quote_cancellation_default ?? ""} /></Field>
+        <Field label="Fecho do orçamento"><textarea name="quote_closing" rows={4} defaultValue={doc.quote_closing ?? ""} /></Field>
+        <div className="fields">
+          <Field label="Assinatura (nome)"><input name="quote_signature_name" defaultValue={doc.quote_signature_name ?? ""} /></Field>
+          <Field label="Cargo"><input name="quote_signature_role" defaultValue={doc.quote_signature_role ?? ""} /></Field>
+          <Field label="Telefone da assinatura"><input name="quote_signature_phone" defaultValue={doc.quote_signature_phone ?? ""} /></Field>
+          <Field label="Cidade"><input name="quote_city" defaultValue={doc.quote_city ?? ""} /></Field>
+        </div>
+        <small>O cabeçalho com o logo (do seu modelo de orçamento) e o logo da OS são imagens fixas. Para trocar, peça a atualização.</small>
+        <div><button className="btn accent" type="submit">Salvar empresa e textos</button></div>
+      </form>
       <section className="card stack" id="notificacoes">
         <h2>Notificações</h2>
         <p>Ative ou desative os avisos do sistema neste aparelho. Vale para o navegador (Chrome) e para o aplicativo instalado: cada um é ativado separadamente.</p>

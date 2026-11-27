@@ -2,13 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/server/db";
 import { requirePerm } from "@/server/session";
-import { can } from "@/server/core";
+import { can, getSettings } from "@/server/core";
 import { getQuote } from "@/server/services/eagle";
-import { getSettings } from "@/server/core";
 import { fmtYmd, todayYmd } from "@/lib/dates";
-import { Badge, Flash, PageHead, money } from "@/components/ui";
+import { Badge, Flash, PageHead } from "@/components/ui";
 import { QuoteStatusBadge } from "@/components/eagle-ui";
-import { PrintButton } from "@/components/client";
+import { QuoteDocument, type DocSettings } from "@/components/documents";
 import { quoteStatusAction } from "@/app/actions/eagle";
 
 export const metadata = { title: "Orçamento" };
@@ -21,7 +20,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   const data = await getQuote(db, ctx, id).catch(() => null);
   if (!data) notFound();
   const { quote: q, items } = data;
-  const company = (await getSettings(db.query, ctx.unitId)) as unknown as { company_name?: string | null; company_cnpj?: string | null; company_phone?: string | null; company_email?: string | null; company_address?: string | null };
+  const s = (await getSettings(db.query, ctx.unitId)) as unknown as DocSettings;
   const manage = can(ctx, "quotes.manage");
   const editable = q.status === "rascunho" || q.status === "enviado";
   const expired = q.valid_until && q.valid_until < todayYmd() && editable;
@@ -32,52 +31,25 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
 
   return (
     <>
-      <PageHead title={`Orçamento nº ${q.number}`} sub={<>{q.customer_name} · emitido em {fmtYmd(q.issue_date)}{q.valid_until ? ` · válido até ${fmtYmd(q.valid_until)}` : ""}</>}>
+      <PageHead title={`Orçamento nº ${q.number}`} sub={<>{q.customer_name} · {fmtYmd(q.issue_date)}{q.valid_until ? ` · vence em ${fmtYmd(q.valid_until)}` : ""}</>}>
         <QuoteStatusBadge s={q.status} />
         {expired ? <Badge tone="bad">vencido</Badge> : null}
-        <PrintButton />
-        <Link className="btn ghost" href="/orcamentos">Voltar</Link>
+        <Link className="btn accent" href={`/documento/orcamento/${q.id}`}>Ver documento / PDF</Link>
+        <a className="btn ghost" href={`/api/documento/orcamento/${q.id}`}>Baixar Word</a>
       </PageHead>
       <Flash ok={sp.ok} erro={sp.erro} />
-      {manage ? (
-        <section className="card row noprint" style={{ gap: 10 }}>
-          {editable ? <Link className="btn" href={`/orcamentos/${q.id}/editar`}>Editar</Link> : null}
-          {q.status === "rascunho" ? status("enviado", "Marcar como enviado") : null}
-          {editable ? status("aprovado", "Cliente aprovou", "btn accent") : null}
-          {editable ? status("recusado", "Cliente recusou", "btn ghost") : null}
-          {!editable ? status("rascunho", "Voltar para rascunho", "btn ghost") : null}
-          {q.status === "aprovado" && can(ctx, "agenda.create") ? <Link className="btn accent" href={`/agenda/novo?cust=${q.customer_id}${services ? `&svc=${services}` : ""}`}>Agendar o serviço</Link> : null}
-        </section>
-      ) : null}
-      <section className="card stack">
-        <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
-            <b>{company.company_name || "Eagle Detetizadora"}</b>
-            {company.company_cnpj ? <><br /><small>CNPJ {company.company_cnpj}</small></> : null}
-            {company.company_address ? <><br /><small>{company.company_address}</small></> : null}
-            {company.company_phone || company.company_email ? <><br /><small>{[company.company_phone, company.company_email].filter(Boolean).join(" · ")}</small></> : null}
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <b>Cliente: {q.customer_name}</b>
-            {q.customer_phone ? <><br /><small>{q.customer_phone}</small></> : null}
-            {q.service_address ? <><br /><small>Local do serviço: {q.service_address}</small></> : null}
-          </div>
-        </div>
-        <div className="tablewrap">
-          <table>
-            <thead><tr><th>Descrição</th><th className="n">Qtd.</th><th className="n">Valor unitário</th><th className="n">Total</th></tr></thead>
-            <tbody>
-              {items.map((i) => <tr key={i.id}><td>{i.description}</td><td className="n">{i.quantity.toLocaleString("pt-BR")}</td><td className="n">{money(i.unit_price_cents)}</td><td className="n">{money(i.total_cents)}</td></tr>)}
-              <tr className="sub"><td colSpan={3}>Subtotal</td><td className="n">{money(q.items_cents)}</td></tr>
-              {q.discount_cents ? <tr className="sub"><td colSpan={3}>Desconto</td><td className="n">− {money(q.discount_cents)}</td></tr> : null}
-              <tr className="total"><td colSpan={3}>Total</td><td className="n">{money(q.total_cents)}</td></tr>
-            </tbody>
-          </table>
-        </div>
-        {q.payment_terms ? <div><small>Condições de pagamento</small><br />{q.payment_terms}</div> : null}
-        {q.conditions ? <div><small>Condições e garantia</small><br /><span style={{ whiteSpace: "pre-line" }}>{q.conditions}</span></div> : null}
+      <section className="card row noprint" style={{ gap: 10 }}>
+        {manage && editable ? <Link className="btn" href={`/orcamentos/${q.id}/editar`}>Editar</Link> : null}
+        {manage && q.status === "rascunho" ? status("enviado", "Marcar como enviado") : null}
+        {manage && editable ? status("aprovado", "Cliente aprovou", "btn accent") : null}
+        {manage && editable ? status("recusado", "Cliente recusou", "btn ghost") : null}
+        {manage && !editable ? status("rascunho", "Voltar para rascunho", "btn ghost") : null}
+        {q.status === "aprovado" && can(ctx, "agenda.create") ? <Link className="btn accent" href={`/agenda/novo?cust=${q.customer_id}${services ? `&svc=${services}` : ""}`}>Agendar o serviço</Link> : null}
+        {can(ctx, "customers.view") ? <Link className="btn ghost" href={`/clientes/${q.customer_id}`}>Ficha do cliente</Link> : null}
+        {q.file_id ? <a className="btn ghost" href={`/api/arquivo/cliente/${q.file_id}`}>Arquivo original</a> : null}
       </section>
-      {q.notes && manage ? <section className="card noprint"><small>Observações internas (não saem na impressão)</small><p style={{ whiteSpace: "pre-line" }}>{q.notes}</p></section> : null}
+      {q.notes && manage ? <div className="alert noprint"><b>Observações internas:</b> {q.notes}</div> : null}
+      <div className="doc-preview"><QuoteDocument q={q} s={s} items={items} /></div>
     </>
   );
 }
