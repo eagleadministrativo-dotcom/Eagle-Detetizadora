@@ -16,7 +16,7 @@ export const HISTORY_IMPORT_MAX_BYTES = 8 * 1024 * 1024;
 
 type Item = { p: number; x: number; y: number; w: number; s: string };
 export interface SheetRecord {
-  page: number; sale_date: string | null; service_date: string; name: string; address: string | null; cep: string | null; contact: string | null;
+  page: number; sale_date: string | null; service_date: string; name: string; name_note?: string | null; address: string | null; cep: string | null; contact: string | null;
   phone: string | null; doc: string | null; description: string | null; amount_raw: string | null; amount_cents: number | null; payment_raw: string | null;
   payment: string | null; status: string | null; report: string | null; email: string | null; return_at: string | null; warranty: string | null;
   seller: string | null; notes: string | null; follow_up: string | null;
@@ -127,6 +127,9 @@ export function sheetRecords(items: Item[]): SheetRecord[] {
     const name0 = rec["RAZÃO SOCIAL"];
     if (!name0 || !(rec["VALOR SERV"] || rec["DESCRIÇÃO DO SERVIÇOS"] || rec["DATA AGEND"])) continue;
     let name = name0.replace(/\s+/g, " ").trim();
+    // anotação entre asteriscos no nome (*sem contato*, **faz com outra empresa**) vai para as observações
+    const nameNotes = [...name.matchAll(/\*+([^*]+)\*+/g)].map((m) => m[1].trim()).filter(Boolean);
+    if (nameNotes.length) name = name.replace(/\*+[^*]*\*+/g, " ").replace(/\s+/g, " ").trim() || name.replace(/\*/g, "").trim();
     let saleRaw = rec["DATA"] || rec["f"] || rec["ra"];
     const lead = name.match(/^(\d{1,2}\/[a-zç]{3}\.?|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\s+(.*)$/i);
     if (lead) { saleRaw = saleRaw || lead[1]; name = lead[2]; }
@@ -138,7 +141,7 @@ export function sheetRecords(items: Item[]): SheetRecord[] {
     if (!service) continue;
     const cm = address?.match(/\b(\d{2})\.?(\d{3})-?(\d{3})\b/);
     out.push({
-      page: r.p, sale_date: sale, service_date: service, name, address, cep: cm ? `${cm[1]}${cm[2]}-${cm[3]}` : null,
+      page: r.p, sale_date: sale, service_date: service, name, name_note: nameNotes.join("; ") || null, address, cep: cm ? `${cm[1]}${cm[2]}-${cm[3]}` : null,
       contact: rec["CONTATO"] || null, phone: rec["TELEFONE"] || null, doc: rec["CNPJ/CPF"] || null, description: rec["DESCRIÇÃO DO SERVIÇOS"] || null,
       amount_raw: rec["VALOR SERV"] || null, amount_cents: parseMoney(rec["VALOR SERV"]), payment_raw: rec["FORMA PAGAM"] || null, payment: paymentKind(rec["FORMA PAGAM"]),
       status: rec["SITUAÇÃO DO CLIENTE"] || null, report: rec["LAUDOS"] || null, email: rec["E-MAIL"] || null, return_at: rec["DATA P/ RETORNO"] || null,
@@ -211,6 +214,8 @@ export async function importRecords(db: Db, ctx: Ctx, recs: SheetRecord[], opts:
       const email = latest((r) => (r.email ?? "").split(/[\s;,/]+/).find((e) => EMAIL.test(e)));
       const notes = ["Cliente vindo da planilha de vendas."];
       if (phones.length > 1) notes.push(`Outros telefones: ${phones.slice(1).join(", ")}`);
+      const nameNotes = [...new Set(idx.map((i) => recs[i].name_note).filter(Boolean))];
+      if (nameNotes.length) notes.push(`Obs.: ${nameNotes.join("; ")}`);
       fresh.push({
         id, name: (latest((r) => (junk(r.name) ? null : r.name)) ?? recs[idx[0]].name).slice(0, 200), phone: phones[0] ?? null,
         email: email ? email.toLowerCase().slice(0, 200) : null, cpf: latest((r) => r.doc), address: latest((r) => r.address), cep: latest((r) => r.cep),
@@ -223,7 +228,7 @@ export async function importRecords(db: Db, ctx: Ctx, recs: SheetRecord[], opts:
   // referência estável de cada linha: o mesmo arquivo enviado de novo não duplica
   const occ = new Map<string, number>();
   const refs = recs.map((r) => {
-    const h = crypto.createHash("sha1").update([r.service_date, normName(r.name), normName(r.description), r.amount_cents ?? "", normName(r.address), normName(r.payment_raw)].join("|")).digest("hex").slice(0, 20);
+    const h = crypto.createHash("sha1").update([r.service_date, normName(`${r.name_note ?? ""} ${r.name}`), normName(r.description), r.amount_cents ?? "", normName(r.address), normName(r.payment_raw)].join("|")).digest("hex").slice(0, 20);
     const n = (occ.get(h) ?? 0) + 1; occ.set(h, n);
     return `${h}#${n}`;
   });

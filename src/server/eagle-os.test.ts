@@ -236,8 +236,14 @@ describe("leitura da planilha de vendas", () => {
       ...row(1, 735, ["CONDOMINIO AZUL", "RUA A,10- CENTRO", "", "11.111.111/0001-11", "20/03", "LIMP CAIXA", "300", "BOLETO 30 DIAS", ""]),
       ...row(1, 733, ["EMPRESA X - UNIDADE NORTE", "RUA B, 1", "(41) 3333-2222", "22.222.222/0001-22", "21/03/2021", "DD", "CORTESIA", "", ""]),
       ...row(1, 731, ["EMPRESA X - UNIDADE NORTE", "RUA C, 99", "", "22.222.222/0001-22", "22/03/2021", "DD", "R$ 90,00", "TRANS BANC", ""]),
+      ...row(1, 729, ["*sem contato*MARIA SOUZA / RESIDENCIA", "RUA D, 5", "41 98765-4321", "", "23/03/2021", "DD", "150", "PIX", ""]),
     ];
-    const recs = sheetRecords(items);
+    const all = sheetRecords(items);
+    expect(all[4]).toMatchObject({ name: "MARIA SOUZA / RESIDENCIA", name_note: "sem contato" });
+    await importRecords(w.db, w.owner, [all[4]]);
+    const [maria] = await w.db.query<{ notes: string }>("select notes from customers where name='MARIA SOUZA / RESIDENCIA'");
+    expect(maria.notes).toContain("Obs.: sem contato");
+    const recs = all.slice(0, 4);
     expect(recs).toHaveLength(4);
     expect(recs[0]).toMatchObject({ name: "CONDOMÍNIO AZUL", service_date: "2021-03-10", amount_cents: 125050, payment: "pix", notes: "ok" });
     expect(recs[1]).toMatchObject({ service_date: "2021-03-20", amount_cents: 30000, payment: "boleto" });
