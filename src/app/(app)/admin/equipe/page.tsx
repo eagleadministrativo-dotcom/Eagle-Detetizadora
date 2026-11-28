@@ -3,6 +3,8 @@ import { requirePerm } from "@/server/session";
 import { listCatalog } from "@/server/services/catalog";
 import { Badge, Field, Flash, PageHead } from "@/components/ui";
 import { saveStaffAction } from "@/app/actions/admin";
+import { AccessPicker } from "@/components/access-picker";
+import { accessPickerProps } from "@/server/permissions";
 
 export const metadata = { title: "Equipe" };
 const DAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
@@ -37,7 +39,13 @@ export default async function StaffAdmin({ searchParams }: { searchParams: Promi
           </div>
         </fieldset>
         {canInvite && !p?.user_id ? (
-          <Field label="E-mail para convidar ao app (opcional)"><input name="inviteEmail" type="email" autoComplete="off" placeholder="tecnico@email.com" /></Field>
+          <>
+            <Field label="E-mail para convidar ao app (opcional)"><input name="inviteEmail" type="email" autoComplete="off" placeholder="tecnico@email.com" /></Field>
+            <details>
+              <summary>Cargo e acesso do convite (padrão: Técnico)</summary>
+              <div style={{ marginTop: 10 }}><AccessPicker {...accessPickerProps(ctx)} role="tecnico" /></div>
+            </details>
+          </>
         ) : null}
         {p ? <label className="check"><input type="checkbox" name="isActive" defaultChecked={p.is_active} />Ativo</label> : null}
         <div><button className="btn accent" type="submit">{p ? "Salvar" : "Adicionar profissional"}</button></div>

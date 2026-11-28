@@ -1,7 +1,8 @@
 import type { Db, Q } from "../db";
 import { audit, can, need, requireText, requireUuid } from "../core";
 import { DomainError, ForbiddenError } from "../errors";
-import { PERMISSIONS, ROLE_PERMISSIONS, MODULES, buildPerms, type Ctx, type Permission, type Role, type Module } from "../permissions";
+import { PERMISSIONS, ROLE_PERMISSIONS, MODULES, accessFor, buildPerms, type Ctx, type Permission, type Role, type Module } from "../permissions";
+import { activeOwners, assertRoleGrant } from "./bootstrap";
 
 const VALID = new Set<string>(PERMISSIONS);
 export const clean = (list: string[]) => [...new Set(list.filter((p) => VALID.has(p)))] as Permission[];
@@ -44,6 +45,29 @@ export async function setUserPermissions(db: Db, ctx: Ctx, userId: string, perms
   return db.tx(async (q) => {
     const u = await target(q, ctx, userId);
     return writePermissionsTx(q, ctx, userId, u.role, perms, profileId);
+  });
+}
+
+/** Cargo + acesso de uma vez (tela da pessoa). O que não aparece na lista segue o padrão do novo cargo. */
+export async function setUserAccess(db: Db, ctx: Ctx, userId: string, role: Role, checked: string[]) {
+  need(ctx, "users.manage");
+  if (!(role in ROLE_PERMISSIONS)) throw new DomainError("invalid", "Cargo inválido.");
+  return db.tx(async (q) => {
+    const [u] = await q<{ role: Role }>("select role from user_units where user_id=$1 and unit_id=$2 for update", [requireUuid(userId, "Usuário"), ctx.unitId]);
+    if (!u) throw new DomainError("not_found", "Usuário não encontrado.");
+    if (userId === ctx.userId) throw new ForbiddenError("Você não pode alterar o seu próprio acesso.");
+    if (u.role === "administrador" && ctx.role !== "administrador") throw new ForbiddenError("Só o administrador altera o acesso de outro administrador.");
+    if (u.role === "administrador" && role !== "administrador" && (await activeOwners(q, ctx.unitId, userId)) === 0) throw new DomainError("last_owner", "É preciso manter pelo menos um administrador ativo.");
+    if (role !== u.role) {
+      assertRoleGrant(ctx, role);
+      await q("update user_units set role=$3, profile_id=null where user_id=$1 and unit_id=$2", [userId, ctx.unitId, role]);
+      await audit(q, ctx, "CARGO_ALTERADO", "user", userId, { role: u.role }, { role });
+    }
+    if (role === "administrador") {
+      await q("delete from permission_overrides where user_id=$1 and unit_id=$2", [userId, ctx.unitId]);
+      return { added: [], removed: [] };
+    }
+    return writePermissionsTx(q, ctx, userId, role, accessFor(role, checked), null);
   });
 }
 

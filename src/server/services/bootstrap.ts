@@ -86,7 +86,7 @@ export async function listUsers(db: Db, ctx: Ctx): Promise<UserRow[]> {
   );
 }
 
-async function activeOwners(q: Q, unitId: string, excluding?: string): Promise<number> {
+export async function activeOwners(q: Q, unitId: string, excluding?: string): Promise<number> {
   const [r] = await q<{ n: number }>(
     "select count(*) as n from users u join user_units uu on uu.user_id=u.id where uu.unit_id=$1 and uu.role='administrador' and u.is_active and ($2::uuid is null or u.id <> $2)",
     [unitId, excluding ?? null],

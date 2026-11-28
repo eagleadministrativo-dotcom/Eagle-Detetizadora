@@ -6,7 +6,7 @@ import { resetUserPassword, updateUser } from "@/server/services/bootstrap";
 import { setUserModules, setInviteModules } from "@/server/services/access";
 import { DomainError } from "@/server/errors";
 import type { Role } from "@/server/permissions";
-import { createInvite, resendInvite, revokeInvite } from "@/server/services/invites";
+import { createInvite, resendInvite, revokeInvite, updateInvite } from "@/server/services/invites";
 import { appUrl } from "@/server/mail";
 import { atLocal } from "@/lib/dates";
 import { parseBRL } from "@/lib/money";
@@ -55,7 +55,8 @@ export async function saveStaffAction(fd: FormData) {
     const staffId = await saveStaff(db, ctx, { id: id ?? undefined, name: str(fd, "name"), phone: optStr(fd, "phone"), contractType: optStr(fd, "contractType"), color: str(fd, "color") || "#8B6B4A", isActive: id ? bool(fd, "isActive") : true, schedules });
     const email = optStr(fd, "inviteEmail");
     if (!email) return "Profissional salvo.";
-    const r = await createInvite(db, ctx, { email, fullName: str(fd, "name"), role: "tecnico", staffId });
+    const role = (str(fd, "role") || "tecnico") as Role;
+    const r = await createInvite(db, ctx, { email, fullName: str(fd, "name"), role, staffId, permissions: fd.has("role") ? fd.getAll("perm").map(String) : null });
     return r.sent ? "Profissional salvo e convite enviado por e-mail." : `Profissional salvo e convite criado. O e-mail não foi enviado: passe o link ${appUrl()}/cadastro para a pessoa.`;
   });
 }
@@ -137,9 +138,18 @@ export async function inviteUserAction(fd: FormData) {
     const profileId = str(fd, "profileId");
     const r = await createInvite(await getDb(), ctx, {
       email: str(fd, "email"), fullName: str(fd, "name"), role: str(fd, "role") as Role, staffId: optStr(fd, "staffId"),
-      profileId: profileId && profileId !== "custom" ? profileId : null, permissions: profileId === "custom" ? fd.getAll("perm").map(String) : null,
+      profileId: profileId || null, permissions: profileId ? null : fd.getAll("perm").map(String),
     });
     return r.sent ? "Convite enviado por e-mail. A pessoa cria o próprio acesso em Cadastrar." : `Convite criado, mas o e-mail não foi enviado. Passe o link ${appUrl()}/cadastro para a pessoa.`;
+  });
+}
+
+export async function updateInviteAction(fd: FormData) {
+  const { ctx } = await requireSession();
+  const id = str(fd, "id");
+  await run(`/admin/usuarios/convite/${id}`, async () => {
+    await updateInvite(await getDb(), ctx, id, { fullName: str(fd, "name"), role: str(fd, "role") as Role, staffId: optStr(fd, "staffId"), permissions: fd.getAll("perm").map(String) });
+    return { to: "/admin/usuarios", ok: "Convite atualizado. Vale quando a pessoa criar o acesso; não precisa reenviar." };
   });
 }
 

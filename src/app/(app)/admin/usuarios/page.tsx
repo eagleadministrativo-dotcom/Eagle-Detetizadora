@@ -3,7 +3,8 @@ import { getDb } from "@/server/db";
 import { requirePerm } from "@/server/session";
 import { listUsers } from "@/server/services/bootstrap";
 import { listCatalog } from "@/server/services/catalog";
-import { PERMISSION_GROUPS, ROLE_LABEL, type Role } from "@/server/permissions";
+import { ROLE_LABEL, accessPickerProps } from "@/server/permissions";
+import { AccessPicker } from "@/components/access-picker";
 import { fmtDateTime } from "@/lib/dates";
 import { Badge, ConfirmAction, Field, Flash, PageHead } from "@/components/ui";
 import { listProfiles } from "@/server/services/access";
@@ -13,7 +14,6 @@ import { hasTempPassword, listInvites } from "@/server/services/invites";
 import { tempPasswordAction } from "@/app/actions/auth";
 
 export const metadata = { title: "Usuários e permissões" };
-const ROLES = Object.keys(ROLE_LABEL) as Role[];
 
 export default async function UsersAdmin({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string }> }) {
   const sp = await searchParams;
@@ -36,11 +36,9 @@ export default async function UsersAdmin({ searchParams }: { searchParams: Promi
               <small>Último acesso: {u.last_login_at ? fmtDateTime(u.last_login_at) : "nunca"}</small>
               <form action={updateUserAction} className="form">
                 <input type="hidden" name="id" value={u.id} />
-                <div className="fields">
-                  <Field label="Perfil"><select name="role" defaultValue={u.role}>{ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select></Field>
-                  <label className="check"><input type="checkbox" name="isActive" defaultChecked={u.is_active} />Acesso ativo</label>
-                </div>
-                <div className="row"><button className="btn" type="submit">Salvar</button><Link className="btn accent" href={`/admin/usuarios/${u.id}`}>Permissões individuais</Link></div>
+                <input type="hidden" name="role" value={u.role} />
+                <label className="check"><input type="checkbox" name="isActive" defaultChecked={u.is_active} />Acesso ativo (desmarque para bloquear a entrada)</label>
+                <div className="row"><Link className="btn accent" href={`/admin/usuarios/${u.id}`}>Mudar cargo e acesso</Link><button className="btn" type="submit">Salvar</button></div>
               </form>
               <ConfirmAction label="Redefinir senha" action={resetPasswordAction} submit="Redefinir" warn="Encerra todas as sessões do usuário, em todos os aparelhos.">
                 <input type="hidden" name="id" value={u.id} />
@@ -59,6 +57,7 @@ export default async function UsersAdmin({ searchParams }: { searchParams: Promi
                 <br /><small>{i.accepted_at ? `Aceito em ${fmtDateTime(i.accepted_at)}` : `Enviado em ${fmtDateTime(i.created_at)}${i.invited_by_name ? ` por ${i.invited_by_name}` : ""}`}{i.staff_name ? ` · profissional: ${i.staff_name}` : ""}</small></span>
               {!i.accepted_at ? (
                 <>
+                  <Link className="btn small accent" href={`/admin/usuarios/convite/${i.id}`}>Editar cargo e acesso</Link>
                   <form action={resendInviteAction}><input type="hidden" name="id" value={i.id} /><button className="btn small" type="submit">Reenviar</button></form>
                   <form action={revokeInviteAction}><input type="hidden" name="id" value={i.id} /><button className="btn small ghost" type="submit">Cancelar</button></form>
                 </>
@@ -82,15 +81,14 @@ export default async function UsersAdmin({ searchParams }: { searchParams: Promi
         <div className="fields">
           <Field label="Nome"><input name="name" required /></Field>
           <Field label="E-mail"><input name="email" type="email" required autoComplete="off" /></Field>
-          <Field label="Perfil"><select name="role" defaultValue="tecnico">{ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select></Field>
-          <Field label="Vincular ao profissional"><select name="staffId" defaultValue=""><option value="">—</option>{freeStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
+          <Field label="Vincular ao técnico da Equipe"><select name="staffId" defaultValue=""><option value="">—</option>{freeStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
         </div>
         <fieldset>
-          <legend>Acesso</legend>
-          <Field label="Começar com"><select name="profileId" defaultValue=""><option value="">O padrão do perfil escolhido acima</option>{profiles.map((x) => <option key={x.id} value={x.id}>Perfil salvo: {x.name}</option>)}<option value="custom">Escolher uma a uma (abaixo)</option></select></Field>
-          <details style={{ marginTop: 10 }}><summary>Permissões uma a uma</summary><div className="permgrid" style={{ marginTop: 10 }}>{PERMISSION_GROUPS.map((g) => <fieldset key={g.title}><legend>{g.title}</legend>{g.items.map(([k, l]) => <label key={k} className="check"><input type="checkbox" name="perm" value={k} disabled={k === "tasks.own"} defaultChecked={k === "tasks.own"} />{l}</label>)}</fieldset>)}</div></details>
+          <legend>Cargo e acesso</legend>
+          <AccessPicker {...accessPickerProps(ctx)} role="tecnico" />
+          {profiles.length ? <Field label="…ou usar um perfil salvo (substitui as marcações acima)"><select name="profileId" defaultValue=""><option value="">Não, usar o que marquei acima</option>{profiles.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field> : null}
         </fieldset>
-        <small>Na tela de cadastro, Administrador aparece como “Dono da empresa”, Técnico como “Técnico de serviço”, Gerente como “Gerente” e Vendedores e Colaboradores como “Equipe comercial e apoio”. Técnicos precisam estar vinculados a um profissional para ter agenda própria. O convite vale por 14 dias.</small>
+        <small>Técnicos precisam estar vinculados a um técnico da Equipe para ter agenda própria. O convite vale por 14 dias, e o cargo e o acesso podem ser mudados antes e depois de a pessoa entrar.</small>
         <div><button className="btn accent" type="submit">Enviar convite</button></div>
       </form>
       {profiles.length ? <section className="card stack"><h2>Perfis salvos</h2>{profiles.map((x) => <div className="row" key={x.id}><span className="grow"><b>{x.name}</b> <small>· {ROLE_LABEL[x.base_role]} · {x.permissions.length} permissões · {x.users} pessoa(s)</small></span><form action={deleteProfileAction}><input type="hidden" name="id" value={x.id} /><button className="btn small ghost" type="submit">Remover</button></form></div>)}</section> : null}

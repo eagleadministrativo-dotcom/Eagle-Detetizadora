@@ -7,6 +7,9 @@ import {
 } from "./services/eagle";
 import { orderTotals, orderBreakdowns, quoteTotals, receivableOrders, runEagleJobs } from "./services/eagle-stats";
 import { getCustomer, listCustomers, saveCustomer } from "./services/customers";
+import { createInvite, getInvite, updateInvite } from "./services/invites";
+import { getUserAccess, setUserAccess } from "./services/access";
+import { ROLE_DEFAULTS } from "./permissions";
 import { addDays, addMonths, monthEnd, monthStart, todayYmd } from "@/lib/dates";
 
 let w: World;
@@ -144,6 +147,31 @@ describe("serviço com mais de um técnico", () => {
     await setAppointmentTeam(w.db, w.owner, id, []);
     expect((await listAppointments(w.db, w.barber2, range)).map((a) => a.id)).not.toContain(id);
     expect(await msg(setAppointmentTeam(w.db, w.barber2, id, [w.barber2StaffId]))).toMatch(/gerencia/);
+  });
+});
+
+describe("cargo e acesso por pessoa", () => {
+  it("convite guarda o acesso marcado, pode ser editado antes de aceito, e a pessoa tem cargo e acesso trocados depois", async () => {
+    const { id } = await createInvite(w.db, w.owner, { email: "acesso@teste.local", fullName: "Pessoa Acesso", role: "tecnico", permissions: ["agenda.view_own", "agenda.manage_own", "quotes.view"] });
+    let inv = await getInvite(w.db, w.owner, id);
+    expect(inv?.permissions).toEqual(expect.arrayContaining(["quotes.view", "agenda.view_own"]));
+    expect(inv?.permissions).not.toContain("returns.own"); // desmarcado, mesmo sendo padrão do técnico
+    await updateInvite(w.db, w.owner, id, { fullName: "Pessoa Acesso", role: "vendedor", permissions: ["customers.view", "quotes.manage"] });
+    inv = await getInvite(w.db, w.owner, id);
+    expect(inv).toMatchObject({ role: "vendedor" });
+    expect(inv?.permissions).toEqual(expect.arrayContaining(["customers.view", "quotes.manage", "payments.register"])); // payments: fora da lista, segue o cargo
+    expect(await msg(updateInvite(w.db, w.barber, id, { fullName: "x", role: "tecnico", permissions: [] }))).toMatch(/permissão|acesso/i);
+
+    // usuário existente: troca de cargo e acesso de uma vez
+    const uid = w.barber2.userId;
+    await setUserAccess(w.db, w.owner, uid, "gerente", ["finance.view", "agenda.view_all"]);
+    const a = await getUserAccess(w.db, w.owner, uid);
+    expect(a.user.role).toBe("gerente");
+    expect(a.perms.has("finance.view")).toBe(true);
+    expect(a.perms.has("customers.manage")).toBe(false); // padrão do gerente, mas desmarcado
+    await setUserAccess(w.db, w.owner, uid, "tecnico", ROLE_DEFAULTS.tecnico);
+    expect((await getUserAccess(w.db, w.owner, uid)).perms.has("finance.view")).toBe(false);
+    expect(await msg(setUserAccess(w.db, w.owner, w.owner.userId, "tecnico", []))).toMatch(/próprio/);
   });
 });
 

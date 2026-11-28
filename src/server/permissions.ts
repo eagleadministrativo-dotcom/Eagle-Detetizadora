@@ -145,6 +145,49 @@ export const PERMISSION_GROUPS: { title: string; items: [Permission, string][] }
   { title: "Administração (Apenas Administrador)", items: [["users.manage", "Convidar e gerenciar a equipe"], ["admin.settings", "Configurações da empresa"], ["data.import", "Importar dados em lote"], ["audit.view", "Auditoria de alterações"], ["data.export", "Backup completo"]] },
 ];
 
+/**
+ * Acesso da Eagle, organizado pelas páginas do menu. É o que aparece para marcar no convite e na tela da pessoa.
+ * Permissões que não aparecem aqui (herança da barbearia) seguem o padrão do cargo.
+ */
+export const ACCESS_GROUPS: { title: string; hint?: string; items: [Permission, string][] }[] = [
+  { title: "Início (painel)", items: [["dashboard.own", "Ver o próprio dia"], ["dashboard.full", "Ver o painel da empresa: faturamento, gráficos e números"]] },
+  { title: "Agenda e Ordens de serviço", hint: "A página Ordens de serviço segue a agenda: quem opera o serviço abre e preenche a OS.", items: [
+    ["agenda.view_own", "Ver a própria agenda"], ["agenda.view_all", "Ver a agenda de todos"],
+    ["agenda.manage_own", "Operar os próprios serviços (OS, fotos, assinatura)"], ["agenda.manage", "Operar os serviços de todos e escolher a equipe"],
+    ["agenda.create", "Criar agendamento"], ["agenda.edit", "Reagendar"], ["agenda.cancel", "Cancelar agendamento"],
+    ["agenda.block", "Bloquear horários"], ["agenda.retroactive", "Lançar em data passada"],
+  ] },
+  { title: "Clientes", items: [["customers.view", "Ver a página Clientes"], ["customers.manage", "Cadastrar e editar clientes"], ["customers.history", "Ver o histórico do cliente"], ["customers.edit_sensitive", "Ver e editar e-mail e CPF/CNPJ"], ["customers.deactivate", "Desativar cliente"]] },
+  { title: "Retornos", items: [["returns.own", "Ver os próprios retornos"], ["returns.view_all", "Ver os retornos de todos"], ["returns.contact", "Registrar contato com o cliente"], ["returns.manage", "Criar, remarcar e encerrar retornos"]] },
+  { title: "Orçamentos", items: [["quotes.view", "Ver a página Orçamentos"], ["quotes.manage", "Criar, editar, enviar e gerar a OS"]] },
+  { title: "Financeiro", items: [["finance.view", "Ver a página Financeiro (faturado, recebido, a receber)"], ["finance.manage", "Lançar receitas e gastos e marcar OS como recebida"], ["finance.goals", "Definir metas"]] },
+  { title: "Relatórios", items: [["reports.view", "Ver a página Relatórios"], ["reports.export", "Exportar planilhas"], ["charts.view", "Ver gráficos"]] },
+  { title: "Tarefas", hint: "Todos veem e fazem as próprias tarefas.", items: [["tasks.create", "Criar tarefas"], ["tasks.delegate", "Passar tarefas para outras pessoas"], ["tasks.view_team", "Ver as tarefas da equipe"], ["tasks.approve", "Aprovar tarefas concluídas"]] },
+  { title: "Configurações", items: [["admin.catalog", "Serviços e preços; Equipe (técnicos e escalas)"], ["admin.settings", "Configurações da empresa (dados, documentos, certificado)"]] },
+  { title: "Sistema", items: [["users.manage", "Usuários e permissões (convidar, mudar cargo e acesso)"], ["audit.view", "Auditoria e Saúde do sistema"], ["data.export", "Dados e backup"], ["data.import", "Importar dados em lote"]] },
+];
+const SHOWN = new Set<Permission>(ACCESS_GROUPS.flatMap((g) => g.items.map(([k]) => k)));
+
+/** Acesso final: o que foi marcado na lista + o padrão do cargo para o que não aparece na lista. */
+export function accessFor(role: Role, checked: string[]): Permission[] {
+  const out = new Set<Permission>(checked.filter((p): p is Permission => SHOWN.has(p as Permission)));
+  for (const p of ROLE_PERMISSIONS[role]) if (!SHOWN.has(p)) out.add(p);
+  out.add("tasks.own");
+  return [...out];
+}
+
+/** Padrão de cada cargo (só o que aparece na lista), para a tela pré-marcar ao trocar o cargo. */
+export const ROLE_DEFAULTS: Record<Role, Permission[]> = Object.fromEntries(
+  (Object.keys(ROLE_PERMISSIONS) as Role[]).map((r) => [r, [...ROLE_PERMISSIONS[r]].filter((p) => SHOWN.has(p))]),
+) as Record<Role, Permission[]>;
+
+/** Dados para o seletor de cargo e acesso; `cannot` = o que quem está editando não pode liberar. */
+export function accessPickerProps(ctx: { role: Role; perms: Set<Permission> }) {
+  const roles = (Object.keys(ROLE_LABEL) as Role[]).filter((r) => r !== "pendente" && (ctx.role === "administrador" || r !== "administrador")).map((r) => ({ value: r, label: ROLE_LABEL[r] }));
+  const cannot = ctx.role === "administrador" ? [] : [...SHOWN].filter((p) => !ctx.perms.has(p));
+  return { roles, defaults: ROLE_DEFAULTS as Record<string, string[]>, groups: ACCESS_GROUPS as { title: string; hint?: string; items: [string, string][] }[], cannot };
+}
+
 export interface Ctx {
   userId: string;
   unitId: string;

@@ -3,7 +3,7 @@ import type { Db, Q } from "../db";
 import { audit, need, requireText, requireUuid } from "../core";
 import { checkPasswordStrength, createSession, hashPassword, verifyPassword } from "../auth";
 import { DomainError } from "../errors";
-import { PERMISSIONS, ROLE_LABEL, ROLE_PERMISSIONS, type Ctx, type Permission, type Role } from "../permissions";
+import { PERMISSIONS, ROLE_LABEL, ROLE_PERMISSIONS, accessFor, type Ctx, type Permission, type Role } from "../permissions";
 import { appUrl, mailHtml, sendMail } from "../mail";
 import { assertRoleGrant } from "./bootstrap";
 import { assertGrantable, clean } from "./access";
@@ -62,9 +62,9 @@ export async function createInvite(db: Db, ctx: Ctx, i: InviteInput): Promise<{ 
       role = p.base_role;
       perms = clean(p.permissions);
       profileId = i.profileId;
-    } else if (i.permissions && role !== "administrador") perms = clean(i.permissions);
+    } else if (i.permissions && role !== "administrador") perms = accessFor(role, i.permissions);
     assertRoleGrant(ctx, role);
-    if (perms) assertGrantable(ctx, perms, new Set());
+    if (perms) assertGrantable(ctx, perms, new Set(ROLE_PERMISSIONS[role]));
     const [dup] = await q("select 1 from users where lower(email)=$1", [email]);
     if (dup) throw new DomainError("duplicate", "Já existe um acesso com este e-mail.");
     if (i.staffId) {
@@ -98,6 +98,34 @@ async function sendInviteMail(email: string, name: string, role: Role): Promise<
     console.error("[convite] e-mail não enviado:", (e as Error).message);
     return false;
   }
+}
+
+export interface InviteDetail { id: string; email: string; full_name: string; role: Role; staff_id: string | null; permissions: string[] | null; accepted_at: Date | null; revoked_at: Date | null }
+export async function getInvite(db: Db, ctx: Ctx, id: string): Promise<InviteDetail | null> {
+  need(ctx, "users.manage");
+  const [r] = await db.query<InviteDetail>("select id, email, full_name, role, staff_id, permissions, accepted_at, revoked_at from user_invites where id=$1 and unit_id=$2", [requireUuid(id, "Convite"), ctx.unitId]);
+  return r ?? null;
+}
+
+/** Muda nome, cargo, técnico vinculado e acesso de um convite que ainda não foi aceito. */
+export async function updateInvite(db: Db, ctx: Ctx, id: string, i: { fullName: string; role: Role; staffId?: string | null; permissions: string[] }) {
+  need(ctx, "users.manage");
+  if (!(i.role in ROLE_PERMISSIONS)) throw new DomainError("invalid", "Cargo inválido.");
+  const fullName = requireText(i.fullName, "Nome");
+  assertRoleGrant(ctx, i.role);
+  const perms = i.role === "administrador" ? null : accessFor(i.role, i.permissions);
+  if (perms) assertGrantable(ctx, perms, new Set(ROLE_PERMISSIONS[i.role]));
+  await db.tx(async (q) => {
+    const [cur] = await q<{ staff_id: string | null }>("select staff_id from user_invites where id=$1 and unit_id=$2 and accepted_at is null and revoked_at is null for update", [requireUuid(id, "Convite"), ctx.unitId]);
+    if (!cur) throw new DomainError("not_found", "Convite não encontrado ou já aceito. Depois de aceito, ajuste na tela da pessoa.");
+    if (i.staffId && i.staffId !== cur.staff_id) {
+      const [s] = await q<{ user_id: string | null }>("select user_id from staff where id=$1 and unit_id=$2", [requireUuid(i.staffId, "Profissional"), ctx.unitId]);
+      if (!s) throw new DomainError("not_found", "Profissional não encontrado.");
+      if (s.user_id) throw new DomainError("duplicate", "Este profissional já tem acesso ao app.");
+    }
+    await q("update user_invites set full_name=$3, role=$4, staff_id=$5, permissions=$6, profile_id=null where id=$1 and unit_id=$2", [id, ctx.unitId, fullName, i.role, i.staffId || null, perms]);
+    await audit(q, ctx, "CONVITE_ALTERADO", "user_invite", id, null, { role: i.role, staffId: i.staffId ?? null, permissions: perms });
+  });
 }
 
 export async function listInvites(db: Db, ctx: Ctx): Promise<InviteRow[]> {
