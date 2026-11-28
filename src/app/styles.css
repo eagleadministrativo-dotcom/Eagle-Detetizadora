@@ -131,6 +131,9 @@ small, .muted { color: var(--muted); }
 .brand .mark { flex: none; width: 36px; height: 36px; display: grid; place-items: center; font-family: var(--serif); font-size: 20px; font-weight: 600; }
 .brand .name { line-height: 1.1; }
 .brand .name small { display: block; color: var(--bronze); font: 500 10px var(--sans); margin-top: 3px; }
+/* tamanho padrão de todo ícone: sem isto o Safari do iPhone desenha o SVG com largura zero (botão vazio) */
+.ic { flex: none; width: 18px; height: 18px; }
+.btn.icon .ic { width: 20px; height: 20px; }
 .side nav .sec { opacity: 0.85; white-space: nowrap; }
 .side nav a { position: relative; display: flex; align-items: center; gap: 12px; margin: 1px 0; text-decoration: none; font-size: 14px; transition: background var(--t-micro) var(--ease), color var(--t-micro) var(--ease); white-space: nowrap; }
 .side nav a .ic { flex: none; width: 18px; height: 18px; opacity: 0.85; }
@@ -1251,14 +1254,18 @@ a.signal:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); }
 .login { background: transparent; color: var(--ink); }
 .login::after { background: linear-gradient(180deg, transparent, rgba(245, 196, 0, 0.55), transparent); }
 .login .card {
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.66));
+  /* cartão sempre claro, inclusive no tema escuro: campos brancos com letra preta (antes ficavam pretos com letra preta) */
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.97), rgba(255, 255, 255, 0.9));
   -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2);
+  color: #111111; color-scheme: light;
+  --glass: rgba(255, 255, 255, 0.8); --glass-strong: #ffffff; --card-border: rgba(0, 0, 0, 0.12); --surface-2: #f4f4f2; --surface-3: #ececea; --graphite-btn: #111111; --graphite-ink: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.95);
   box-shadow: 0 1px 0 #ffffff inset, 0 30px 70px -30px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(245, 196, 0, 0.18);
   --ink: #111111; --ink-2: #2b2b2b; --muted: #555555; --surface: rgba(255, 255, 255, 0.82);
   --line: rgba(0, 0, 0, 0.12); --line-strong: rgba(0, 0, 0, 0.22); --accent: var(--eg-gold); --accent-ink: var(--eg-black); --focus: #111111;
 }
 .login .legal { color: var(--muted); }
+:root .login .card .btn:not(.accent):not(.ghost):not(.danger):not(.text) { background: #111111; border-color: #111111; color: #ffffff; }
 /* ───────── documentos (OS e orçamento) no modelo da Eagle: sempre papel branco, em qualquer tema ───────── */
 .docpage { min-height: 100vh; padding: 24px 12px 48px; position: relative; z-index: 0; background: #d9d9d6; color: #111; }
 .docpage .toolbar { max-width: 794px; margin: 0 auto 14px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; align-items: center; }
