@@ -1319,3 +1319,35 @@ a.signal:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); }
 .minical-day.on i { background: var(--accent-ink); color: var(--accent); }
 .minical-sel { display: grid; gap: 8px; }
 .minical-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+
+/* Campo de cliente com busca */
+.cpick { position: relative; display: grid; gap: 4px; }
+.cpick > input[type="search"] { width: 100%; }
+.cpick-list { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; max-height: 300px; overflow: auto; margin: 0; padding: 4px; list-style: none;
+  background: var(--bg); border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28); }
+.cpick-list li { display: grid; gap: 1px; padding: 8px 10px; border-radius: 8px; cursor: pointer; line-height: 1.3; }
+.cpick-list li small { color: var(--muted); }
+.cpick-list li.on, .cpick-list li:hover { background: var(--accent-soft); }
+.cpick-list li.cpick-none { cursor: default; color: var(--muted); }
+.cpick-sel { color: var(--muted); }
+
+/* Fotos e assinatura da OS */
+.photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.photos figure { margin: 0; display: grid; gap: 4px; }
+.photos img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
+.photos figcaption { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; gap: 6px; align-items: center; }
+.sigpad { display: grid; gap: 8px; max-width: 520px; }
+.sigpad canvas { width: 100%; height: 180px; border: 1px dashed var(--line); border-radius: 12px; background: #fff; touch-action: none; cursor: crosshair; }
+.sigimg { max-width: 260px; max-height: 110px; background: #fff; border-radius: 8px; border: 1px solid var(--line); padding: 4px; }
+.lbl { display: grid; gap: 5px; font-size: 12.5px; font-weight: 500; color: var(--ink-2); }
+.paper .doc-sign { margin-top: 10px; text-align: right; font-size: 11px; }
+.paper .doc-sign img { max-width: 220px; max-height: 80px; }
+.paper.cert .small { font-size: 12px; }
+.paper .cert-table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13.5px; }
+.paper .cert-table th, .paper .cert-table td { border: 1px solid #999; padding: 6px 8px; text-align: left; vertical-align: top; }
+.paper .cert-table th { width: 34%; background: #f2f2f2; font-weight: 700; color: #000; font-size: 13px; letter-spacing: normal; text-transform: none; position: static; white-space: normal; }
+.paper .cert-table td { width: 66%; color: #000; }
+.paper .cert-table { table-layout: fixed; }
+.paper .cert-signs { display: grid; grid-template-columns: 1fr 1fr; align-items: end; gap: 40px; margin-top: 46px; text-align: center; font-size: 13px; }
+.paper .cert-signs .line { display: block; border-top: 1px solid #000; margin-bottom: 4px; }
+.paper .cert-signs img { max-width: 200px; max-height: 70px; display: block; margin: 0 auto 2px; }

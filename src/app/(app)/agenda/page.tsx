@@ -87,7 +87,6 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     <>
       <LiveAgenda />
       <PageHead title="Agenda">
-        {canBook ? <Link className="btn ghost" href="/agenda/novo?imediato=1">Sem hora marcada</Link> : null}
         {canBook ? <Link className="btn accent" href={`/agenda/novo?d=${d}`}>Agendar</Link> : null}
       </PageHead>
       <Flash ok={sp.ok} erro={sp.erro} />

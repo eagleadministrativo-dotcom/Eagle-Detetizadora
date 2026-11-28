@@ -3,6 +3,8 @@ import { fmtBRL } from "@/lib/money";
 import { Field } from "@/components/ui";
 import { OptionChecklist, OptionSelect, type PickOption } from "@/components/doc-pickers";
 import { MiniAgenda } from "@/components/mini-agenda";
+import { DueDateField } from "@/components/due-date";
+import { CustomerPicker, type PickerCustomer } from "@/components/customer-picker";
 import { saveQuoteAction } from "@/app/actions/eagle";
 import type { QuoteItemRow, QuoteRow, QuoteTexts } from "@/server/services/eagle";
 import type { AgendaItem, DocOption, DocOptionKind } from "@/lib/doc-options";
@@ -16,7 +18,7 @@ type Defaults = Required<{ [K in keyof QuoteTexts]: string }> & { paymentTerms: 
  * são marcados entre as opções cadastradas em Serviços e preços; só Atenção e Obs. são escritos.
  */
 export function QuoteForm({ customers, services, quote, items, customerId, defaults, options, agenda }: {
-  customers: { id: string; name: string; phone: string | null }[];
+  customers: PickerCustomer[];
   services: { id: string; name: string; description: string | null; price_cents: number | null }[];
   quote?: QuoteRow; items?: QuoteItemRow[]; customerId?: string; defaults: Defaults; options: DocOption[]; agenda: AgendaItem[];
 }) {
@@ -36,12 +38,7 @@ export function QuoteForm({ customers, services, quote, items, customerId, defau
       <section className="card form">
         <h2>Cliente</h2>
         <div className="fields">
-          <Field label="Cliente">
-            <select name="customerId" defaultValue={quote?.customer_id ?? customerId ?? ""} required>
-              <option value="">— escolher —</option>
-              {customers.map((c) => <option key={c.id} value={c.id}>{c.name}{c.phone ? ` · ${c.phone}` : ""}</option>)}
-            </select>
-          </Field>
+          <CustomerPicker customers={customers} defaultValue={quote?.customer_id ?? customerId} required newHref="/clientes/novo" />
           <Field label="Data do orçamento"><input type="date" name="issueDate" defaultValue={quote?.issue_date ?? todayYmd()} /></Field>
         </div>
         <Field label="Local do serviço (em branco usa o endereço da ficha)"><input name="serviceAddress" defaultValue={quote?.service_address ?? ""} placeholder="Rua, número, bairro, cidade" /></Field>
@@ -60,7 +57,7 @@ export function QuoteForm({ customers, services, quote, items, customerId, defau
         <div className="fields">
           <Field label="Valor (R$)"><input name="value" inputMode="decimal" defaultValue={brl(quote?.value_cents)} placeholder="Em branco: soma dos itens abaixo" /></Field>
           <OptionSelect name="validityText" label="Validade do orçamento" options={opts("validade")} current={quote?.validity_text} isNew={isNew} />
-          <Field label="Vence em (para o sistema avisar)"><input type="date" name="validUntil" defaultValue={quote?.valid_until ?? ""} /></Field>
+          <DueDateField defaultValue={quote?.valid_until} />
         </div>
         <div className="fields">
           <OptionSelect name="paymentTerms" label="Formas de pagamento" options={opts("pagamento")} current={quote?.payment_terms} isNew={isNew} />

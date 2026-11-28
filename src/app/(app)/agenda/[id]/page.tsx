@@ -10,7 +10,7 @@ import { fmtBRL } from "@/lib/money";
 import { ApptBadge, ConfirmAction, Field, Flash, PageHead } from "@/components/ui";
 import { seriesOf } from "@/server/services/series";
 import { seriesAction } from "@/app/actions/agenda";
-import { cancelAppointmentAction, noShowAction, rescheduleAction, startAttendanceAction } from "@/app/actions/agenda";
+import { cancelAppointmentAction, noShowAction, rescheduleAction } from "@/app/actions/agenda";
 import { orderOfAppointment } from "@/server/services/eagle";
 import { createServiceOrderAction } from "@/app/actions/eagle";
 
@@ -30,7 +30,6 @@ export default async function AppointmentPage({ params, searchParams }: { params
   const series = sid?.series_id ? await seriesOf(db, ctx, sid.series_id) : null;
   const cat = await listCatalog(db, ctx.unitId);
   const mine = can(ctx, "agenda.manage") || (can(ctx, "agenda.manage_own") && ctx.staffId === a.staff_id);
-  const canRun = can(ctx, "attendance.run") || (can(ctx, "attendance.run_own") && ctx.staffId === a.staff_id);
   const os = await orderOfAppointment(db, ctx.unitId, id);
   const [h] = await db.query<{ cancelled_by_name: string | null; cancelled_at: Date | null }>("select u.full_name as cancelled_by_name, ap.cancelled_at from appointments ap left join users u on u.id=ap.cancelled_by where ap.id=$1", [id]);
 
@@ -59,7 +58,6 @@ export default async function AppointmentPage({ params, searchParams }: { params
         {mine && a.status === "agendado" ? (
           <section className="card stack">
             <h2>Ações</h2>
-            {canRun ? <form action={startAttendanceAction}><input type="hidden" name="id" value={a.id} /><button className="btn accent" type="submit">Iniciar atendimento</button></form> : null}
             <ConfirmAction label={series ? "Reagendar só este" : "Reagendar"} tone="neutral" action={rescheduleAction} submit="Reagendar">
               <input type="hidden" name="id" value={a.id} />
               <div className="fields">
@@ -93,7 +91,7 @@ export default async function AppointmentPage({ params, searchParams }: { params
                 </ConfirmAction> : null}
               </>
             ) : null}
-            <ConfirmAction label="Cliente não compareceu" action={noShowAction} submit="Confirmar ausência" warn="Só é possível depois do horário marcado. Dependendo da configuração, pode gerar cobrança de taxa.">
+            <ConfirmAction label="Cliente não estava no local" action={noShowAction} submit="Confirmar ausência" warn="Só é possível depois do horário marcado. O agendamento fica registrado como não realizado.">
               <input type="hidden" name="id" value={a.id} />
             </ConfirmAction>
             <ConfirmAction label={series ? "Cancelar só este" : "Cancelar agendamento"} action={cancelAppointmentAction} submit="Cancelar agendamento" warn="O horário será liberado. Informe o motivo.">

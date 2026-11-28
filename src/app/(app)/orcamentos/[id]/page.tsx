@@ -8,7 +8,8 @@ import { fmtYmd, todayYmd } from "@/lib/dates";
 import { Badge, Flash, PageHead } from "@/components/ui";
 import { QuoteStatusBadge } from "@/components/eagle-ui";
 import { QuoteDocument, type DocSettings } from "@/components/documents";
-import { quoteStatusAction } from "@/app/actions/eagle";
+import { createOrderFromQuoteAction, quoteStatusAction } from "@/app/actions/eagle";
+import { quoteMessage, waLink } from "@/lib/whatsapp";
 
 export const metadata = { title: "Orçamento" };
 
@@ -22,6 +23,8 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   const { quote: q, items } = data;
   const s = (await getSettings(db.query, ctx.unitId)) as unknown as DocSettings;
   const manage = can(ctx, "quotes.manage");
+  const [order] = await db.query<{ id: string; number: number }>("select id, number from service_orders where quote_id=$1 and unit_id=$2 and status<>'cancelada' order by created_at limit 1", [id, ctx.unitId]);
+  const wa = waLink(q.customer_phone, quoteMessage(q, s.company_name || "Eagle Controle de Pragas"));
   const editable = q.status === "rascunho" || q.status === "enviado";
   const expired = q.valid_until && q.valid_until < todayYmd() && editable;
   const services = [...new Set([...(q.service_ids ?? []), ...items.map((i) => i.service_id)].filter(Boolean))].join(",");
@@ -46,6 +49,11 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
         {manage && editable ? status("recusado", "Cliente recusou", "btn ghost") : null}
         {manage && !editable ? status("rascunho", "Voltar para rascunho", "btn ghost") : null}
         {q.status === "aprovado" && can(ctx, "agenda.create") ? <Link className="btn accent" href={`/agenda/novo?cust=${q.customer_id}${services ? `&svc=${services}` : ""}${when}`}>{q.scheduled_date ? `Agendar para ${fmtYmd(q.scheduled_date)}` : "Agendar o serviço"}</Link> : null}
+        {q.status === "aprovado" && order ? <Link className="btn" href={`/os/${order.id}`}>OS nº {order.number}</Link> : null}
+        {q.status === "aprovado" && !order && can(ctx, "agenda.manage") ? (
+          <form action={createOrderFromQuoteAction}><input type="hidden" name="quoteId" value={q.id} /><button className="btn accent" type="submit">Gerar OS</button></form>
+        ) : null}
+        {wa ? <a className="btn ghost" href={wa} target="_blank" rel="noopener noreferrer">Enviar no WhatsApp</a> : null}
         {can(ctx, "customers.view") ? <Link className="btn ghost" href={`/clientes/${q.customer_id}`}>Ficha do cliente</Link> : null}
         {q.file_id ? <a className="btn ghost" href={`/api/arquivo/cliente/${q.file_id}`}>Arquivo original</a> : null}
       </section>

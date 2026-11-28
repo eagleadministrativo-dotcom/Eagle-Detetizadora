@@ -6,12 +6,12 @@ import { addDays, fmtYmd, monthEnd, todayYmd } from "@/lib/dates";
 import { fmtBRL } from "@/lib/money";
 import { alertDueDates, generateRecurringPayables } from "./finance";
 import { computeDre, getCashFlow, goalsProgress } from "./reports";
-import { dayEndUtc, dayStartUtc } from "@/lib/dates";
 import { runTaskJobs } from "./tasks";
 import { runReturnJobs } from "./returns";
 import { runSeriesJobs } from "./series";
 import { runRecordJobs } from "./achievements";
 import { processEvents } from "./events";
+import { runEagleJobs } from "./eagle-stats";
 
 const SYSTEM_USER = "00000000-0000-0000-0000-000000000000";
 export const systemCtx = (unitId: string): Ctx => ({ userId: SYSTEM_USER, unitId, role: "administrador", perms: buildPerms("administrador", []) });
@@ -58,10 +58,7 @@ export async function runDailyJobs(db: Db, unitId: string, today = todayYmd()) {
       out.A13 = { cur: cur.contributionRatio, prev: prev.contributionRatio };
     }
 
-    const y = addDays(today, -1);
-    const [s] = await db.query<{ n: number; rev: number }>("select count(*)::bigint as n, coalesce(sum(total_cents),0)::bigint as rev from attendances where unit_id=$1 and status='concluido' and finished_at >= $2 and finished_at < $3", [unitId, dayStartUtc(y), dayEndUtc(y)]);
-    if (s.n > 0) await notify(db, unitId, "resumo_diario", "info", `Resumo de ${fmtYmd(y)}: ${s.n} atendimento(s), receita operacional de ${fmtBRL(s.rev)}.`, `summary:${y}`);
-    out.A14 = { yesterday: y, attendances: s.n };
+    out.A14 = await runEagleJobs(db, unitId, today); // orçamentos vencendo, retornos vencendo e resumo de ontem (pelas OS)
 
     out.A15 = await runTaskJobs(db, unitId);
     out.A16 = await runSeriesJobs(db, unitId, ctx);

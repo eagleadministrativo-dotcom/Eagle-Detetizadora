@@ -22,7 +22,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
       </PageHead>
       <Flash ok={sp.ok} erro={sp.erro} />
       <form className="filters" method="get">
-        <label>Buscar por nome ou telefone<input name="q" defaultValue={sp.q ?? ""} /></label>
+        <label>Buscar por nome, fantasia, contato, endereço, telefone ou CNPJ<input name="q" type="search" defaultValue={sp.q ?? ""} placeholder="Acentos e hífen não importam" /></label>
         <label className="check" style={{ minWidth: 0 }}><input type="checkbox" name="inativos" value="1" defaultChecked={sp.inativos === "1"} />Incluir inativos</label>
         <button className="btn ghost" type="submit">Buscar</button>
       </form>

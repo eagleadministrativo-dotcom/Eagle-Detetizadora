@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import type { OpenAppointment } from "@/server/services/eagle";
+import { CustomerPicker, type PickerCustomer } from "@/components/customer-picker";
 
 const brl = (c: number) => (c / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmt = (ymd: string) => ymd.split("-").reverse().join("/");
@@ -15,7 +16,7 @@ function pick(list: OpenAppointment[], today: string) {
  * e a data, o horário, os serviços e o valor vêm preenchidos do agendamento.
  */
 export function OrderCustomerPicker({ customers, appointments, initialCustomer, today }: {
-  customers: { id: string; name: string; phone: string | null }[]; appointments: OpenAppointment[]; initialCustomer?: string; today: string;
+  customers: PickerCustomer[]; appointments: OpenAppointment[]; initialCustomer?: string; today: string;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [customer, setCustomer] = useState(initialCustomer ?? "");
@@ -37,12 +38,8 @@ export function OrderCustomerPicker({ customers, appointments, initialCustomer, 
   return (
     <div ref={box} className="stack">
       <div className="fields">
-        <label>Cliente
-          <select name="customerId" value={customer} required onChange={(e) => { setCustomer(e.target.value); setAppt(pick(appointments.filter((a) => a.customer_id === e.target.value), today)?.id ?? ""); }}>
-            <option value="">— escolher —</option>
-            {customers.map((c) => <option key={c.id} value={c.id}>{c.name}{c.phone ? ` · ${c.phone}` : ""}</option>)}
-          </select>
-        </label>
+        <CustomerPicker customers={customers} defaultValue={initialCustomer} required newHref="/clientes/novo"
+          onChange={(id) => { setCustomer(id); setAppt(pick(appointments.filter((a) => a.customer_id === id), today)?.id ?? ""); }} />
         {list.length ? (
           <label>Agendamento deste cliente
             <select name="appointmentId" value={appt} onChange={(e) => setAppt(e.target.value)}>

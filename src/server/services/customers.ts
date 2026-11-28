@@ -6,24 +6,51 @@ import { cleanRow, normalizePhone, MAX_IMPORT_ROWS, type ImportRow } from "@/lib
 
 export interface CustomerRow { id: string; name: string; phone: string | null; email: string | null; cpf: string | null; birthdate: string | null; notes: string | null; is_active: boolean; visits: number; last_visit: Date | null; total_spent_cents: number; legal_name?: string | null; trade_name?: string | null; address?: string | null; cep?: string | null; contact_name?: string | null }
 
+const ACC_FROM = "áàâãäéèêëíìîïóòôõöúùûüçñ";
+const ACC_TO = "aaaaaeeeeiiiiooooouuuucn";
+/** Tira acentos e caixa, igual ao que o banco faz na busca. */
+export const searchKey = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim();
+const NORM = (expr: string) => `translate(lower(${expr}), '${ACC_FROM}', '${ACC_TO}')`;
+const SEARCH_TEXT = NORM("c.name || ' ' || coalesce(c.trade_name,'') || ' ' || coalesce(c.legal_name,'') || ' ' || coalesce(c.contact_name,'') || ' ' || coalesce(c.address,'')");
+
+// visitas e total gasto: ordens de serviço concluídas (e atendimentos antigos, se houver)
+const OS_VALUE = "coalesce(so.value_cents, (select sum(ai.price_cents) from appointment_services ai where ai.appointment_id=so.appointment_id), 0)";
+const VISIT_COLS = `
+       ((select count(*) from attendances a where a.customer_id=c.id and a.status='concluido') + (select count(*) from service_orders so where so.customer_id=c.id and so.status='executada'))::bigint as visits,
+       greatest((select max(a.finished_at) from attendances a where a.customer_id=c.id and a.status='concluido'),
+                (select max(coalesce(so.service_date::timestamptz + interval '12 hours', so.executed_at)) from service_orders so where so.customer_id=c.id and so.status='executada')) as last_visit,
+       (coalesce((select sum(a.total_cents) from attendances a where a.customer_id=c.id and a.status='concluido'),0)
+        + coalesce((select sum(${OS_VALUE}) from service_orders so where so.customer_id=c.id and so.status='executada'),0))::bigint as total_spent_cents`;
+
 export async function listCustomers(db: Db, ctx: Ctx, opts: { search?: string; limit?: number; offset?: number; includeInactive?: boolean } = {}) {
   need(ctx, "customers.view");
   const sensitive = can(ctx, "customers.edit_sensitive") || can(ctx, "finance.view");
-  const like = opts.search ? `%${opts.search.trim().toLowerCase()}%` : null;
+  const term = opts.search ? searchKey(opts.search) : "";
+  const like = term ? `%${term}%` : null;
+  const digits = term.replace(/\D/g, "");
+  const likeDigits = digits.length >= 3 ? `%${digits}%` : null;
   const rows = await db.query<CustomerRow & { total: number }>(
     `select c.id, c.name, c.phone,
        case when $5 then c.email end as email, case when $5 then c.cpf end as cpf, case when $5 then to_char(c.birthdate,'YYYY-MM-DD') end as birthdate,
-       c.notes, c.is_active,
-       (select count(*) from attendances a where a.customer_id=c.id and a.status='concluido')::bigint as visits,
-       (select max(a.finished_at) from attendances a where a.customer_id=c.id and a.status='concluido') as last_visit,
-       coalesce((select sum(a.total_cents) from attendances a where a.customer_id=c.id and a.status='concluido'),0)::bigint as total_spent_cents,
+       c.notes, c.is_active, c.trade_name, c.contact_name,${VISIT_COLS},
        count(*) over() as total
      from customers c
-     where c.unit_id=$1 and ($2::text is null or lower(c.name) like $2 or c.phone like $2) and ($6 or c.is_active)
+     where c.unit_id=$1 and ($6 or c.is_active)
+       and ($2::text is null or ${SEARCH_TEXT} like $2
+            or ($7::text is not null and regexp_replace(coalesce(c.phone,''), '[^0-9]', '', 'g') like $7)
+            or ($5 and $7::text is not null and regexp_replace(coalesce(c.cpf,''), '[^0-9]', '', 'g') like $7))
      order by lower(c.name) limit $3 offset $4`,
-    [ctx.unitId, like, opts.limit ?? 50, opts.offset ?? 0, sensitive, opts.includeInactive ?? false],
+    [ctx.unitId, like, opts.limit ?? 50, opts.offset ?? 0, sensitive, opts.includeInactive ?? false, likeDigits],
   );
   return { rows, total: rows[0]?.total ?? 0 };
+}
+
+export interface CustomerOption { id: string; name: string; phone: string | null; trade_name: string | null; contact_name: string | null; address: string | null }
+
+/** Lista leve para os campos de cliente com busca (OS, orçamento, agenda, retorno). */
+export async function customerOptions(db: Db, ctx: Ctx): Promise<CustomerOption[]> {
+  need(ctx, "customers.view");
+  return db.query<CustomerOption>("select id, name, phone, trade_name, contact_name, address from customers where unit_id=$1 and is_active order by lower(name) limit 5000", [ctx.unitId]);
 }
 
 export async function getCustomer(db: Db, ctx: Ctx, id: string) {
@@ -31,10 +58,7 @@ export async function getCustomer(db: Db, ctx: Ctx, id: string) {
   const sensitive = can(ctx, "customers.edit_sensitive") || can(ctx, "finance.view");
   const [c] = await db.query<CustomerRow>(
     `select c.id,c.name,c.phone, case when $3 then c.email end as email, case when $3 then c.cpf end as cpf, case when $3 then to_char(c.birthdate,'YYYY-MM-DD') end as birthdate, c.notes, c.is_active,
-       c.legal_name, c.trade_name, c.address, c.cep, c.contact_name,
-       (select count(*) from attendances a where a.customer_id=c.id and a.status='concluido')::bigint as visits,
-       (select max(a.finished_at) from attendances a where a.customer_id=c.id and a.status='concluido') as last_visit,
-       coalesce((select sum(a.total_cents) from attendances a where a.customer_id=c.id and a.status='concluido'),0)::bigint as total_spent_cents
+       c.legal_name, c.trade_name, c.address, c.cep, c.contact_name,${VISIT_COLS}
      from customers c where c.id=$1 and c.unit_id=$2`,
     [id, ctx.unitId, sensitive],
   );

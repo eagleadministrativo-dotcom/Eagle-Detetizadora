@@ -2,7 +2,8 @@ import { getDb } from "@/server/db";
 import { requirePerm } from "@/server/session";
 import { can } from "@/server/core";
 import { listCatalog, listServices } from "@/server/services/catalog";
-import { listCustomers } from "@/server/services/customers";
+import { customerOptions } from "@/server/services/customers";
+import { CustomerPicker } from "@/components/customer-picker";
 import { fmtBRL } from "@/lib/money";
 import { todayYmd } from "@/lib/dates";
 import { Empty, Field, Flash, PageHead, Seg } from "@/components/ui";
@@ -18,7 +19,7 @@ export default async function NewAppointment({ searchParams }: { searchParams: P
   const db = await getDb();
   const cat = await listCatalog(db, ctx.unitId);
   const services = await listServices(db, ctx.unitId);
-  const customers = can(ctx, "customers.view") ? (await listCustomers(db, ctx, { limit: 500 })).rows : [];
+  const customers = can(ctx, "customers.view") ? await customerOptions(db, ctx) : [];
   const mode = sp.bloqueio ? "bloqueio" : sp.imediato ? "imediato" : "agendar";
   const d = /^\d{4}-\d{2}-\d{2}$/.test(sp.d ?? "") ? sp.d! : todayYmd();
   const ownOnly = !can(ctx, "agenda.manage") && can(ctx, "agenda.manage_own");
@@ -30,12 +31,7 @@ export default async function NewAppointment({ searchParams }: { searchParams: P
     <fieldset>
       <legend>Cliente</legend>
       <div className="fields">
-        <Field label="Cliente cadastrado">
-          <select name="customerId" defaultValue={sp.cust ?? ""}>
-            <option value="">— escolher —</option>
-            {customers.map((c) => <option key={c.id} value={c.id}>{c.name}{c.phone ? ` · ${c.phone}` : ""}</option>)}
-          </select>
-        </Field>
+        <CustomerPicker label="Cliente cadastrado" customers={customers} defaultValue={sp.cust} />
         <Field label="…ou novo cliente (nome)"><input name="newName" placeholder="Nome" /></Field>
         <Field label="Telefone (opcional)"><input name="newPhone" inputMode="tel" placeholder="41 99999-0000" /></Field>
       </div>
@@ -76,7 +72,6 @@ export default async function NewAppointment({ searchParams }: { searchParams: P
       <PageHead title={mode === "bloqueio" ? "Bloquear horário" : mode === "imediato" ? "Atendimento sem hora marcada" : "Novo agendamento"}>
         <Seg items={[
           { href: `/agenda/novo?d=${d}`, label: "Agendar", active: mode === "agendar" },
-          { href: "/agenda/novo?imediato=1", label: "Sem hora marcada", active: mode === "imediato" },
           ...(can(ctx, "agenda.block") ? [{ href: `/agenda/novo?bloqueio=1&d=${d}`, label: "Bloquear", active: mode === "bloqueio" }] : []),
         ]} />
       </PageHead>

@@ -4,8 +4,9 @@ import { bool, optStr, requireSession, run, str } from "@/server/session";
 import { DomainError } from "@/server/errors";
 import { parseBRL } from "@/lib/money";
 import {
-  cancelServiceOrder, createServiceOrder, createStandaloneOrder, deleteFinanceEntry, executeServiceOrder, saveFinanceEntry, saveQuote, saveReturn,
+  cancelServiceOrder, createServiceOrder, createStandaloneOrder, deleteFinanceEntry, saveFinanceEntry, saveQuote, saveReturn,
   setQuoteStatus, updateReturn, updateServiceOrder, saveDocumentSettings, DOC_SETTING_COLS, quoteDefaults, type OrderFields,
+  executeServiceOrderFull, setOrderPayment, createOrderFromQuote, addOrderFile, deleteOrderFile, setOrderSigner,
 } from "@/server/services/eagle";
 import { composeOptions, pickedFrom, scheduledText } from "@/lib/doc-options";
 import { deleteDocOption, saveDocOption } from "@/server/services/doc-options";
@@ -148,8 +149,9 @@ export async function executeServiceOrderAction(fd: FormData) {
   const { ctx } = await requireSession();
   const id = str(fd, "id");
   await run(`/os/${id}`, async () => {
-    const ret = await executeServiceOrder(await getDb(), ctx, id);
-    return ret ? "Ordem de serviço concluída. O retorno de garantia foi criado." : "Ordem de serviço concluída.";
+    const r = await executeServiceOrderFull(await getDb(), ctx, id);
+    const made = [r.warrantyId ? "o retorno de garantia" : "", r.renewalId ? "o lembrete de renovação do laudo" : ""].filter(Boolean).join(" e ");
+    return made ? `Ordem de serviço concluída. Criado ${made} em Retornos.` : "Ordem de serviço concluída.";
   });
 }
 
@@ -167,6 +169,74 @@ export async function importServiceOrderAction(fd: FormData) {
   await run("/os", async () => {
     const r = await importServiceOrderFile(await getDb(), ctx, await fileFrom(fd));
     return { to: `/os/${r.id}`, ok: `Arquivo importado${r.customerCreated ? " e cliente cadastrado" : ""}. Confira os campos e salve.` };
+  });
+}
+
+/** Volta só para páginas do próprio sistema. */
+const backTo = (fd: FormData, fallback: string) => { const b = str(fd, "back"); return b.startsWith("/") && !b.startsWith("//") ? b : fallback; };
+
+export async function setOrderPaymentAction(fd: FormData) {
+  const { ctx } = await requireSession();
+  const id = str(fd, "id");
+  const back = backTo(fd, `/os/${id}`);
+  const [path, hash] = back.split("#");
+  await run(path, async () => {
+    await setOrderPayment(await getDb(), ctx, id, str(fd, "status"), optStr(fd, "method"));
+    const msg = str(fd, "status") === "pago" ? "Pagamento registrado." : "Situação do pagamento atualizada.";
+    return hash ? { to: `${path}${path.includes("?") ? "&" : "?"}ok=${encodeURIComponent(msg)}#${hash}` } : msg;
+  });
+}
+
+export async function createOrderFromQuoteAction(fd: FormData) {
+  const { ctx } = await requireSession();
+  const quoteId = str(fd, "quoteId");
+  await run(`/orcamentos/${quoteId}`, async () => {
+    const id = await createOrderFromQuote(await getDb(), ctx, quoteId);
+    return { to: `/os/${id}`, ok: "Ordem de serviço gerada do orçamento. Confira e complete os campos." };
+  });
+}
+
+/** Fotos chegam já reduzidas pelo navegador (até 1600 px); várias de uma vez. */
+export async function addOrderPhotosAction(fd: FormData) {
+  const { ctx } = await requireSession();
+  const id = str(fd, "id");
+  await run(`/os/${id}`, async () => {
+    const stage = ["Antes", "Depois", "Foto"].includes(str(fd, "stage")) ? str(fd, "stage") : "Foto";
+    const note = str(fd, "note").slice(0, 80);
+    const files = fd.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
+    if (!files.length) throw new DomainError("invalid", "Escolha ou tire pelo menos uma foto.");
+    if (files.length > 10) throw new DomainError("invalid", "Envie até 10 fotos por vez.");
+    const db = await getDb();
+    for (const [i, f] of files.entries()) {
+      const ext = f.type === "image/png" ? "png" : f.type === "image/webp" ? "webp" : "jpg";
+      await addOrderFile(db, ctx, id, { kind: "foto", name: `${stage}${note ? ` - ${note}` : ""}${files.length > 1 ? ` (${i + 1})` : ""}.${ext}`, mime: f.type, bytes: Buffer.from(await f.arrayBuffer()) });
+    }
+    return files.length === 1 ? "Foto anexada à OS." : `${files.length} fotos anexadas à OS.`;
+  });
+}
+
+export async function signOrderAction(fd: FormData) {
+  const { ctx } = await requireSession();
+  const id = str(fd, "id");
+  await run(`/os/${id}`, async () => {
+    const data = str(fd, "signature");
+    const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(data);
+    if (!m) throw new DomainError("invalid", "Faça a assinatura no quadro antes de salvar.");
+    const who = str(fd, "signer");
+    if (who.length < 2) throw new DomainError("invalid", "Informe o nome de quem assinou.");
+    const db = await getDb();
+    await addOrderFile(db, ctx, id, { kind: "assinatura", name: `Assinatura - ${who.slice(0, 80)}.png`, mime: "image/png", bytes: Buffer.from(m[1], "base64") });
+    await setOrderSigner(db, ctx, id, who);
+    return "Assinatura do cliente salva na OS.";
+  });
+}
+
+export async function deleteOrderFileAction(fd: FormData) {
+  const { ctx } = await requireSession();
+  const back = `/os/${str(fd, "orderId")}`;
+  await run(back, async () => {
+    await deleteOrderFile(await getDb(), ctx, str(fd, "fileId"));
+    return "Imagem excluída da OS.";
   });
 }
 

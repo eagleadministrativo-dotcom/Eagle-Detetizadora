@@ -3,12 +3,14 @@ import { getDb } from "@/server/db";
 import { requirePerm } from "@/server/session";
 import { can } from "@/server/core";
 import { listFinanceEntries } from "@/server/services/eagle";
+import { orderTotals, paidOrders, receivableOrders } from "@/server/services/eagle-stats";
+import { docPhone } from "@/lib/doc-format";
 import { fmtYmd, monthEnd, monthStart, todayYmd, addMonths } from "@/lib/dates";
 import { Badge, ConfirmAction, Empty, Field, Flash, PageHead, Stat, money } from "@/components/ui";
-import { deleteFinanceEntryAction, saveFinanceEntryAction } from "@/app/actions/eagle";
+import { deleteFinanceEntryAction, saveFinanceEntryAction, setOrderPaymentAction } from "@/app/actions/eagle";
 
 export const metadata = { title: "Financeiro" };
-const CATS = { receita: ["Serviços avulsos", "Contrato de manutenção", "Venda de produtos", "Outras receitas"], gasto: ["Produtos e insumos", "Combustível", "Veículo", "Equipamentos e EPIs", "Salários", "Impostos", "Aluguel", "Marketing", "Outras despesas"] };
+const CATS = { receita: ["Contrato de manutenção", "Venda de produtos", "Outras receitas"], gasto: ["Produtos e insumos", "Combustível", "Veículo", "Equipamentos e EPIs", "Salários", "Impostos", "Aluguel", "Marketing", "Outras despesas"] };
 const MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
 export default async function Finance({ searchParams }: { searchParams: Promise<{ m?: string; ok?: string; erro?: string }> }) {
@@ -18,40 +20,74 @@ export default async function Finance({ searchParams }: { searchParams: Promise<
   const m = /^\d{4}-\d{2}$/.test(sp.m ?? "") ? sp.m! : today.slice(0, 7);
   const start = monthStart(`${m}-01`);
   const end = monthEnd(`${m}-01`);
-  const { rows, income, expense, balance, categories } = await listFinanceEntries(await getDb(), ctx, { start, end });
+  const db = await getDb();
+  const [{ rows, income, expense, categories }, os, receivable, paid] = await Promise.all([
+    listFinanceEntries(db, ctx, { start, end }), orderTotals(db, ctx, { start, end }), receivableOrders(db, ctx), paidOrders(db, ctx, { start, end })]);
+  const balance = os.paid + income - expense;
   const manage = can(ctx, "finance.manage");
   const label = `${MONTHS[Number(m.slice(5)) - 1]} de ${m.slice(0, 4)}`;
   const prev = addMonths(start, -1).slice(0, 7);
   const next = addMonths(start, 1).slice(0, 7);
-  const links: [string, string, boolean][] = [
-    ["/financeiro/caixa", "Caixa do dia", can(ctx, "cash.manage") || can(ctx, "finance.view")],
-    ["/financeiro/receber", "Contas a receber", true],
-    ["/financeiro/pagar", "Contas a pagar", true],
-    ["/financeiro/conciliacao", "Conciliação", true],
-    ["/financeiro/fluxo", "Fluxo de caixa", true],
-    ["/financeiro/dre", "DRE (resultado)", true],
-    ["/financeiro/fechamento", "Fechamento do mês", true],
-    ["/financeiro/metas", "Metas", true],
-    ["/relatorios", "Indicadores e relatórios", can(ctx, "reports.view")],
-  ];
 
   return (
     <>
-      <PageHead title="Financeiro" sub={`Resumo de ${label}: lançamentos avulsos e atalhos para caixa, contas, DRE e fechamento.`}>
+      <PageHead title="Financeiro" sub={`Resumo de ${label}: ordens de serviço concluídas (faturado, recebido e a receber), receitas avulsas e gastos.`}>
         <Link className="btn ghost" href={`/financeiro?m=${prev}`}>‹ Mês anterior</Link>
         {m !== today.slice(0, 7) ? <Link className="btn ghost" href="/financeiro">Mês atual</Link> : null}
         <Link className="btn ghost" href={`/financeiro?m=${next}`}>Próximo mês ›</Link>
       </PageHead>
       <Flash ok={sp.ok} erro={sp.erro} />
       <div className="grid cols-3">
-        <Stat label="Receitas lançadas" value={money(income)} />
+        <Stat label="Faturado em OS" value={money(os.billed)} hint={`${os.done} OS concluída(s) no mês, pela data do serviço`} />
+        <Stat label="Recebido das OS" value={money(os.paid)} tone="ol" hint="OS concluídas e marcadas como pagas" />
+        <Stat label="A receber (todas as datas)" value={money(receivable.total)} tone={receivable.total ? "hi" : ""} hint={`${receivable.rows.length} OS concluída(s) sem pagamento`} />
+        <Stat label="Outras receitas lançadas" value={money(income)} />
         <Stat label="Gastos lançados" value={money(expense)} />
-        <Stat label="Saldo dos lançamentos" value={money(balance)} tone={balance >= 0 ? "ol" : "hi"} hint="Só os lançamentos desta tela. Atendimentos e contas estão no DRE." />
+        <Stat label="Saldo do mês" value={money(balance)} tone={balance >= 0 ? "ol" : "hi"} hint="Recebido das OS + outras receitas − gastos" />
       </div>
-      <section className="card stack">
-        <h2>Atalhos</h2>
-        <div className="row">{links.filter(([, , ok]) => ok).map(([href, text]) => <Link key={href} className="btn ghost" href={href}>{text}</Link>)}</div>
+      <section className="card stack" id="receber">
+        <h2>A receber: OS concluídas sem pagamento</h2>
+        {receivable.rows.length === 0 ? <Empty title="Nada a receber">Todas as OS concluídas estão pagas.</Empty> : (
+          <div className="tablewrap">
+            <table>
+              <thead><tr><th>OS</th><th>Cliente</th><th>Serviço em</th><th className="n">Valor</th><th>Situação</th>{manage ? <th /> : null}</tr></thead>
+              <tbody>
+                {receivable.rows.map((o) => (
+                  <tr key={o.id}>
+                    <td className="mono"><Link href={`/os/${o.id}`}>#{o.number}</Link></td>
+                    <td><Link href={`/clientes/${o.customer_id}`}>{o.customer_name}</Link>{o.customer_phone ? <><br /><small>{docPhone(o.customer_phone)}</small></> : null}</td>
+                    <td className="nowrap">{o.service_date ? fmtYmd(o.service_date) : "—"}{o.service_date && o.service_date < addMonths(today, -1) ? <><br /><Badge tone="bad">há mais de 1 mês</Badge></> : null}</td>
+                    <td className="n">{money(o.total_cents)}</td>
+                    <td><Badge tone={o.payment_status === "parcial" ? "info" : "warn"}>{o.payment_status === "parcial" ? "Parcial" : "Pendente"}</Badge></td>
+                    {manage ? (
+                      <td>
+                        <form action={setOrderPaymentAction} className="row">
+                          <input type="hidden" name="id" value={o.id} /><input type="hidden" name="back" value={`/financeiro?m=${m}#receber`} /><input type="hidden" name="status" value="pago" />
+                          <select name="method" defaultValue={o.payment_method ?? ""} aria-label="Forma de pagamento">
+                            <option value="">Forma…</option>{["Pix", "Dinheiro", "Boleto", "Cartão", "Transferência"].map((x) => <option key={x} value={x}>{x}</option>)}
+                          </select>
+                          <button className="btn small accent" type="submit">Recebido</button>
+                        </form>
+                      </td>
+                    ) : null}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
+      {paid.length ? (
+        <details className="card">
+          <summary><b>Recebido em {label}</b> · {paid.length} OS · {money(os.paid)}</summary>
+          <div className="tablewrap" style={{ marginTop: 10 }}>
+            <table>
+              <thead><tr><th>OS</th><th>Cliente</th><th>Serviço em</th><th>Forma</th><th className="n">Valor</th></tr></thead>
+              <tbody>{paid.map((o) => <tr key={o.id}><td className="mono"><Link href={`/os/${o.id}`}>#{o.number}</Link></td><td>{o.customer_name}</td><td className="nowrap">{o.service_date ? fmtYmd(o.service_date) : "—"}</td><td>{o.payment_method ?? "—"}</td><td className="n">{money(o.total_cents)}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </details>
+      ) : null}
       <div className="grid asym">
         <section className="card stack">
           <h2>Lançamentos de {label}</h2>
@@ -91,6 +127,7 @@ export default async function Finance({ searchParams }: { searchParams: Promise<
             <h2>Novo lançamento</h2>
             <form action={saveFinanceEntryAction} className="form">
               <input type="hidden" name="m" value={m} />
+              <small className="muted">As OS concluídas já entram sozinhas. Aqui vão gastos (produtos, combustível...) e receitas fora das OS.</small>
               <Field label="Tipo"><select name="kind" defaultValue="gasto"><option value="gasto">Gasto</option><option value="receita">Receita</option></select></Field>
               <Field label="Descrição"><input name="description" required placeholder="Ex.: Inseticida gel, 10 unidades" /></Field>
               <Field label="Categoria">

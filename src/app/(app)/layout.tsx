@@ -45,7 +45,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
   add("Equipe", [
     { href: "/tarefas", label: "Tarefas", count: tasks.open },
-    can(ctx, "team.view") && { href: "/equipe", label: "Painel da equipe" },
   ]);
   const fv = can(ctx, "finance.view");
   add("Financeiro", [
@@ -66,8 +65,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
 
   const all = groups.flatMap((g) => g.items);
-  // no celular: agenda, atendimentos, tarefas e retornos primeiro
-  const order = ["/agenda", "/atendimentos", "/tarefas", "/retornos", "/", "/clientes"];
+  // no celular: agenda, ordens de serviço, retornos e painel primeiro
+  const order = ["/agenda", "/os", "/retornos", "/", "/clientes", "/tarefas"];
   const primary = order.map((h) => all.find((i) => i.href === h)).filter((i): i is NavItem => !!i).slice(0, 4);
 
   const quick = [

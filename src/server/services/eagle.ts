@@ -2,7 +2,7 @@ import type { Db, Q } from "../db";
 import { audit, can, need, requireText, requireUuid } from "../core";
 import { DomainError, ForbiddenError } from "../errors";
 import type { Ctx } from "../permissions";
-import { addDays, todayYmd } from "@/lib/dates";
+import { addDays, addMonths, todayYmd } from "@/lib/dates";
 import { defaultTexts, listDocOptions } from "./doc-options";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -39,7 +39,7 @@ const RETURN_SELECT = `
   from service_returns r
   join customers c on c.id = r.customer_id
   left join staff st on st.id = r.staff_id
-  left join service_orders so on so.appointment_id = r.origin_appointment_id`;
+  left join service_orders so on so.id = r.service_order_id or (r.service_order_id is null and r.origin_appointment_id is not null and so.appointment_id = r.origin_appointment_id)`;
 
 export async function listReturns(db: Db, ctx: Ctx, opts: { status?: string; limit?: number; offset?: number } = {}) {
   needReturns(ctx);
@@ -66,7 +66,7 @@ export async function getReturn(db: Db, ctx: Ctx, id: string): Promise<ReturnRow
   return r;
 }
 
-export interface SaveReturnInput { customerId: string; kind: string; dueDate: string; staffId?: string | null; notes?: string | null; originAppointmentId?: string | null }
+export interface SaveReturnInput { customerId: string; kind: string; dueDate: string; staffId?: string | null; notes?: string | null; originAppointmentId?: string | null; serviceOrderId?: string | null }
 
 async function insertReturn(q: Q, ctx: Ctx, i: SaveReturnInput): Promise<string> {
   const kind = RETURN_KINDS.includes(i.kind as ReturnKind) ? (i.kind as ReturnKind) : "outro";
@@ -77,13 +77,14 @@ async function insertReturn(q: Q, ctx: Ctx, i: SaveReturnInput): Promise<string>
     const [s] = await q("select 1 from staff where id=$1 and unit_id=$2", [requireUuid(i.staffId, "Técnico"), ctx.unitId]);
     if (!s) throw new DomainError("not_found", "Técnico não encontrado.");
   }
-  if (i.originAppointmentId) {
-    const [dup] = await q("select 1 from service_returns where origin_appointment_id=$1 and kind=$2 and status<>'cancelado'", [requireUuid(i.originAppointmentId, "Agendamento"), kind]);
+  if (i.originAppointmentId || i.serviceOrderId) {
+    const [dup] = await q("select 1 from service_returns where (origin_appointment_id=$1::uuid or service_order_id=$2::uuid) and kind=$3 and status<>'cancelado'",
+      [i.originAppointmentId ? requireUuid(i.originAppointmentId, "Agendamento") : null, i.serviceOrderId ? requireUuid(i.serviceOrderId, "Ordem de serviço") : null, kind]);
     if (dup) throw new DomainError("conflict", "Já existe um retorno deste tipo para este serviço.");
   }
   const [r] = await q<{ id: string }>(
-    "insert into service_returns(unit_id,customer_id,origin_appointment_id,staff_id,kind,due_date,notes,created_by) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id",
-    [ctx.unitId, i.customerId, i.originAppointmentId || null, i.staffId || null, kind, dueDate, i.notes?.trim() || null, ctx.userId],
+    "insert into service_returns(unit_id,customer_id,origin_appointment_id,staff_id,kind,due_date,notes,created_by,service_order_id) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id",
+    [ctx.unitId, i.customerId, i.originAppointmentId || null, i.staffId || null, kind, dueDate, i.notes?.trim() || null, ctx.userId, i.serviceOrderId || null],
   );
   await audit(q, ctx, "RETORNO_CRIADO", "service_return", r.id, null, { kind, dueDate });
   return r.id;
@@ -194,6 +195,12 @@ const TEXT_COLS = ["services_text", "application_text", "products_text", "execut
 const TEXT_KEYS: (keyof QuoteTexts)[] = ["servicesText", "applicationText", "productsText", "executionTime", "validityText", "includesText", "schedulingText", "attentionText", "cancellationText", "signatureName", "signatureRole", "signaturePhone", "city"];
 const txt = (v: string | null | undefined) => v?.replace(/\r\n/g, "\n").trim() || null;
 
+/** Data de vencimento a partir do texto da validade ("Validade da proposta: 15 dias"). */
+export function validUntilFrom(validity: string | null | undefined, issueDate: string): string | null {
+  const m = /(\d{1,3})\s*dias/i.exec(validity ?? "");
+  return m && Number(m[1]) > 0 ? addDays(issueDate, Number(m[1])) : null;
+}
+
 export async function saveQuote(db: Db, ctx: Ctx, input: SaveQuoteInput): Promise<string> {
   need(ctx, "quotes.manage");
   const discount = Math.max(0, Math.round(input.discountCents ?? 0));
@@ -232,7 +239,9 @@ export async function saveQuote(db: Db, ctx: Ctx, input: SaveQuoteInput): Promis
     if (!items.length && !txt(input.servicesText)) throw new DomainError("invalid", "Descreva os serviços a serem realizados ou inclua pelo menos um item.");
     if (!items.length && input.valueCents == null) throw new DomainError("invalid", "Informe o valor do orçamento.");
     const texts = TEXT_KEYS.map((k) => txt(input[k]));
-    const base = [input.customerId, input.serviceAddress?.trim() || null, input.validUntil || null, discount, input.paymentTerms?.trim() || null, input.conditions?.trim() || null, input.notes?.trim() || null, input.valueCents ?? null,
+    // "Vence em" vazio: sai da validade escolhida (ex.: "15 dias" a partir da data do orçamento)
+    const validUntil = input.validUntil || validUntilFrom(input.validityText, input.issueDate || todayYmd());
+    const base = [input.customerId, input.serviceAddress?.trim() || null, validUntil, discount, input.paymentTerms?.trim() || null, input.conditions?.trim() || null, input.notes?.trim() || null, input.valueCents ?? null,
       input.scheduledDate || null, input.scheduledDate ? input.scheduledTime || null : null, serviceIds.length ? serviceIds : null, ...texts];
     const setCols = ["customer_id", "service_address", "valid_until", "discount_cents", "payment_terms", "conditions", "notes", "value_cents", "scheduled_date", "scheduled_time", "service_ids", ...TEXT_COLS];
 
@@ -501,25 +510,90 @@ export async function updateServiceOrder(db: Db, ctx: Ctx, id: string, i: OrderF
   });
 }
 
-/** Conclui a OS. Com garantia, cria o retorno de garantia para o mesmo técnico, vencendo ao fim do prazo. Devolve o id do retorno criado. */
+/**
+ * Conclui a OS: o agendamento ligado fica concluído; com garantia, cria o retorno de garantia (contado da data do serviço);
+ * com laudo, cria o retorno de manutenção para renovar quando o laudo vencer. Devolve o id do retorno de garantia (ou null).
+ */
 export async function executeServiceOrder(db: Db, ctx: Ctx, id: string): Promise<string | null> {
+  return (await executeServiceOrderFull(db, ctx, id)).warrantyId;
+}
+
+export async function executeServiceOrderFull(db: Db, ctx: Ctx, id: string): Promise<{ warrantyId: string | null; renewalId: string | null }> {
   return db.tx(async (q) => {
-    const [o] = await q<{ status: OSStatus; staff_id: string | null; customer_id: string; appointment_id: string | null; warranty_days: number | null; technician_confirmed: boolean }>(
-      `select so.status, a.staff_id, so.customer_id, so.appointment_id, so.warranty_days, so.technician_confirmed
+    const [o] = await q<{ status: OSStatus; staff_id: string | null; customer_id: string; appointment_id: string | null; warranty_days: number | null; technician_confirmed: boolean; service_date: string | null; report_months: number | null; number: number }>(
+      `select so.status, a.staff_id, so.customer_id, so.appointment_id, so.warranty_days, so.technician_confirmed, so.report_months, so.number,
+              coalesce(to_char(so.service_date,'YYYY-MM-DD'), to_char(a.starts_at at time zone 'America/Sao_Paulo','YYYY-MM-DD')) as service_date
        from service_orders so left join appointments a on a.id=so.appointment_id where so.id=$1 and so.unit_id=$2 for update of so`, [requireUuid(id, "Ordem de serviço"), ctx.unitId]);
     if (!o) throw new DomainError("not_found", "Ordem de serviço não encontrada.");
     if (!canEditOrder(ctx, o.staff_id)) throw new ForbiddenError();
     if (o.status !== "aberta") throw new DomainError("locked", "Esta OS já foi encerrada.");
     if (!o.technician_confirmed) throw new DomainError("invalid", "Marque a confirmação do técnico antes de concluir a OS.");
-    await q("update service_orders set status='executada', updated_at=now() where id=$1", [id]);
-    await audit(q, ctx, "OS_EXECUTADA", "service_order", id);
-    if (!o.warranty_days) return null;
-    if (o.appointment_id) {
-      const [dup] = await q("select 1 from service_returns where origin_appointment_id=$1 and kind='garantia' and status<>'cancelado'", [o.appointment_id]);
-      if (dup) return null;
+    const today = todayYmd();
+    // data do serviço (a OS pode ser fechada no sistema dias depois); nunca no futuro
+    const done = o.service_date && o.service_date < today ? o.service_date : today;
+    await q("update service_orders set status='executada', executed_at=now(), service_date=coalesce(service_date, $2::date), updated_at=now() where id=$1", [id, done]);
+    if (o.appointment_id) await q("update appointments set status='concluido' where id=$1 and status in ('agendado','em_atendimento')", [o.appointment_id]);
+    await audit(q, ctx, "OS_EXECUTADA", "service_order", id, null, { data: done });
+
+    let warrantyId: string | null = null;
+    if (o.warranty_days) {
+      const [dup] = await q("select 1 from service_returns where (service_order_id=$1 or ($2::uuid is not null and origin_appointment_id=$2::uuid)) and kind='garantia' and status<>'cancelado'", [id, o.appointment_id]);
+      if (!dup) warrantyId = await insertReturn(q, ctx, {
+        customerId: o.customer_id, kind: "garantia", dueDate: addDays(done, o.warranty_days), staffId: o.staff_id, originAppointmentId: o.appointment_id, serviceOrderId: id,
+        notes: `Garantia de ${o.warranty_days} dias da OS nº ${o.number} (serviço em ${done.split("-").reverse().join("/")}).`,
+      });
     }
-    return insertReturn(q, ctx, { customerId: o.customer_id, kind: "garantia", dueDate: addDays(todayYmd(), o.warranty_days), staffId: o.staff_id, originAppointmentId: o.appointment_id, notes: "Criado automaticamente ao concluir a ordem de serviço." });
+    let renewalId: string | null = null;
+    if (o.report_months) {
+      const [dup] = await q("select 1 from service_returns where service_order_id=$1 and kind='manutencao' and status<>'cancelado'", [id]);
+      const expires = addMonths(done, o.report_months);
+      if (!dup) renewalId = await insertReturn(q, ctx, {
+        customerId: o.customer_id, kind: "manutencao", dueDate: addDays(expires, -15), staffId: o.staff_id, serviceOrderId: id,
+        notes: `Renovação: o laudo da OS nº ${o.number} vence em ${expires.split("-").reverse().join("/")}. Ligar para o cliente e agendar a nova aplicação.`,
+      });
+    }
+    return { warrantyId, renewalId };
   });
+}
+
+/** Marca o pagamento da OS (tela do financeiro ou da OS). */
+export async function setOrderPayment(db: Db, ctx: Ctx, id: string, status: string, method?: string | null) {
+  if (!can(ctx, "finance.manage") && !can(ctx, "agenda.manage")) throw new ForbiddenError();
+  if (!(Object.keys(OS_PAYMENT_LABEL) as string[]).includes(status)) throw new DomainError("invalid", "Situação do pagamento inválida.");
+  await db.tx(async (q) => {
+    const [o] = await q<{ payment_status: string; status: OSStatus }>("select payment_status, status from service_orders where id=$1 and unit_id=$2 for update", [requireUuid(id, "Ordem de serviço"), ctx.unitId]);
+    if (!o) throw new DomainError("not_found", "Ordem de serviço não encontrada.");
+    if (o.status === "cancelada") throw new DomainError("locked", "OS cancelada não recebe pagamento.");
+    await q("update service_orders set payment_status=$2, payment_method=coalesce($3, payment_method), updated_at=now() where id=$1", [id, status, method?.trim() || null]);
+    await audit(q, ctx, "OS_PAGAMENTO", "service_order", id, { pagamento: o.payment_status }, { pagamento: status });
+  });
+}
+
+/**
+ * OS do orçamento aprovado: serviços, valor, data agendada e endereço saem do orçamento. Se o orçamento já tem OS, devolve a existente.
+ * Com agendamento ligado ao orçamento (Agendar), a OS fica ligada a ele.
+ */
+export async function createOrderFromQuote(db: Db, ctx: Ctx, quoteId: string): Promise<string> {
+  need(ctx, "agenda.manage");
+  const [qt] = await db.query<{ id: string; status: QuoteStatus; customer_id: string; services_text: string | null; value_cents: number | null; scheduled_date: string | null; scheduled_time: string | null; appointment_id: string | null; items: string | null; items_cents: number | null; discount_cents: number; warranty: number | null }>(
+    `select q.id, q.status, q.customer_id, q.services_text, q.value_cents, to_char(q.scheduled_date,'YYYY-MM-DD') as scheduled_date, q.scheduled_time, q.appointment_id, q.discount_cents,
+            (select string_agg(i.description, ', ' order by i.sort_order) from quote_items i where i.quote_id=q.id) as items,
+            (select round(sum(i.quantity * i.unit_price_cents)) from quote_items i where i.quote_id=q.id)::bigint as items_cents,
+            (select max(s.warranty_days) from services s where s.id = any(coalesce(q.service_ids, '{}'::uuid[]))) as warranty
+     from quotes q where q.id=$1 and q.unit_id=$2`, [requireUuid(quoteId, "Orçamento"), ctx.unitId]);
+  if (!qt) throw new DomainError("not_found", "Orçamento não encontrado.");
+  if (qt.status !== "aprovado") throw new DomainError("invalid", "Só orçamento aprovado gera ordem de serviço.");
+  const [existing] = await db.query<{ id: string }>("select id from service_orders where quote_id=$1 and status<>'cancelada' order by created_at limit 1", [qt.id]);
+  if (existing) return existing.id;
+  const services = (qt.services_text ?? "").split("\n").map((s) => s.trim().replace(/[.;]+$/, "")).filter(Boolean).join(", ") || qt.items || null;
+  const value = qt.value_cents ?? (qt.items_cents != null ? Math.max(0, qt.items_cents - qt.discount_cents) : null);
+  const [ap] = qt.appointment_id ? await db.query("select 1 from appointments where id=$1 and status<>'cancelado' and not exists (select 1 from service_orders so where so.appointment_id=$1)", [qt.appointment_id]) : [];
+  const [prior] = await db.query("select 1 from service_orders where customer_id=$1 and status<>'cancelada' limit 1", [qt.customer_id]);
+  const id = await createStandaloneOrder(db, ctx, qt.customer_id, {
+    servicesText: services ? `${services}.` : null, valueCents: value, serviceDate: qt.scheduled_date, serviceTime: qt.scheduled_time, clientSituation: prior ? "retorno" : "novo", warrantyDays: qt.warranty,
+  }, { appointmentId: ap ? qt.appointment_id : null });
+  await db.query("update service_orders set quote_id=$2 where id=$1", [id, qt.id]);
+  return id;
 }
 
 export async function cancelServiceOrder(db: Db, ctx: Ctx, id: string, reason: string) {
@@ -591,6 +665,7 @@ export const DOC_SETTING_COLS = [
   "quote_application_default", "quote_products_default", "quote_payment_default", "quote_execution_default", "quote_validity_default",
   "quote_includes_default", "quote_scheduling_default", "quote_attention_default", "quote_cancellation_default",
   "quote_signature_name", "quote_signature_role", "quote_signature_phone", "quote_city", "quote_closing", "quote_products_intro",
+  "cert_responsible", "cert_registration", "cert_license", "cert_notes",
 ] as const;
 export type DocSettingCol = (typeof DOC_SETTING_COLS)[number];
 
@@ -609,4 +684,81 @@ export async function saveDocumentSettings(db: Db, ctx: Ctx, values: Partial<Rec
       [ctx.unitId, ...cols.map((c) => values[c]?.replace(/\r\n/g, "\n").trim() || null), ctx.userId]);
     await audit(q, ctx, "CONFIGURACAO_DOCUMENTOS", "unit_settings", ctx.unitId, null, { campos: cols });
   });
+}
+// ───────── Fotos e assinatura da OS (guardadas na ficha do cliente) ─────────
+export type OrderFileKind = "foto" | "assinatura";
+export interface OrderFileRow { id: string; kind: OrderFileKind; name: string; mime: string; size_bytes: number; created_at: Date; created_by_name: string | null }
+const ORDER_IMAGE = /^image\/(png|jpeg|webp)$/;
+const ORDER_FILE_MAX = 5 * 1024 * 1024;
+
+async function orderForFiles(q: Q, ctx: Ctx, orderId: string, edit: boolean) {
+  const [o] = await q<{ customer_id: string; staff_id: string | null; status: OSStatus; number: number }>(
+    "select so.customer_id, a.staff_id, so.status, so.number from service_orders so left join appointments a on a.id=so.appointment_id where so.id=$1 and so.unit_id=$2",
+    [requireUuid(orderId, "Ordem de serviço"), ctx.unitId]);
+  if (!o) throw new DomainError("not_found", "Ordem de serviço não encontrada.");
+  if (edit ? !canEditOrder(ctx, o.staff_id) : !seesAllOrders(ctx) && o.staff_id !== ctx.staffId) throw new ForbiddenError();
+  if (edit && o.status === "cancelada") throw new DomainError("locked", "OS cancelada não recebe fotos nem assinatura.");
+  return o;
+}
+
+/** Foto (antes/depois) ou assinatura do cliente na OS. A assinatura nova substitui a anterior. */
+export async function addOrderFile(db: Db, ctx: Ctx, orderId: string, f: { kind: OrderFileKind; name: string; mime: string; bytes: Buffer }): Promise<string> {
+  if (!f.bytes.length) throw new DomainError("invalid", "A imagem está vazia.");
+  if (f.bytes.length > ORDER_FILE_MAX) throw new DomainError("too_big", "A imagem passa de 5 MB.");
+  if (!ORDER_IMAGE.test(f.mime)) throw new DomainError("invalid", "Envie uma foto (JPG, PNG ou WebP).");
+  if (f.kind !== "foto" && f.kind !== "assinatura") throw new DomainError("invalid", "Tipo inválido.");
+  return db.tx(async (q) => {
+    const o = await orderForFiles(q, ctx, orderId, true);
+    if (f.kind === "assinatura") await q("delete from customer_files where service_order_id=$1 and kind='assinatura'", [orderId]);
+    const name = requireText(f.name, "Nome").slice(0, 200);
+    const [r] = await q<{ id: string }>(
+      "insert into customer_files(unit_id,customer_id,service_order_id,kind,name,mime,size_bytes,content_b64,created_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id",
+      [ctx.unitId, o.customer_id, orderId, f.kind, name, f.mime, f.bytes.length, f.bytes.toString("base64"), ctx.userId]);
+    await audit(q, ctx, f.kind === "assinatura" ? "OS_ASSINADA" : "OS_FOTO", "service_order", orderId, null, { arquivo: r.id, nome: name, bytes: f.bytes.length });
+    return r.id;
+  });
+}
+
+/** Quem assinou pelo cliente: vai para "Confirmado pelo cliente" e marca a confirmação do cliente. */
+export async function setOrderSigner(db: Db, ctx: Ctx, orderId: string, who: string) {
+  await db.tx(async (q) => {
+    await orderForFiles(q, ctx, orderId, true);
+    await q("update service_orders set confirmed_by_customer=$2, customer_confirmed=true, confirmed_on=coalesce(confirmed_on, to_char(now() at time zone 'America/Sao_Paulo','DD/MM/YYYY')), updated_at=now() where id=$1",
+      [orderId, requireText(who, "Nome de quem assinou").slice(0, 120)]);
+  });
+}
+
+export async function listOrderFiles(db: Db, ctx: Ctx, orderId: string): Promise<OrderFileRow[]> {
+  await orderForFiles(db.query, ctx, orderId, false);
+  return db.query<OrderFileRow>(
+    `select f.id, f.kind, f.name, f.mime, f.size_bytes, f.created_at, u.full_name as created_by_name
+     from customer_files f left join users u on u.id=f.created_by where f.service_order_id=$1 and f.unit_id=$2 and f.kind in ('foto','assinatura') order by f.created_at`,
+    [orderId, ctx.unitId]);
+}
+
+/** Imagem da OS para mostrar na tela e no documento (só fotos e assinaturas, só imagens). */
+export async function getOrderImage(db: Db, ctx: Ctx, fileId: string): Promise<{ mime: string; bytes: Buffer } | null> {
+  const [f] = await db.query<{ mime: string; content_b64: string; service_order_id: string | null }>(
+    "select mime, content_b64, service_order_id from customer_files where id=$1 and unit_id=$2 and kind in ('foto','assinatura')", [requireUuid(fileId, "Imagem"), ctx.unitId]);
+  if (!f?.service_order_id || !ORDER_IMAGE.test(f.mime)) return null;
+  await orderForFiles(db.query, ctx, f.service_order_id, false);
+  return { mime: f.mime, bytes: Buffer.from(f.content_b64, "base64") };
+}
+
+export async function deleteOrderFile(db: Db, ctx: Ctx, fileId: string): Promise<string> {
+  return db.tx(async (q) => {
+    const [f] = await q<{ service_order_id: string | null; name: string }>("select service_order_id, name from customer_files where id=$1 and unit_id=$2 and kind in ('foto','assinatura')", [requireUuid(fileId, "Imagem"), ctx.unitId]);
+    if (!f?.service_order_id) throw new DomainError("not_found", "Imagem não encontrada.");
+    await orderForFiles(q, ctx, f.service_order_id, true);
+    await q("delete from customer_files where id=$1", [fileId]);
+    await audit(q, ctx, "OS_FOTO_EXCLUIDA", "service_order", f.service_order_id, { nome: f.name }, null);
+    return f.service_order_id;
+  });
+}
+
+/** Dados do responsável técnico para o certificado de execução. */
+export async function certificateSettings(db: Db, unitId: string) {
+  const [s] = await db.query<{ cert_responsible: string | null; cert_registration: string | null; cert_license: string | null; cert_notes: string | null }>(
+    "select cert_responsible, cert_registration, cert_license, cert_notes from unit_settings where unit_id=$1", [unitId]);
+  return s ?? { cert_responsible: null, cert_registration: null, cert_license: null, cert_notes: null };
 }

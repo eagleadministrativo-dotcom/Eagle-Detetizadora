@@ -11,7 +11,7 @@ const Lines = ({ text }: { text: string | null | undefined }) => <span style={{ 
 const B = ({ children }: { children: ReactNode }) => <b>{children}</b>;
 
 /** Ordem de serviço no modelo da Eagle (A4). */
-export function OrderDocument({ o }: { o: ServiceOrderRow }) {
+export function OrderDocument({ o, signatureSrc }: { o: ServiceOrderRow; signatureSrc?: string | null }) {
   const mark = (k: string) => (o.client_situation === k ? "(x)" : "( )");
   return (
     <article className="paper os">
@@ -51,6 +51,12 @@ export function OrderDocument({ o }: { o: ServiceOrderRow }) {
         <p>Nº recibo: {o.receipt_number ?? ""}</p>
         <p>Boleto: {o.boleto ?? ""}</p>
         <p className="split"><span>Serviço Confirmado Data: {o.confirmed_on ?? ""}</span><span>Resp. Conf. Cliente: {o.confirmed_by_customer ?? ""}</span><span>Resp. Eagle: {o.confirmed_by_eagle ?? ""}</span></p>
+        {signatureSrc ? (
+          <p className="doc-sign">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={signatureSrc} alt="Assinatura do cliente" /><br />Assinatura do cliente{o.confirmed_by_customer ? `: ${o.confirmed_by_customer}` : ""}
+          </p>
+        ) : null}
       </section>
     </article>
   );
