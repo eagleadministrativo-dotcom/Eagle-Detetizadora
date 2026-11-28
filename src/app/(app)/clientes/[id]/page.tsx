@@ -53,15 +53,16 @@ export default async function CustomerPage({ params, searchParams }: { params: P
   const pastTotal = past.reduce((a, h) => a + (h.amount_cents ?? 0), 0);
   return (
     <>
-      <PageHead title={c.name} sub={showHistory ? <>{c.visits} visita(s) · total gasto {money(c.total_spent_cents)}</> : undefined}>
+      <PageHead title={c.name}>
         {!c.is_active ? <Badge>inativo</Badge> : null}
         <Link className="btn ghost" href="/clientes">Voltar</Link>
       </PageHead>
       <Flash ok={sp.ok} erro={sp.erro} />
-      <div className="grid cols-2">
-        <section className="card">
-          <h2>Dados</h2>
-          <form action={saveCustomerAction} className="form" style={{ marginTop: 10 }}>
+      <details className="card" open={!!sp.erro}>
+        <summary><b>Informações adicionais do cadastro</b></summary>
+        <div className="stack" style={{ marginTop: 10 }}>
+          {showHistory ? <small className="muted">{c.visits} visita(s) no sistema · total gasto {money(c.total_spent_cents)}{past.length ? ` · ${past.length} serviço(s) no histórico da planilha` : ""}</small> : null}
+          <form action={saveCustomerAction} className="form">
             <input type="hidden" name="id" value={c.id} />
             <div className="fields">
               <Field label="Nome"><input name="name" defaultValue={c.name} required readOnly={!edit} /></Field>
@@ -87,7 +88,9 @@ export default async function CustomerPage({ params, searchParams }: { params: P
             {can(ctx, "customers.deactivate") ? <label className="check"><input type="checkbox" name="isActive" defaultChecked={c.is_active} />Cliente ativo</label> : <input type="hidden" name="isActive" value={c.is_active ? "true" : ""} />}
             {edit ? <div><button className="btn accent" type="submit">Salvar</button></div> : null}
           </form>
-        </section>
+        </div>
+      </details>
+      <div className="grid cols-2">
         <section className="card stack">
           <div className="row" style={{ justifyContent: "space-between" }}><h2>Retornos</h2>{can(ctx, "returns.manage") ? <Link className="btn small" href={`/retornos/novo?cust=${c.id}`}>+ Novo retorno</Link> : null}</div>
           {serviceReturns.length === 0 ? <small className="muted">Nenhum retorno. Ao concluir uma OS com garantia ou laudo, o retorno entra aqui sozinho.</small> : (
