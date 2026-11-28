@@ -6,7 +6,8 @@ import {
   updateServiceOrder, validUntilFrom, addOrderFile, listOrderFiles, getOrderImage, setOrderSigner,
 } from "./services/eagle";
 import { orderTotals, orderBreakdowns, quoteTotals, receivableOrders, runEagleJobs } from "./services/eagle-stats";
-import { getCustomer, listCustomers, saveCustomer } from "./services/customers";
+import { getCustomer, listCustomers, saveCustomer, updateCustomerNotes } from "./services/customers";
+import { customerObs } from "@/lib/customer-notes";
 import { createInvite, getInvite, pendingInvitesByStaff, updateInvite } from "./services/invites";
 import { customerHistory, historySummary, listHistory, parseReturnNote, sheetNextReturn } from "./services/history";
 import { saveStaff } from "./services/catalog";
@@ -256,6 +257,12 @@ describe("leitura da planilha de vendas", () => {
     const [{ phone }] = await w.db.query<{ phone: string }>("select phone from customers where name='CONDOMINIO AZUL' or name='CONDOMÍNIO AZUL'");
     expect(phone).toBe("41999991111"); // sem DDD na planilha: assume 41
     expect(await msg(importRecords(w.db, w.barber, recs))).toMatch(/permissão/i);
+    // observações em destaque: sem as linhas automáticas; só quem edita clientes altera
+    const mariaId = (await w.db.query<{ id: string }>("select id from customers where name='MARIA SOUZA / RESIDENCIA'"))[0].id;
+    expect(customerObs("Cliente vindo da planilha de vendas.\nOutros telefones: 4133332222\nObs.: sem contato")).toBe("Obs.: sem contato");
+    await updateCustomerNotes(w.db, w.owner, mariaId, "Obs.: sem contato\nTem cachorro");
+    expect((await getCustomer(w.db, w.owner, mariaId)).customer.notes).toBe("Obs.: sem contato\nTem cachorro");
+    expect(await msg(updateCustomerNotes(w.db, w.barber, mariaId, "x"))).toMatch(/permissão/i);
   });
 });
 

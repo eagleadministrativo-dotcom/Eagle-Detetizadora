@@ -8,6 +8,7 @@ import { listCatalog } from "@/server/services/catalog";
 import { dayEndUtc, dayStartUtc, fmtDate, fmtDateTime, fmtTime, toYmd } from "@/lib/dates";
 import { fmtBRL } from "@/lib/money";
 import { fmtPhone } from "@/lib/phone";
+import { customerObs } from "@/lib/customer-notes";
 import { ApptBadge, ConfirmAction, Field, Flash, PageHead } from "@/components/ui";
 import { seriesOf } from "@/server/services/series";
 import { seriesAction } from "@/app/actions/agenda";
@@ -72,7 +73,7 @@ export default async function AppointmentPage({ params, searchParams }: { params
               </div>
             );
           })() : <div><small>Telefone do cliente</small><br /><span className="muted">Sem telefone. Complete na <Link href={`/clientes/${a.customer_id}`}>ficha do cliente</Link>.</span></div>}
-          {a.customer_notes ? <div><small>Observações do cliente</small><br />{a.customer_notes}</div> : null}
+          {customerObs(a.customer_notes) ? <div className="alert" style={{ whiteSpace: "pre-line" }}><small>Observações do cliente</small><br /><b>{customerObs(a.customer_notes)}</b></div> : null}
           {a.notes ? <div><small>Observações do agendamento</small><br />{a.notes}</div> : null}
           {a.status === "cancelado" ? <div className="alert">Cancelado: {a.cancellation_reason}{h?.cancelled_by_name ? ` (por ${h.cancelled_by_name} em ${h.cancelled_at ? fmtDateTime(h.cancelled_at) : ""})` : ""}</div> : null}
           {a.attendance_id ? <Link className="btn" href={`/atendimentos/${a.attendance_id}`}>Abrir atendimento</Link> : null}

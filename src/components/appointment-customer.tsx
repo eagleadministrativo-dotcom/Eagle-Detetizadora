@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { CustomerPicker, type PickerCustomer } from "@/components/customer-picker";
+import { customerObs } from "@/lib/customer-notes";
 
 /**
  * Cliente do agendamento + endereço do serviço. Ao escolher o cliente, o endereço da ficha aparece no campo;
@@ -39,6 +40,9 @@ export function AppointmentCustomer({ customers, defaultCustomer }: { customers:
           : id ? "A ficha deste cliente não tem telefone: o que você digitar fica salvo nela e aparece na agenda."
           : "O telefone aparece na agenda para o técnico ligar, se precisar."}
       </small>
+      {customerObs(customers.find((c) => c.id === id)?.notes) ? (
+        <div className="alert" style={{ whiteSpace: "pre-line" }}><small>Observações do cliente</small><br /><b>{customerObs(customers.find((c) => c.id === id)?.notes)}</b></div>
+      ) : null}
       <label>Endereço do serviço
         <input name="address" value={address} onChange={(e) => setAddress(e.target.value)} maxLength={300} autoComplete="street-address"
           placeholder="Rua, número, bairro, cidade" />

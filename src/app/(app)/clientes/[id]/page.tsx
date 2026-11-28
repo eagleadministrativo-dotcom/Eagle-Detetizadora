@@ -11,7 +11,8 @@ import { returnDetails } from "@/server/services/returns";
 import { listCatalog } from "@/server/services/catalog";
 import { fmtDateTime, fmtYmd, todayYmd } from "@/lib/dates";
 import { contactPrefsAction } from "@/app/actions/returns";
-import { saveCustomerAction } from "@/app/actions/customers";
+import { saveCustomerAction, saveCustomerNotesAction } from "@/app/actions/customers";
+import { customerObs } from "@/lib/customer-notes";
 import { listQuotes, listServiceOrders, RETURN_KIND_LABEL, RETURN_STATUS_LABEL } from "@/server/services/eagle";
 import { listCustomerFiles } from "@/server/services/files";
 import { OSStatusBadge, QuoteStatusBadge } from "@/components/eagle-ui";
@@ -52,6 +53,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
   ]);
   const pastTotal = past.reduce((a, h) => a + (h.amount_cents ?? 0), 0);
   const nextReturn = sheetNextReturn(past);
+  const obs = customerObs(c.notes);
   const visitsTotal = Number(c.visits);
   const sheetVisits = Number(c.sheet_visits ?? 0);
   const visitLine = visitsTotal === 0 ? "Nenhuma visita registrada" : [
@@ -66,6 +68,21 @@ export default async function CustomerPage({ params, searchParams }: { params: P
         <Link className="btn ghost" href="/clientes">Voltar</Link>
       </PageHead>
       <Flash ok={sp.ok} erro={sp.erro} />
+      <section className="card stack obs-card">
+        <h2>Observações</h2>
+        {obs ? <p style={{ whiteSpace: "pre-line", margin: 0 }}><b>{obs}</b></p> : <small className="muted">Nenhuma observação.</small>}
+        {edit ? (
+          <details>
+            <summary>{obs ? "Editar observações" : "Escrever observação"}</summary>
+            <form action={saveCustomerNotesAction} className="form" style={{ marginTop: 8 }}>
+              <input type="hidden" name="id" value={c.id} />
+              <textarea name="notes" defaultValue={c.notes ?? ""} rows={4} placeholder="Ex.: sem contato, só aceita visita de manhã, tem cachorro…" />
+              <small className="muted">Aparece aqui, na agenda e ao agendar este cliente.</small>
+              <div><button className="btn small accent" type="submit">Salvar observações</button></div>
+            </form>
+          </details>
+        ) : null}
+      </section>
       <details className="card" open={!!sp.erro}>
         <summary><b>Informações adicionais do cadastro</b></summary>
         <div className="stack" style={{ marginTop: 10 }}>
@@ -92,7 +109,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
                 <Field label="Nascimento"><input name="birthdate" type="date" defaultValue={c.birthdate ?? ""} /></Field>
               </div>
             ) : null}
-            <Field label="Observações"><textarea name="notes" defaultValue={c.notes ?? ""} readOnly={!edit} /></Field>
+            <input type="hidden" name="notes" value={c.notes ?? ""} />
             {can(ctx, "customers.deactivate") ? <label className="check"><input type="checkbox" name="isActive" defaultChecked={c.is_active} />Cliente ativo</label> : <input type="hidden" name="isActive" value={c.is_active ? "true" : ""} />}
             {edit ? <div><button className="btn accent" type="submit">Salvar</button></div> : null}
           </form>

@@ -1,5 +1,5 @@
 import type { Db } from "../db";
-import { audit, can, need, requireText } from "../core";
+import { audit, can, need, requireText, requireUuid } from "../core";
 import { DomainError } from "../errors";
 import type { Ctx } from "../permissions";
 import { cleanRow, normalizePhone, MAX_IMPORT_ROWS, type ImportRow } from "@/lib/contact-import";
@@ -53,12 +53,12 @@ export async function listCustomers(db: Db, ctx: Ctx, opts: { search?: string; l
   return { rows, total: rows[0]?.total ?? 0 };
 }
 
-export interface CustomerOption { id: string; name: string; phone: string | null; trade_name: string | null; contact_name: string | null; address: string | null }
+export interface CustomerOption { id: string; name: string; phone: string | null; trade_name: string | null; contact_name: string | null; address: string | null; notes: string | null }
 
 /** Lista leve para os campos de cliente com busca (OS, orçamento, agenda, retorno). */
 export async function customerOptions(db: Db, ctx: Ctx): Promise<CustomerOption[]> {
   need(ctx, "customers.view");
-  return db.query<CustomerOption>("select id, name, phone, trade_name, contact_name, address from customers where unit_id=$1 and is_active order by lower(name) limit 5000", [ctx.unitId]);
+  return db.query<CustomerOption>("select id, name, phone, trade_name, contact_name, address, notes from customers where unit_id=$1 and is_active order by lower(name) limit 5000", [ctx.unitId]);
 }
 
 export async function getCustomer(db: Db, ctx: Ctx, id: string) {
@@ -78,6 +78,17 @@ export async function getCustomer(db: Db, ctx: Ctx, id: string) {
     [id, ctx.unitId],
   );
   return { customer: c, history };
+}
+
+export async function updateCustomerNotes(db: Db, ctx: Ctx, id: string, notes: string | null) {
+  need(ctx, "customers.manage");
+  const text = (notes ?? "").trim().slice(0, 4000) || null;
+  await db.tx(async (q) => {
+    const [old] = await q<{ notes: string | null }>("select notes from customers where id=$1 and unit_id=$2 for update", [requireUuid(id, "Cliente"), ctx.unitId]);
+    if (!old) throw new DomainError("not_found", "Cliente não encontrado.");
+    await q("update customers set notes=$3, updated_at=now(), updated_by=$4 where id=$1 and unit_id=$2", [id, ctx.unitId, text, ctx.userId]);
+    await audit(q, ctx, "CLIENTE_EDITADO", "customer", id, { notes: old.notes }, { notes: text });
+  });
 }
 
 export interface SaveCustomerInput { id?: string; name: string; phone?: string | null; email?: string | null; cpf?: string | null; birthdate?: string | null; notes?: string | null; isActive?: boolean; legalName?: string | null; tradeName?: string | null; address?: string | null; cep?: string | null; contactName?: string | null }

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
-export interface PickerCustomer { id: string; name: string; phone: string | null; trade_name?: string | null; contact_name?: string | null; address?: string | null }
+export interface PickerCustomer { id: string; name: string; phone: string | null; trade_name?: string | null; contact_name?: string | null; address?: string | null; notes?: string | null }
 
 const key = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 const digits = (s: string) => s.replace(/\D/g, "");

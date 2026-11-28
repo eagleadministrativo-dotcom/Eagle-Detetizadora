@@ -1,7 +1,7 @@
 "use server";
 import { getDb } from "@/server/db";
 import { requireSession, run, str, optStr, bool } from "@/server/session";
-import { saveCustomer, importCustomers } from "@/server/services/customers";
+import { saveCustomer, importCustomers, updateCustomerNotes } from "@/server/services/customers";
 import { DomainError } from "@/server/errors";
 
 export async function saveCustomerAction(fd: FormData) {
@@ -14,6 +14,16 @@ export async function saveCustomerAction(fd: FormData) {
       isActive: id ? bool(fd, "isActive") : undefined,
     });
     return { to: `/clientes/${savedId}`, ok: id ? "Cliente atualizado." : "Cliente cadastrado." };
+  });
+}
+
+/** Só as observações do cliente (quadro em destaque na ficha). */
+export async function saveCustomerNotesAction(fd: FormData) {
+  const { ctx } = await requireSession();
+  const id = str(fd, "id");
+  await run(`/clientes/${id}`, async () => {
+    await updateCustomerNotes(await getDb(), ctx, id, optStr(fd, "notes"));
+    return { to: `/clientes/${id}`, ok: "Observações salvas." };
   });
 }
 
