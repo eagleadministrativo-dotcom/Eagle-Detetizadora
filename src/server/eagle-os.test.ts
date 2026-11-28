@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { makeWorld, future, type World } from "./testkit";
-import { createAppointment, listAppointments } from "./services/agenda";
+import { createAppointment, listAppointments, setAppointmentTeam } from "./services/agenda";
 import {
-  createOrderFromQuote, createStandaloneOrder, executeServiceOrderFull, getReturn, getServiceOrder, saveQuote, setOrderPayment, setQuoteStatus,
+  createOrderFromQuote, createServiceOrder, createStandaloneOrder, executeServiceOrderFull, getReturn, getServiceOrder, saveQuote, setOrderPayment, setQuoteStatus,
   updateServiceOrder, validUntilFrom, addOrderFile, listOrderFiles, getOrderImage, setOrderSigner,
 } from "./services/eagle";
 import { orderTotals, orderBreakdowns, quoteTotals, receivableOrders, runEagleJobs } from "./services/eagle-stats";
@@ -120,6 +120,30 @@ describe("endereço do agendamento", () => {
     expect((await getCustomer(w.db, w.owner, cid)).customer.address).toBe("Rua A, 10 - Centro");
     const os = await createStandaloneOrder(w.db, w.owner, cid, { valueCents: 100 }, { appointmentId: a2 });
     expect((await getServiceOrder(w.db, w.owner, os))?.service_address).toBe("Galpão, Rua B, 99");
+  });
+});
+
+describe("serviço com mais de um técnico", () => {
+  it("aparece na agenda do acompanhante, ele abre e conclui a OS, e fica ocupado no horário", async () => {
+    const starts = future(300);
+    const id = await createAppointment(w.db, w.owner, { customerId: w.customerId, staffId: w.barberStaffId, startsAt: starts, serviceIds: [w.serviceId], helperIds: [w.barber2StaffId, w.barberStaffId] });
+    const range = { from: new Date(starts.getTime() - 3600000), to: new Date(starts.getTime() + 3600000) };
+    const mine = await listAppointments(w.db, w.barber2, range);
+    expect(mine.map((a) => a.id)).toContain(id);
+    const row = mine.find((a) => a.id === id)!;
+    expect(row.helper_ids).toEqual([w.barber2StaffId]);
+    expect(row.staff_name.split(", ")).toHaveLength(2);
+    expect(row.customer_phone).not.toBeUndefined();
+    // o acompanhante não pode ser marcado em outro serviço no mesmo horário
+    expect(await msg(createAppointment(w.db, w.owner, { customerId: w.customer2Id, staffId: w.barber2StaffId, startsAt: starts, serviceIds: [w.serviceId] }))).toMatch(/já tem atendimento/);
+    // ele abre a OS do serviço e conclui
+    const os = await createServiceOrder(w.db, w.barber2, id);
+    await updateServiceOrder(w.db, w.barber2, os, { valueCents: 100, technicianConfirmed: true });
+    expect((await getServiceOrder(w.db, w.barber2, os))?.helper_ids).toEqual([w.barber2StaffId]);
+    // tirar da equipe libera o horário dele
+    await setAppointmentTeam(w.db, w.owner, id, []);
+    expect((await listAppointments(w.db, w.barber2, range)).map((a) => a.id)).not.toContain(id);
+    expect(await msg(setAppointmentTeam(w.db, w.barber2, id, [w.barber2StaffId]))).toMatch(/gerencia/);
   });
 });
 

@@ -14,7 +14,8 @@ export async function GET() {
   if (!s?.mfaVerified) return new Response(null, { status: 401 });
   const t = todayYmd();
   const [r] = await (await getDb()).query<{ v: string | null }>(
-    `select md5(coalesce((select string_agg(id::text || status || starts_at::text || ends_at::text || staff_id::text || coalesce(chair_id::text,''), ',' order by id)
+    `select md5(coalesce((select string_agg(id::text || status || starts_at::text || ends_at::text || staff_id::text || coalesce(chair_id::text,'') || coalesce(service_address,'')
+         || coalesce((select string_agg(h.staff_id::text, '' order by h.staff_id) from appointment_helpers h where h.appointment_id=appointments.id),''), ',' order by id)
        from appointments where unit_id=$1 and starts_at >= $2 and starts_at < $3), '')
      || coalesce((select string_agg(id::text || starts_at::text || ends_at::text, ',' order by id) from schedule_blocks where unit_id=$1 and ends_at >= $2 and starts_at < $3), '')) as v`,
     [s.ctx.unitId, dayStartUtc(addDays(t, -1)), dayEndUtc(addDays(t, 21))]);

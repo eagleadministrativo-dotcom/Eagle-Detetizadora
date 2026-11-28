@@ -10,11 +10,27 @@ import { dayOfWeek, toYmd, atLocal } from "@/lib/dates";
 export interface AppointmentRow {
   id: string; customer_id: string; customer_name: string; customer_phone: string | null; customer_notes: string | null;
   staff_id: string; staff_name: string; staff_color: string; chair_id: string; chair_name: string; address: string | null;
+  /** técnicos que acompanham o responsável (staff_name já traz a equipe toda) */ helper_ids: string[];
   starts_at: Date; ends_at: Date; status: string; notes: string | null; cancellation_reason: string | null;
   services: string; total_cents: number; attendance_id: string | null; series_id: string | null;
 }
 
 const ACTIVE = "('agendado','em_atendimento','concluido')";
+
+/** O técnico faz parte do serviço: é o responsável ou um dos que acompanham. */
+export const onTeam = (a: string, p: string) => `(${a}.staff_id = ${p} or exists (select 1 from appointment_helpers hh where hh.appointment_id = ${a}.id and hh.staff_id = ${p}))`;
+/** Ids dos técnicos que acompanham o responsável. */
+export const helperIds = (a: string) => `array(select hh.staff_id::text from appointment_helpers hh where hh.appointment_id = ${a}.id)`;
+/** Nomes da equipe: o responsável primeiro, depois os demais. */
+export const teamNames = (a: string) => `(select string_agg(t.name, ', ' order by t.id <> ${a}.staff_id, t.name) from staff t where t.id = ${a}.staff_id or t.id in (select hh.staff_id from appointment_helpers hh where hh.appointment_id = ${a}.id))`;
+
+function cleanHelpers(ids: string[] | null | undefined, primary: string): string[] {
+  return [...new Set((ids ?? []).map((x) => x.trim()).filter((x) => x && x !== primary))].map((x) => requireUuid(x, "Técnico"));
+}
+
+async function checkHelpers(q: Q, ctx: Ctx, helpers: string[], slot: Omit<Slot, "staffId">) {
+  for (const h of helpers) await validateSlot(q, { ...slot, unitId: ctx.unitId, staffId: h });
+}
 
 export function assertManage(ctx: Ctx, staffId: string, action: "agenda.create" | "agenda.edit" | "agenda.cancel" = "agenda.edit") {
   if (!can(ctx, action)) throw new ForbiddenError("Seu acesso não permite esta ação na agenda.");
@@ -53,7 +69,7 @@ export async function validateSlot(q: Q, s: Slot) {
   // O "local" interno não bloqueia: técnicos atendem em endereços diferentes ao mesmo tempo. Só o técnico não pode ter dois atendimentos simultâneos.
   const [sc] = await q<{ customer_name: string }>(
     `select c.name as customer_name from appointments a join customers c on c.id=a.customer_id
-     where a.staff_id=$1 and a.status in ${ACTIVE} and tstzrange(a.starts_at,a.ends_at) && tstzrange($2,$3) and ($4::uuid is null or a.id <> $4) limit 1`,
+     where ${onTeam("a", "$1")} and a.status in ${ACTIVE} and tstzrange(a.starts_at,a.ends_at) && tstzrange($2,$3) and ($4::uuid is null or a.id <> $4) limit 1`,
     [s.staffId, s.startsAt, s.endsAt, s.excludeId ?? null],
   );
   if (sc) throw new DomainError("staff_conflict", `${staff.name} já tem atendimento nesse horário (${sc.customer_name}).`, sc);
@@ -88,7 +104,7 @@ async function resolveServices(q: Q, unitId: string, staffId: string, serviceIds
   return out;
 }
 
-export interface CreateAppointmentInput { customerId: string; staffId: string; chairId?: string | null; startsAt: Date; serviceIds: string[]; notes?: string | null; address?: string | null }
+export interface CreateAppointmentInput { customerId: string; staffId: string; chairId?: string | null; startsAt: Date; serviceIds: string[]; notes?: string | null; address?: string | null; helperIds?: string[] }
 
 /** Endereço do serviço: o digitado vale para este agendamento; se a ficha do cliente não tem endereço, ele vai para a ficha também. */
 export async function serviceAddress(q: Q, ctx: Ctx, customerId: string, typed: string | null | undefined): Promise<string | null> {
@@ -130,11 +146,14 @@ export async function createAppointmentTx(q: Q, ctx: Ctx, input: CreateAppointme
     }
     if (!chairId) throw lastErr;
   }
+  const helpers = cleanHelpers(input.helperIds, input.staffId);
+  await checkHelpers(q, ctx, helpers, { unitId: ctx.unitId, chairId: chairId!, startsAt: input.startsAt, endsAt });
   const address = await serviceAddress(q, ctx, input.customerId, input.address);
   const [a] = await q<{ id: string }>(
     "insert into appointments(unit_id,customer_id,staff_id,chair_id,starts_at,ends_at,notes,created_by,updated_by,series_id,service_address) values ($1,$2,$3,$4,$5,$6,$7,$8,$8,$9,$10) returning id",
     [ctx.unitId, input.customerId, input.staffId, chairId, input.startsAt, endsAt, input.notes ?? null, ctx.userId, opts.seriesId ?? null, address],
   );
+  for (const h of helpers) await q("insert into appointment_helpers(appointment_id,staff_id) values ($1,$2) on conflict do nothing", [a.id, h]);
   for (const s of svcs) {
     await q("insert into appointment_services(appointment_id,service_id,name_snapshot,price_cents,duration_minutes) values ($1,$2,$3,$4,$5)", [a.id, s.id, s.name, s.price, s.minutes]);
   }
@@ -145,8 +164,8 @@ export async function createAppointmentTx(q: Q, ctx: Ctx, input: CreateAppointme
 
 /** Avisa (alerta + push) proprietário/gerente e o próprio profissional sobre mudanças na agenda. */
 async function notifyAppointment(q: Q, ctx: Ctx, id: string, kind: "novo_agendamento" | "agendamento_cancelado" | "agendamento_reagendado", verb: string, extra?: string) {
-  const [r] = await q<{ cname: string; sname: string; user_id: string | null; starts_at: Date }>(
-    "select c.name as cname, s.name as sname, s.user_id, a.starts_at from appointments a join customers c on c.id=a.customer_id join staff s on s.id=a.staff_id where a.id=$1",
+  const [r] = await q<{ cname: string; sname: string; starts_at: Date }>(
+    `select c.name as cname, ${teamNames("a")} as sname, a.starts_at from appointments a join customers c on c.id=a.customer_id where a.id=$1`,
     [id],
   );
   if (!r) return;
@@ -154,8 +173,12 @@ async function notifyAppointment(q: Q, ctx: Ctx, id: string, kind: "novo_agendam
   const msg = `${verb}: ${r.cname} com ${r.sname} em ${when}${extra ? ` (${extra})` : ""}.`;
   const key = `${kind}:${id}:${Date.now()}`;
   await q("insert into notifications(unit_id,kind,severity,message,ref_entity,ref_id,dedupe_key,url) values ($1,$2,$3,$4,'appointment',$5,$6,'/agenda/' || $5)", [ctx.unitId, kind, kind === "agendamento_cancelado" ? "atencao" : "info", msg, id, key]);
-  if (r.user_id && r.user_id !== ctx.userId) {
-    await q("insert into notifications(unit_id,user_id,kind,severity,message,ref_entity,ref_id,dedupe_key,url) values ($1,$2,$3,$4,$5,'appointment',$6,$7,'/agenda/' || $6)", [ctx.unitId, r.user_id, kind, kind === "agendamento_cancelado" ? "atencao" : "info", msg, id, key + ":staff"]);
+  // cada técnico da equipe recebe o aviso no próprio celular
+  const team = await q<{ user_id: string }>(
+    "select s.user_id from staff s where s.user_id is not null and (s.id=(select staff_id from appointments where id=$1) or s.id in (select staff_id from appointment_helpers where appointment_id=$1))", [id]);
+  for (const t of team) {
+    if (t.user_id === ctx.userId) continue;
+    await q("insert into notifications(unit_id,user_id,kind,severity,message,ref_entity,ref_id,dedupe_key,url) values ($1,$2,$3,$4,$5,'appointment',$6,$7,'/agenda/' || $6) on conflict (dedupe_key) do nothing", [ctx.unitId, t.user_id, kind, kind === "agendamento_cancelado" ? "atencao" : "info", msg, id, `${key}:staff:${t.user_id}`]);
   }
 }
 
@@ -190,6 +213,10 @@ export async function rescheduleTx(q: Q, ctx: Ctx, id: string, input: Reschedule
     if (no) throw new DomainError("staff_not_allowed", `Este profissional não realiza "${no.name}".`);
   }
   await validateSlot(q, { unitId: ctx.unitId, staffId, chairId, startsAt: input.startsAt, endsAt, excludeId: id });
+  // quem passa a responsável deixa de constar como acompanhante; os demais precisam estar livres no novo horário
+  await q("delete from appointment_helpers where appointment_id=$1 and staff_id=$2", [id, staffId]);
+  const helpers = (await q<{ staff_id: string }>("select staff_id from appointment_helpers where appointment_id=$1", [id])).map((h) => h.staff_id);
+  await checkHelpers(q, ctx, helpers, { unitId: ctx.unitId, chairId, startsAt: input.startsAt, endsAt, excludeId: id });
   await q("update appointments set staff_id=$2, chair_id=$3, starts_at=$4, ends_at=$5, updated_at=now(), updated_by=$6, reminder_sent_at=case when starts_at=$4 then reminder_sent_at end, reminder_channel=case when starts_at=$4 then reminder_channel end where id=$1", [id, staffId, chairId, input.startsAt, endsAt, ctx.userId]);
   if (input.address !== undefined) {
     const [c] = await q<{ customer_id: string }>("select customer_id from appointments where id=$1", [id]);
@@ -197,6 +224,25 @@ export async function rescheduleTx(q: Q, ctx: Ctx, id: string, input: Reschedule
   }
   await audit(q, ctx, "AGENDAMENTO_REAGENDADO", "appointment", id, { staff_id: a.staff_id, chair_id: a.chair_id, starts_at: a.starts_at, ends_at: a.ends_at }, { staff_id: staffId, chair_id: chairId, starts_at: input.startsAt, ends_at: endsAt }, input.reason);
   if (!silent) await notifyAppointment(q, ctx, id, "agendamento_reagendado", "Agendamento reagendado");
+}
+
+/** Troca os técnicos que acompanham o responsável. Quem entra precisa estar livre no horário. */
+export async function setAppointmentTeam(db: Db, ctx: Ctx, id: string, ids: string[]) {
+  if (!can(ctx, "agenda.manage")) throw new ForbiddenError("Só quem gerencia a agenda escolhe a equipe.");
+  await db.tx(async (q) => {
+    const [a] = await q<{ staff_id: string; chair_id: string; starts_at: Date; ends_at: Date; status: string }>(
+      "select staff_id, chair_id, starts_at, ends_at, status from appointments where id=$1 and unit_id=$2 for update", [requireUuid(id, "Agendamento"), ctx.unitId]);
+    if (!a) throw new DomainError("not_found", "Agendamento não encontrado.");
+    if (a.status !== "agendado") throw new DomainError("bad_status", "Só dá para mudar a equipe de um agendamento ainda não realizado.");
+    const want = cleanHelpers(ids, a.staff_id);
+    const had = (await q<{ staff_id: string }>("select staff_id from appointment_helpers where appointment_id=$1", [id])).map((h) => h.staff_id);
+    const added = want.filter((x) => !had.includes(x));
+    await checkHelpers(q, ctx, added, { unitId: ctx.unitId, chairId: a.chair_id, startsAt: a.starts_at, endsAt: a.ends_at, excludeId: id });
+    await q("delete from appointment_helpers where appointment_id=$1 and not (staff_id = any($2::uuid[]))", [id, want]);
+    for (const h of added) await q("insert into appointment_helpers(appointment_id,staff_id) values ($1,$2) on conflict do nothing", [id, h]);
+    await audit(q, ctx, "AGENDAMENTO_EQUIPE", "appointment", id, { helpers: had }, { helpers: want });
+    if (added.length) await notifyAppointment(q, ctx, id, "novo_agendamento", "Você entrou na equipe do serviço");
+  });
 }
 
 export async function rescheduleAppointment(db: Db, ctx: Ctx, id: string, input: RescheduleInput) {
@@ -247,17 +293,18 @@ export async function listAppointments(db: Db, ctx: Ctx, range: { from: Date; to
     if (!ctx.staffId) return [];
     staffId = ctx.staffId;
   }
-  const contact = can(ctx, "customers.view");
+  // técnico sem acesso à lista de clientes vê só os serviços da própria equipe, e neles precisa do telefone e das observações
+  const contact = can(ctx, "customers.view") || !can(ctx, "agenda.view_all");
   return db.query<AppointmentRow>(
     `select a.id, a.series_id, a.customer_id, c.name as customer_name, ${contact ? "c.phone" : "null::text"} as customer_phone, ${contact ? "c.notes" : "null::text"} as customer_notes,
-       a.staff_id, s.name as staff_name, s.color as staff_color, a.chair_id, ch.name as chair_name, nullif(trim(coalesce(a.service_address, c.address)), '') as address,
+       a.staff_id, coalesce(${teamNames("a")}, s.name) as staff_name, ${helperIds("a")} as helper_ids, s.color as staff_color, a.chair_id, ch.name as chair_name, nullif(trim(coalesce(a.service_address, c.address)), '') as address,
        a.starts_at, a.ends_at, a.status, a.notes, a.cancellation_reason,
        coalesce((select string_agg(x.name_snapshot, ' + ' order by x.name_snapshot) from appointment_services x where x.appointment_id=a.id),'') as services,
        coalesce((select sum(x.price_cents) from appointment_services x where x.appointment_id=a.id),0)::bigint as total_cents,
        (select t.id from attendances t where t.appointment_id=a.id) as attendance_id
      from appointments a
      join customers c on c.id=a.customer_id join staff s on s.id=a.staff_id join chairs ch on ch.id=a.chair_id
-     where a.unit_id=$1 and a.starts_at >= $2 and a.starts_at < $3 and ($4::uuid is null or a.staff_id=$4) and ($5 or a.status <> 'cancelado')
+     where a.unit_id=$1 and a.starts_at >= $2 and a.starts_at < $3 and ($4::uuid is null or ${onTeam("a", "$4::uuid")}) and ($5 or a.status <> 'cancelado')
      order by a.starts_at`,
     [ctx.unitId, range.from, range.to, staffId, opts.includeCancelled ?? false],
   );

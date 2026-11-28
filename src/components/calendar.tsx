@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { moveAppointmentAction } from "@/app/actions/agenda";
 
 export interface CalCol { key: string; date: string; staffId?: string; chairId?: string; label: string; num?: string; href?: string; color?: string; today?: boolean; off: [number, number][] }
-export interface CalEvent { id: string; col: string; s: number; e: number; title: string; sub: string; status: string; color: string; movable: boolean; rec: boolean }
+export interface CalEvent { id: string; col: string; s: number; e: number; title: string; sub: string; status: string; color: string; movable: boolean; rec: boolean; href?: string }
 export interface CalBlock { id: string; col: string; s: number; e: number; reason: string }
 
 const PX = 1.5; // pixels por minuto
@@ -190,7 +190,7 @@ export function Calendar({ cols, events, blocks, start, end, canBook, canBlock }
               const cw = 100 / cols.length, w = cw / l.n, isDrag = drag?.active && drag.id === e.id;
               const h = Math.max(20, (Math.min(e.e, end) - Math.max(e.s, start)) * PX - 2);
               return (
-                <Link key={e.id} href={`/agenda/${e.id}`} prefetch={false} draggable={false} className={`calev ${e.status} ${isDrag ? "drag" : ""} ${saving === e.id ? "saving" : ""}`}
+                <Link key={e.id} href={e.href ?? `/agenda/${e.id}`} prefetch={false} draggable={false} className={`calev ${e.status} ${isDrag ? "drag" : ""} ${saving === e.id ? "saving" : ""}`}
                   aria-label={`${hhmm(e.s)} a ${hhmm(e.e)}, ${e.title}, ${e.sub}`}
                   style={{ "--c": e.color, top: open(Math.max(e.s, start)), height: h, left: `calc(${ci * cw + l.i * w}% + 4px)`, width: `calc(${w}% - 8px)`, right: "auto" } as React.CSSProperties}
                   onPointerDown={(ev) => { setSel(null); beginDrag(ev, e, "move"); }} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={cancelDrag}

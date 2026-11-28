@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { flushPush } from "@/server/services/push";
 import { getDb } from "@/server/db";
 import { bool, requireSession, run, str, optStr } from "@/server/session";
-import { cancelAppointment, createAppointment, createBlock, cancelBlock, markNoShow, rescheduleAppointment, serviceAddress } from "@/server/services/agenda";
+import { cancelAppointment, createAppointment, createBlock, cancelBlock, markNoShow, rescheduleAppointment, serviceAddress, setAppointmentTeam } from "@/server/services/agenda";
 import { quickAttendance, startAttendance } from "@/server/services/attendance";
 import { saveCustomer } from "@/server/services/customers";
 import { cancelSeries, createSeries, updateSeries } from "@/server/services/series";
@@ -89,7 +89,7 @@ export async function createAppointmentAction(fd: FormData) {
     }
     if (plan === "pref") await saveReturnRule(db, ctx, { customerId, rule });
     await createAppointment(db, ctx, {
-      customerId, staffId: str(fd, "staffId"), chairId: optStr(fd, "chairId"), startsAt: startsAt(fd), serviceIds: fd.getAll("services").map(String), notes: optStr(fd, "notes"), address: optStr(fd, "address"),
+      customerId, staffId: str(fd, "staffId"), chairId: optStr(fd, "chairId"), startsAt: startsAt(fd), serviceIds: fd.getAll("services").map(String), notes: optStr(fd, "notes"), address: optStr(fd, "address"), helperIds: fd.getAll("helpers").map(String),
     });
     pushNow(db);
     return { to: `/agenda?d=${str(fd, "date")}`, ok: "Agendamento criado." };
@@ -132,6 +132,17 @@ export async function noShowAction(fd: FormData) {
   await run(`/agenda/${id}`, async () => {
     await markNoShow(await getDb(), ctx, id);
     return "Marcado como não compareceu.";
+  });
+}
+
+export async function setTeamAction(fd: FormData) {
+  const { ctx } = await requireSession();
+  const id = str(fd, "id");
+  await run(`/agenda/${id}`, async () => {
+    const db = await getDb();
+    await setAppointmentTeam(db, ctx, id, fd.getAll("helpers").map(String));
+    pushNow(db);
+    return "Equipe do serviço atualizada.";
   });
 }
 

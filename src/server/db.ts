@@ -95,6 +95,12 @@ async function postgresDb(rawUrl: string): Promise<Db> {
 }
 
 export async function migrate(db: Db, dir = path.join(/*turbopackIgnore: true*/ process.cwd(), "db", "migrations")) {
+  // caminho rápido: tudo já aplicado → uma consulta só, sem trava (cada início de servidor passava por uma fila de trava)
+  try {
+    const files = fs.readdirSync(/*turbopackIgnore: true*/ dir).filter((f) => f.endsWith(".sql"));
+    const done = new Set((await db.query<{ name: string }>("select name from schema_migrations")).map((r) => r.name));
+    if (files.every((f) => done.has(f))) return;
+  } catch { /* tabela ainda não existe: segue para o caminho completo */ }
   return db.withLock ? db.withLock(() => migrateUnlocked(db, dir)) : migrateUnlocked(db, dir);
 }
 

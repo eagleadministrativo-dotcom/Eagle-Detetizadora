@@ -8,6 +8,8 @@ import { requireSession } from "@/server/session";
 import { can } from "@/server/core";
 import { ROLE_LABEL } from "@/server/permissions";
 import { runDailyJobs } from "@/server/services/ops";
+import { todayYmd } from "@/lib/dates";
+import { doneToday, every, markDoneToday } from "@/server/throttle";
 import { unreadCount } from "@/server/services/notify";
 import { getPrefs } from "@/server/services/access";
 import { taskCounts } from "@/server/services/tasks";
@@ -22,11 +24,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const s = await requireSession();
   const { ctx } = s;
   const db = await getDb();
-  if (can(ctx, "finance.view")) await runDailyJobs(db, ctx.unitId).catch((e) => console.error("[rotina diaria]", e));
+  // rotina diária: uma vez por dia (o servidor lembra que já rodou e não consulta o banco de novo a cada página)
+  const day = `${ctx.unitId}:${todayYmd()}`;
+  if (can(ctx, "finance.view") && !doneToday(day)) {
+    await runDailyJobs(db, ctx.unitId).then(() => markDoneToday(day), (e) => console.error("[rotina diaria]", e));
+  }
   const seesReturns = can(ctx, "returns.view_all") || can(ctx, "returns.own");
   const [unread, tasks, prefs] = await Promise.all([unreadCount(db, ctx), taskCounts(db, ctx), getPrefs(db, ctx.userId)]);
   // Envia por push os avisos novos, depois que a página já respondeu (não atrasa a tela).
-  after(async () => {
+  // no máximo a cada 30 s por servidor: os envios importantes já saem na hora pelas ações e o pg_cron cobre o resto
+  if (every("layout-after", 30_000)) after(async () => {
     await processEvents(db).catch((e) => console.error("[eventos]", e));
     await runReminders(db).catch((e) => console.error("[lembretes]", e));
     await flushPush(db).catch((e) => console.error("[push]", e));

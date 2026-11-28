@@ -4,6 +4,7 @@ import type { Ctx } from "../permissions";
 import { addDays, fmtYmd, todayYmd } from "@/lib/dates";
 import { fmtBRL } from "@/lib/money";
 import { notifyUsers } from "./notify";
+import { onTeam } from "./agenda";
 
 /**
  * Números da Eagle a partir das ordens de serviço: a OS concluída é o faturamento; a OS concluída e paga é o recebido;
@@ -32,8 +33,7 @@ export async function orderTotals(db: Db, ctx: Ctx, p: Period, staffId?: string 
             coalesce(sum(v) filter (where so.status='executada' and d between $2 and $3 and so.payment_status<>'pago'),0)::bigint as unpaid,
             count(*) filter (where so.status='aberta')::bigint as open,
             count(*) filter (where so.status='aberta' and d < $5::date)::bigint as late
-     from (select so.*, a.staff_id as a_staff, ${OS_DATE} as d, ${OS_VALUE} as v ${OS_FROM} where so.unit_id=$1) so
-     where ($4::uuid is null or so.a_staff=$4)`, [ctx.unitId, p.start, p.end, s, todayYmd()]);
+     from (select so.*, a.staff_id as a_staff, ${OS_DATE} as d, ${OS_VALUE} as v ${OS_FROM} where so.unit_id=$1 and ($4::uuid is null or ${onTeam("a", "$4::uuid")})) so`, [ctx.unitId, p.start, p.end, s, todayYmd()]);
   return { ...r, ticket: r.done ? Math.round(r.billed / r.done) : null };
 }
 
@@ -71,7 +71,7 @@ export async function orderBreakdowns(db: Db, ctx: Ctx, p: Period, staffId?: str
     `select to_char(${OS_DATE},'YYYY-MM-DD') as d, ${OS_VALUE}::bigint as v,
             coalesce(so.services_text, (select string_agg(ai.name_snapshot, ', ') from appointment_services ai where ai.appointment_id=a.id)) as services,
             st.name as staff, nullif(trim(so.payment_method),'') as method
-     ${OS_FROM} where so.unit_id=$1 and so.status='executada' and ${OS_DATE} between $2 and $3 and ($4::uuid is null or a.staff_id=$4)`,
+     ${OS_FROM} where so.unit_id=$1 and so.status='executada' and ${OS_DATE} between $2 and $3 and ($4::uuid is null or ${onTeam("a", "$4::uuid")})`,
     [ctx.unitId, p.start, p.end, s]);
   const byDay = new Map<string, number>();
   for (let d = p.start; d <= p.end; d = addDays(d, 1)) byDay.set(d, 0);

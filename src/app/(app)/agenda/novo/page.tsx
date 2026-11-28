@@ -24,7 +24,8 @@ export default async function NewAppointment({ searchParams }: { searchParams: P
   const d = /^\d{4}-\d{2}-\d{2}$/.test(sp.d ?? "") ? sp.d! : todayYmd();
   const ownOnly = !can(ctx, "agenda.manage") && can(ctx, "agenda.manage_own");
   const staff = cat.staff.filter((s) => s.is_active && (!ownOnly || s.id === ctx.staffId));
-  const canBook = can(ctx, "agenda.manage") || can(ctx, "agenda.manage_own");
+  const team = cat.staff.filter((s) => s.is_active);
+  const canBook =can(ctx, "agenda.manage") || can(ctx, "agenda.manage_own");
 
   const customerFields = <AppointmentCustomer customers={customers} defaultCustomer={sp.cust} />;
   const serviceFields = services.length === 0 ? <Empty title="Nenhum serviço cadastrado">Cadastre em Administração → Serviços e preços.</Empty> : (
@@ -41,14 +42,25 @@ export default async function NewAppointment({ searchParams }: { searchParams: P
     </fieldset>
   );
   const staffChair = (
+    <>
     <div className="fields">
-      <Field label="Técnico">
+      <Field label="Técnico responsável">
         <select name="staffId" defaultValue={sp.s ?? (ownOnly ? ctx.staffId ?? "" : "")} required>
           <option value="" disabled>— escolher —</option>
           {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
       </Field>
     </div>
+      {team.length > 1 ? (
+        <fieldset>
+          <legend>Outros técnicos neste serviço (opcional)</legend>
+          <div className="chips">
+            {team.map((s) => <label key={s.id} className="check"><input type="checkbox" name="helpers" value={s.id} /><span>{s.name}</span></label>)}
+          </div>
+          <small className="muted">O serviço aparece na agenda de cada um, com endereço e dados do cliente. Se marcar o responsável aqui, ele é ignorado.</small>
+        </fieldset>
+      ) : null}
+    </>
   );
 
   return (

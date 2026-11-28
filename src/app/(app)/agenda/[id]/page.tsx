@@ -10,7 +10,7 @@ import { fmtBRL } from "@/lib/money";
 import { ApptBadge, ConfirmAction, Field, Flash, PageHead } from "@/components/ui";
 import { seriesOf } from "@/server/services/series";
 import { seriesAction } from "@/app/actions/agenda";
-import { cancelAppointmentAction, noShowAction, rescheduleAction } from "@/app/actions/agenda";
+import { cancelAppointmentAction, noShowAction, rescheduleAction, setTeamAction } from "@/app/actions/agenda";
 import { orderOfAppointment } from "@/server/services/eagle";
 import { createServiceOrderAction } from "@/app/actions/eagle";
 
@@ -29,7 +29,8 @@ export default async function AppointmentPage({ params, searchParams }: { params
   const [sid] = await db.query<{ series_id: string | null }>("select series_id from appointments where id=$1", [id]);
   const series = sid?.series_id ? await seriesOf(db, ctx, sid.series_id) : null;
   const cat = await listCatalog(db, ctx.unitId);
-  const mine = can(ctx, "agenda.manage") || (can(ctx, "agenda.manage_own") && ctx.staffId === a.staff_id);
+  const mine = can(ctx, "agenda.manage") || (can(ctx, "agenda.manage_own") && !!ctx.staffId && (ctx.staffId === a.staff_id || a.helper_ids.includes(ctx.staffId)));
+  const others = cat.staff.filter((s) => s.is_active && s.id !== a.staff_id);
   const os = await orderOfAppointment(db, ctx.unitId, id);
   const [h] = await db.query<{ cancelled_by_name: string | null; cancelled_at: Date | null }>("select u.full_name as cancelled_by_name, ap.cancelled_at from appointments ap left join users u on u.id=ap.cancelled_by where ap.id=$1", [id]);
 
@@ -44,6 +45,19 @@ export default async function AppointmentPage({ params, searchParams }: { params
         <section className="card stack">
           <h2>Detalhes</h2>
           <div><small>Serviços</small><br />{a.services} · <b className="mono">{fmtBRL(a.total_cents)}</b></div>
+          <div><small>{a.helper_ids.length ? "Equipe (responsável primeiro)" : "Técnico"}</small><br />{a.staff_name}</div>
+          {can(ctx, "agenda.manage") && a.status === "agendado" && others.length ? (
+            <details>
+              <summary>Mudar técnicos que acompanham</summary>
+              <form action={setTeamAction} className="stack">
+                <input type="hidden" name="id" value={a.id} />
+                <div className="chips">
+                  {others.map((s) => <label key={s.id} className="check"><input type="checkbox" name="helpers" value={s.id} defaultChecked={a.helper_ids.includes(s.id)} /><span>{s.name}</span></label>)}
+                </div>
+                <button className="btn small" type="submit">Salvar equipe</button>
+              </form>
+            </details>
+          ) : null}
           <div><small>Endereço do serviço</small><br />{a.address ? <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a.address)}`} target="_blank" rel="noreferrer">{a.address}</a> : <span className="muted">Sem endereço. Complete na <Link href={`/clientes/${a.customer_id}`}>ficha do cliente</Link>.</span>}</div>
           {a.customer_phone ? <div><small>Telefone</small><br />{a.customer_phone}</div> : null}
           {a.customer_notes ? <div><small>Observações do cliente</small><br />{a.customer_notes}</div> : null}
@@ -65,7 +79,7 @@ export default async function AppointmentPage({ params, searchParams }: { params
                 <Field label="Data"><input type="date" name="date" defaultValue={ymd} required /></Field>
                 <Field label="Hora"><input type="time" name="time" step={900} defaultValue={fmtTime(a.starts_at)} required /></Field>
                 {can(ctx, "agenda.manage") ? (
-                  <Field label="Técnico"><select name="staffId" defaultValue={a.staff_id}>{cat.staff.filter((s) => s.is_active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
+                  <Field label="Técnico responsável"><select name="staffId" defaultValue={a.staff_id}>{cat.staff.filter((s) => s.is_active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
                 ) : null}
               </div>
               <Field label="Endereço do serviço"><input name="address" defaultValue={a.address ?? ""} maxLength={300} placeholder="Rua, número, bairro, cidade" /></Field>

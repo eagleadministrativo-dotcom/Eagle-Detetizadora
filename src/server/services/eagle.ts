@@ -4,6 +4,7 @@ import { DomainError, ForbiddenError } from "../errors";
 import type { Ctx } from "../permissions";
 import { addDays, addMonths, todayYmd } from "@/lib/dates";
 import { defaultTexts, listDocOptions } from "./doc-options";
+import { helperIds, onTeam, teamNames } from "./agenda";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const ymdOrThrow = (v: string | null | undefined, label: string) => {
@@ -318,7 +319,7 @@ export interface ServiceOrderRow {
   notes: string | null; customer_confirmed: boolean; technician_confirmed: boolean; warranty_days: number | null;
   customer_id: string; customer_name: string; customer_phone: string | null; contact_name: string | null; legal_name: string | null; trade_name: string | null;
   document: string | null; cep: string | null; service_address: string | null;
-  staff_id: string | null; staff_name: string | null; service_date: string | null; service_time: string | null;
+  staff_id: string | null; staff_name: string | null; helper_ids: string[]; service_date: string | null; service_time: string | null;
   services: string; total_cents: number; bank: string | null; report_months: number | null; client_situation: ClientSituation | null;
   closing_ref: string | null; nf_number: string | null; receipt_number: string | null; boleto: string | null; confirmed_on: string | null;
   confirmed_by_customer: string | null; confirmed_by_eagle: string | null; file_id: string | null; created_at: Date; updated_at: Date;
@@ -328,7 +329,7 @@ const OS_SELECT = `
   select so.id, so.number, so.appointment_id, so.quote_id, qt.number as quote_number, so.status, so.pests, so.products_used, so.areas,
          so.payment_method, so.payment_status, so.notes, so.customer_confirmed, so.technician_confirmed, so.warranty_days,
          so.customer_id, c.name as customer_name, c.phone as customer_phone, c.contact_name, c.legal_name, c.trade_name, c.cpf as document, c.cep,
-         coalesce(a.service_address, c.address) as service_address, a.staff_id, st.name as staff_name,
+         coalesce(a.service_address, c.address) as service_address, a.staff_id, coalesce(${teamNames("a")}, st.name) as staff_name, ${helperIds("a")} as helper_ids,
          coalesce(to_char(so.service_date,'YYYY-MM-DD'), to_char(a.starts_at at time zone 'America/Sao_Paulo','YYYY-MM-DD')) as service_date,
          coalesce(so.service_time, to_char(a.starts_at at time zone 'America/Sao_Paulo','HH24:MI')) as service_time,
          coalesce(so.services_text, (select string_agg(ai.name_snapshot, ', ') from appointment_services ai where ai.appointment_id=a.id), '') as services,
@@ -345,13 +346,16 @@ const seesAllOrders = (ctx: Ctx) => can(ctx, "agenda.manage") || can(ctx, "agend
 function needOrders(ctx: Ctx) {
   if (!seesAllOrders(ctx) && !(can(ctx, "agenda.manage_own") || can(ctx, "agenda.view_own"))) throw new ForbiddenError();
 }
-const canEditOrder = (ctx: Ctx, staffId: string | null) => can(ctx, "agenda.manage") || (!!staffId && can(ctx, "agenda.manage_own") && ctx.staffId === staffId);
+/** O técnico logado está na equipe do serviço (responsável ou acompanhante). */
+const inTeam = (ctx: Ctx, staffId: string | null, helpers?: string[] | null) => !!ctx.staffId && (staffId === ctx.staffId || (helpers ?? []).includes(ctx.staffId));
+const canEditOrder = (ctx: Ctx, staffId: string | null, helpers?: string[] | null) => can(ctx, "agenda.manage") || (can(ctx, "agenda.manage_own") && inTeam(ctx, staffId, helpers));
+const HELPERS = `, ${helperIds("a")} as helper_ids`;
 
 export async function listServiceOrders(db: Db, ctx: Ctx, opts: { status?: string; customerId?: string; limit?: number; offset?: number } = {}) {
   needOrders(ctx);
   const status = (Object.keys(OS_STATUS_LABEL) as string[]).includes(opts.status ?? "") ? opts.status : null;
   const rows = await db.query<ServiceOrderRow & { total: number }>(
-    `${OS_SELECT} where so.unit_id = $1 and ($2::text is null or so.status = $2) and ($3::uuid is null or a.staff_id = $3) and ($4::uuid is null or so.customer_id = $4)
+    `${OS_SELECT} where so.unit_id = $1 and ($2::text is null or so.status = $2) and ($3::uuid is null or ${onTeam("a", "$3::uuid")}) and ($4::uuid is null or so.customer_id = $4)
      order by case so.status when 'aberta' then 0 else 1 end, coalesce(so.service_date, (a.starts_at at time zone 'America/Sao_Paulo')::date) desc nulls last, so.number desc
      limit $5 offset $6`.replace("select so.id", "select count(*) over() as total, so.id"),
     [ctx.unitId, status, seesAllOrders(ctx) ? null : ctx.staffId ?? "00000000-0000-0000-0000-000000000000", opts.customerId ?? null, opts.limit ?? 50, opts.offset ?? 0],
@@ -363,7 +367,7 @@ export async function getServiceOrder(db: Db, ctx: Ctx, id: string): Promise<Ser
   needOrders(ctx);
   const [r] = await db.query<ServiceOrderRow>(`${OS_SELECT} where so.id = $1 and so.unit_id = $2`, [requireUuid(id, "Ordem de serviço"), ctx.unitId]);
   if (!r) return null;
-  if (!seesAllOrders(ctx) && r.staff_id !== ctx.staffId) throw new ForbiddenError();
+  if (!seesAllOrders(ctx) && !inTeam(ctx, r.staff_id, r.helper_ids)) throw new ForbiddenError();
   return r;
 }
 
@@ -381,9 +385,9 @@ async function nextOrderNumber(q: Q, unitId: string) {
 /** Abre a OS do agendamento (uma por agendamento), já com data, horário, serviços e valor dele. */
 export async function createServiceOrder(db: Db, ctx: Ctx, appointmentId: string, opts: { quoteId?: string | null } = {}): Promise<string> {
   return db.tx(async (q) => {
-    const [a] = await q<{ staff_id: string; status: string; customer_id: string }>("select staff_id, status, customer_id from appointments where id=$1 and unit_id=$2 for update", [requireUuid(appointmentId, "Agendamento"), ctx.unitId]);
+    const [a] = await q<{ staff_id: string; status: string; customer_id: string; helper_ids: string[] }>(`select a.staff_id, a.status, a.customer_id${HELPERS} from appointments a where a.id=$1 and a.unit_id=$2 for update`, [requireUuid(appointmentId, "Agendamento"), ctx.unitId]);
     if (!a) throw new DomainError("not_found", "Agendamento não encontrado.");
-    if (!canEditOrder(ctx, a.staff_id)) throw new ForbiddenError();
+    if (!canEditOrder(ctx, a.staff_id, a.helper_ids)) throw new ForbiddenError();
     if (a.status === "cancelado") throw new DomainError("invalid", "Agendamento cancelado não gera ordem de serviço.");
     const [existing] = await q<{ id: string }>("select id from service_orders where appointment_id=$1", [appointmentId]);
     if (existing) return existing.id;
@@ -495,10 +499,10 @@ export async function appointmentsWithoutOrder(db: Db, ctx: Ctx): Promise<OpenAp
 export async function updateServiceOrder(db: Db, ctx: Ctx, id: string, i: OrderFields) {
   checkOrderFields(i);
   await db.tx(async (q) => {
-    const [o] = await q<{ status: OSStatus; staff_id: string | null }>(
-      "select so.status, a.staff_id from service_orders so left join appointments a on a.id=so.appointment_id where so.id=$1 and so.unit_id=$2 for update of so", [requireUuid(id, "Ordem de serviço"), ctx.unitId]);
+    const [o] = await q<{ status: OSStatus; staff_id: string | null; helper_ids: string[] }>(
+      `select so.status, a.staff_id${HELPERS} from service_orders so left join appointments a on a.id=so.appointment_id where so.id=$1 and so.unit_id=$2 for update of so`, [requireUuid(id, "Ordem de serviço"), ctx.unitId]);
     if (!o) throw new DomainError("not_found", "Ordem de serviço não encontrada.");
-    if (!canEditOrder(ctx, o.staff_id)) throw new ForbiddenError();
+    if (!canEditOrder(ctx, o.staff_id, o.helper_ids)) throw new ForbiddenError();
     if (o.status === "cancelada") throw new DomainError("locked", "OS cancelada não pode ser alterada.");
     if (o.status === "executada" && !can(ctx, "agenda.manage")) throw new DomainError("locked", "Só o escritório altera uma OS concluída (NF, recibo, boleto).");
     await q(
@@ -520,12 +524,12 @@ export async function executeServiceOrder(db: Db, ctx: Ctx, id: string): Promise
 
 export async function executeServiceOrderFull(db: Db, ctx: Ctx, id: string): Promise<{ warrantyId: string | null; renewalId: string | null }> {
   return db.tx(async (q) => {
-    const [o] = await q<{ status: OSStatus; staff_id: string | null; customer_id: string; appointment_id: string | null; warranty_days: number | null; technician_confirmed: boolean; service_date: string | null; report_months: number | null; number: number }>(
-      `select so.status, a.staff_id, so.customer_id, so.appointment_id, so.warranty_days, so.technician_confirmed, so.report_months, so.number,
+    const [o] = await q<{ status: OSStatus; staff_id: string | null; helper_ids: string[]; customer_id: string; appointment_id: string | null; warranty_days: number | null; technician_confirmed: boolean; service_date: string | null; report_months: number | null; number: number }>(
+      `select so.status, a.staff_id${HELPERS}, so.customer_id, so.appointment_id, so.warranty_days, so.technician_confirmed, so.report_months, so.number,
               coalesce(to_char(so.service_date,'YYYY-MM-DD'), to_char(a.starts_at at time zone 'America/Sao_Paulo','YYYY-MM-DD')) as service_date
        from service_orders so left join appointments a on a.id=so.appointment_id where so.id=$1 and so.unit_id=$2 for update of so`, [requireUuid(id, "Ordem de serviço"), ctx.unitId]);
     if (!o) throw new DomainError("not_found", "Ordem de serviço não encontrada.");
-    if (!canEditOrder(ctx, o.staff_id)) throw new ForbiddenError();
+    if (!canEditOrder(ctx, o.staff_id, o.helper_ids)) throw new ForbiddenError();
     if (o.status !== "aberta") throw new DomainError("locked", "Esta OS já foi encerrada.");
     if (!o.technician_confirmed) throw new DomainError("invalid", "Marque a confirmação do técnico antes de concluir a OS.");
     const today = todayYmd();
@@ -692,11 +696,11 @@ const ORDER_IMAGE = /^image\/(png|jpeg|webp)$/;
 const ORDER_FILE_MAX = 5 * 1024 * 1024;
 
 async function orderForFiles(q: Q, ctx: Ctx, orderId: string, edit: boolean) {
-  const [o] = await q<{ customer_id: string; staff_id: string | null; status: OSStatus; number: number }>(
-    "select so.customer_id, a.staff_id, so.status, so.number from service_orders so left join appointments a on a.id=so.appointment_id where so.id=$1 and so.unit_id=$2",
+  const [o] = await q<{ customer_id: string; staff_id: string | null; helper_ids: string[]; status: OSStatus; number: number }>(
+    `select so.customer_id, a.staff_id${HELPERS}, so.status, so.number from service_orders so left join appointments a on a.id=so.appointment_id where so.id=$1 and so.unit_id=$2`,
     [requireUuid(orderId, "Ordem de serviço"), ctx.unitId]);
   if (!o) throw new DomainError("not_found", "Ordem de serviço não encontrada.");
-  if (edit ? !canEditOrder(ctx, o.staff_id) : !seesAllOrders(ctx) && o.staff_id !== ctx.staffId) throw new ForbiddenError();
+  if (edit ? !canEditOrder(ctx, o.staff_id, o.helper_ids) : !seesAllOrders(ctx) && !inTeam(ctx, o.staff_id, o.helper_ids)) throw new ForbiddenError();
   if (edit && o.status === "cancelada") throw new DomainError("locked", "OS cancelada não recebe fotos nem assinatura.");
   return o;
 }
