@@ -3,11 +3,13 @@ import { getDb } from "@/server/db";
 import { requirePerm } from "@/server/session";
 import { historySummary, listHistory, PAYMENT_KIND_LABEL } from "@/server/services/history";
 import { fmtYmd } from "@/lib/dates";
-import { Empty, PageHead, Pager, money } from "@/components/ui";
+import { Empty, Flash, PageHead, Pager, money } from "@/components/ui";
+import { can } from "@/server/core";
+import { importHistoryAction } from "@/app/actions/history";
 
 export const metadata = { title: "Histórico de serviços" };
 
-export default async function History({ searchParams }: { searchParams: Promise<{ q?: string; ano?: string; pg?: string; p?: string }> }) {
+export default async function History({ searchParams }: { searchParams: Promise<{ q?: string; ano?: string; pg?: string; p?: string; ok?: string; erro?: string }> }) {
   const sp = await searchParams;
   const { ctx } = await requirePerm("customers.history");
   const db = await getDb();
@@ -21,11 +23,23 @@ export default async function History({ searchParams }: { searchParams: Promise<
   if (year) qs.set("ano", String(year));
   if (payment) qs.set("pg", payment);
   const base = `/historico${qs.size ? `?${qs}` : ""}`;
+  const canImport = can(ctx, "customers.manage") && can(ctx, "data.export");
   const all = sum.years.reduce((a, y) => ({ n: a.n + y.n, total: a.total + y.total }), { n: 0, total: 0 });
 
   return (
     <>
       <PageHead title="Histórico de serviços" sub="Serviços já prestados pela Eagle, vindos das planilhas de vendas. Cada um também aparece na ficha do cliente." />
+      <Flash ok={sp.ok} erro={sp.erro} />
+      {canImport ? (
+        <details className="card confirm neutral" open={all.n === 0}>
+          <summary>Importar planilha de vendas (PDF)</summary>
+          <form action={importHistoryAction} className="form">
+            <input type="file" name="file" accept=".pdf,application/pdf" required />
+            <small>A &quot;Planilha de vendas mensal&quot; exportada em PDF. Cada linha vira um serviço no histórico, e o cliente é cadastrado (ou ligado ao que já existe). Enviar o mesmo arquivo de novo não duplica. Até 8 MB.</small>
+            <div className="row"><button className="btn" type="submit" name="mode" value="check">Só conferir</button><button className="btn accent" type="submit" name="mode" value="import">Importar</button></div>
+          </form>
+        </details>
+      ) : null}
       {all.n === 0 ? <Empty title="Nenhum serviço no histórico ainda" /> : (
         <>
           <section className="card stack">

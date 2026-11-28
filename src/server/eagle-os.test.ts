@@ -10,6 +10,7 @@ import { getCustomer, listCustomers, saveCustomer } from "./services/customers";
 import { createInvite, getInvite, pendingInvitesByStaff, updateInvite } from "./services/invites";
 import { customerHistory, historySummary, listHistory } from "./services/history";
 import { saveStaff } from "./services/catalog";
+import { importRecords, sheetRecords } from "./services/history-import";
 import { getUserAccess, setUserAccess } from "./services/access";
 import { ROLE_DEFAULTS } from "./permissions";
 import { addDays, addMonths, monthEnd, monthStart, todayYmd } from "@/lib/dates";
@@ -194,6 +195,34 @@ describe("histórico de serviços da planilha", () => {
     const sum = await historySummary(w.db, w.owner);
     expect(sum.years.find((y) => y.year === 2023)?.total).toBe(20000);
     expect(await msg(listHistory(w.db, w.barber, {}))).toMatch(/permissão/i);
+  });
+});
+
+describe("leitura da planilha de vendas", () => {
+  it("separa colunas, junta cliente repetido, separa unidades e não duplica ao reenviar", async () => {
+    const head = (p: number, y: number) => ["RAZÃO SOCIAL", "ENDEREÇO", "TELEFONE", "CNPJ/CPF", "DATA AGEND", "DESCRIÇÃO DO SERVIÇOS", "VALOR SERV", "FORMA PAGAM", "OBSERVAÇÕES"]
+      .map((s, i) => ({ p, x: 70 + i * 40, y, w: 10, s }));
+    const row = (p: number, y: number, v: string[]) => v.map((s, i) => ({ p, x: 70 + i * 40, y, w: 10, s })).filter((i) => i.s);
+    const items = [
+      { p: 1, x: 58, y: 740, w: 60, s: "PLANILHA DE VENDAS - MENSAL / MARÇO 2021" }, ...head(1, 739),
+      ...row(1, 737, ["CONDOMÍNIO AZUL", "RUA A, 10 - CENTRO", "99999-1111", "11.111.111/0001-11", "10/03/2021", "DD, DR", "R$ 1.250,50", "PIX 12/03", "ok"]),
+      ...row(1, 735, ["CONDOMINIO AZUL", "RUA A,10- CENTRO", "", "11.111.111/0001-11", "20/03", "LIMP CAIXA", "300", "BOLETO 30 DIAS", ""]),
+      ...row(1, 733, ["EMPRESA X - UNIDADE NORTE", "RUA B, 1", "(41) 3333-2222", "22.222.222/0001-22", "21/03/2021", "DD", "CORTESIA", "", ""]),
+      ...row(1, 731, ["EMPRESA X - UNIDADE NORTE", "RUA C, 99", "", "22.222.222/0001-22", "22/03/2021", "DD", "R$ 90,00", "TRANS BANC", ""]),
+    ];
+    const recs = sheetRecords(items);
+    expect(recs).toHaveLength(4);
+    expect(recs[0]).toMatchObject({ name: "CONDOMÍNIO AZUL", service_date: "2021-03-10", amount_cents: 125050, payment: "pix", notes: "ok" });
+    expect(recs[1]).toMatchObject({ service_date: "2021-03-20", amount_cents: 30000, payment: "boleto" });
+    expect(recs[2]).toMatchObject({ amount_cents: null, amount_raw: "CORTESIA" });
+    expect(recs[3].payment).toBe("transferencia");
+    const r = await importRecords(w.db, w.owner, recs);
+    expect(r).toMatchObject({ records: 4, inserted: 4, newCustomers: 3 }); // azul (2 linhas) + empresa x em 2 endereços
+    const again = await importRecords(w.db, w.owner, recs);
+    expect(again).toMatchObject({ inserted: 0, skipped: 4, newCustomers: 0, matchedCustomers: 3 });
+    const [{ phone }] = await w.db.query<{ phone: string }>("select phone from customers where name='CONDOMINIO AZUL' or name='CONDOMÍNIO AZUL'");
+    expect(phone).toBe("41999991111"); // sem DDD na planilha: assume 41
+    expect(await msg(importRecords(w.db, w.barber, recs))).toMatch(/permissão/i);
   });
 });
 
