@@ -118,6 +118,21 @@ export async function serviceAddress(q: Q, ctx: Ctx, customerId: string, typed: 
   return c && c.address?.trim() === t ? null : t;
 }
 
+/**
+ * Telefone informado no agendamento: o telefone é do cliente, então vai para a ficha.
+ * Ficha sem telefone: grava. Telefone diferente: troca só quem pode editar clientes.
+ */
+export async function customerPhoneFromBooking(q: Q, ctx: Ctx, customerId: string, typed: string | null | undefined): Promise<void> {
+  const phone = (typed ?? "").replace(/[^\d+]/g, "");
+  if (!phone) return;
+  if (phone.replace(/\D/g, "").length < 10) throw new DomainError("invalid", "Telefone inválido (informe DDD + número).");
+  const [c] = await q<{ phone: string | null }>("select phone from customers where id=$1 and unit_id=$2", [requireUuid(customerId, "Cliente"), ctx.unitId]);
+  if (!c || (c.phone ?? "").replace(/\D/g, "") === phone.replace(/\D/g, "")) return;
+  if (c.phone && !can(ctx, "customers.manage")) return;
+  await q("update customers set phone=$3, updated_at=now(), updated_by=$4 where id=$1 and unit_id=$2", [customerId, ctx.unitId, phone, ctx.userId]);
+  await audit(q, ctx, "CLIENTE_EDITADO", "customer", customerId, { phone: c.phone }, { phone }, "telefone informado no agendamento");
+}
+
 export async function createAppointmentTx(q: Q, ctx: Ctx, input: CreateAppointmentInput, opts: { silent?: boolean; seriesId?: string } = {}): Promise<string> {
   assertManage(ctx, input.staffId, "agenda.create");
   requireUuid(input.customerId, "Cliente");

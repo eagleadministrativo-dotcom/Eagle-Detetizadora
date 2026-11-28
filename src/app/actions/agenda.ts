@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { flushPush } from "@/server/services/push";
 import { getDb } from "@/server/db";
 import { bool, requireSession, run, str, optStr } from "@/server/session";
-import { cancelAppointment, createAppointment, createBlock, cancelBlock, markNoShow, rescheduleAppointment, serviceAddress, setAppointmentTeam } from "@/server/services/agenda";
+import { cancelAppointment, createAppointment, createBlock, cancelBlock, markNoShow, rescheduleAppointment, serviceAddress, setAppointmentTeam, customerPhoneFromBooking } from "@/server/services/agenda";
 import { quickAttendance, startAttendance } from "@/server/services/attendance";
 import { saveCustomer } from "@/server/services/customers";
 import { cancelSeries, createSeries, updateSeries } from "@/server/services/series";
@@ -64,10 +64,15 @@ function keep(fd: FormData, base: Record<string, string>) {
 
 async function resolveCustomer(fd: FormData, ctx: Awaited<ReturnType<typeof requireSession>>["ctx"]) {
   const existing = str(fd, "customerId");
-  if (existing) return existing;
+  const phone = optStr(fd, "phone") ?? optStr(fd, "newPhone");
+  if (existing) {
+    const db = await getDb();
+    await db.tx((q) => customerPhoneFromBooking(q, ctx, existing, phone));
+    return existing;
+  }
   const name = str(fd, "newName");
   if (!name) throw new DomainError("invalid", "Escolha um cliente ou informe o nome de um novo cliente.");
-  return saveCustomer(await getDb(), ctx, { name, phone: optStr(fd, "newPhone"), address: optStr(fd, "address") });
+  return saveCustomer(await getDb(), ctx, { name, phone, address: optStr(fd, "address") });
 }
 
 export async function createAppointmentAction(fd: FormData) {

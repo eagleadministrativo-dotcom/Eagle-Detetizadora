@@ -7,6 +7,7 @@ import { listAppointments } from "@/server/services/agenda";
 import { listCatalog } from "@/server/services/catalog";
 import { dayEndUtc, dayStartUtc, fmtDate, fmtDateTime, fmtTime, toYmd } from "@/lib/dates";
 import { fmtBRL } from "@/lib/money";
+import { fmtPhone } from "@/lib/phone";
 import { ApptBadge, ConfirmAction, Field, Flash, PageHead } from "@/components/ui";
 import { seriesOf } from "@/server/services/series";
 import { seriesAction } from "@/app/actions/agenda";
@@ -59,7 +60,18 @@ export default async function AppointmentPage({ params, searchParams }: { params
             </details>
           ) : null}
           <div><small>Endereço do serviço</small><br />{a.address ? <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a.address)}`} target="_blank" rel="noreferrer">{a.address}</a> : <span className="muted">Sem endereço. Complete na <Link href={`/clientes/${a.customer_id}`}>ficha do cliente</Link>.</span>}</div>
-          {a.customer_phone ? <div><small>Telefone</small><br />{a.customer_phone}</div> : null}
+          {a.customer_phone ? (() => {
+            const d = a.customer_phone.replace(/\D/g, "");
+            const intl = d.startsWith("55") && d.length > 11 ? d : `55${d}`;
+            return (
+              <div><small>Telefone do cliente</small><br /><b>{fmtPhone(a.customer_phone)}</b>
+                <div className="row" style={{ marginTop: 6 }}>
+                  <a className="btn small accent" href={`tel:+${intl}`}>Ligar</a>
+                  <a className="btn small ghost" href={`https://wa.me/${intl}`} target="_blank" rel="noreferrer">WhatsApp</a>
+                </div>
+              </div>
+            );
+          })() : <div><small>Telefone do cliente</small><br /><span className="muted">Sem telefone. Complete na <Link href={`/clientes/${a.customer_id}`}>ficha do cliente</Link>.</span></div>}
           {a.customer_notes ? <div><small>Observações do cliente</small><br />{a.customer_notes}</div> : null}
           {a.notes ? <div><small>Observações do agendamento</small><br />{a.notes}</div> : null}
           {a.status === "cancelado" ? <div className="alert">Cancelado: {a.cancellation_reason}{h?.cancelled_by_name ? ` (por ${h.cancelled_by_name} em ${h.cancelled_at ? fmtDateTime(h.cancelled_at) : ""})` : ""}</div> : null}

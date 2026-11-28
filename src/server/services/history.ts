@@ -60,6 +60,29 @@ export async function historySummary(db: Db, ctx: Ctx) {
   return { years: years.map((y) => ({ ...y, total: Number(y.total) })), pays: pays.map((p) => ({ ...p, total: Number(p.total) })) };
 }
 
+const MONTH: Record<string, number> = { JAN: 1, FEV: 2, MAR: 3, ABR: 4, MAI: 5, JUN: 6, JUL: 7, AGO: 8, SET: 9, OUT: 10, NOV: 11, DEZ: 12 };
+/** "26/12/2020", "25/4/25", "RET EM JULHO/2020", "SETEMBRO 2021" → data (dia 1 quando só tem mês). Sem ano: null. */
+export function parseReturnNote(s: string | null | undefined): string | null {
+  if (!s) return null;
+  const p = (n: number) => String(n).padStart(2, "0");
+  const d = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (d) {
+    const y = +d[3] < 100 ? 2000 + +d[3] : +d[3];
+    return +d[2] >= 1 && +d[2] <= 12 && +d[1] >= 1 && +d[1] <= 31 && y >= 2010 ? `${y}-${p(+d[2])}-${p(+d[1])}` : null;
+  }
+  const t = s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
+  const m = t.match(/\b(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)[A-Z]*\.?\s*(?:\/|DE)?\s*(20\d\d|\d\d)\b/);
+  if (m) { const y = m[2].length === 2 ? 2000 + +m[2] : +m[2]; return `${y}-${p(MONTH[m[1]])}-01`; }
+  return null;
+}
+
+/** Retorno previsto na planilha: o do serviço mais recente que tenha data de retorno legível. */
+export function sheetNextReturn(rows: HistoryRow[]): string | null {
+  const sorted = rows.slice().sort((a, b) => b.service_date.localeCompare(a.service_date));
+  for (const r of sorted) { const d = parseReturnNote(r.return_note); if (d) return d; }
+  return null;
+}
+
 export async function customerHistory(db: Db, ctx: Ctx, customerId: string) {
   need(ctx, "customers.history");
   return db.query<HistoryRow>(`select ${COLS} from service_history h join customers c on c.id=h.customer_id where h.unit_id=$1 and h.customer_id=$2 order by h.service_date desc`, [ctx.unitId, customerId]);

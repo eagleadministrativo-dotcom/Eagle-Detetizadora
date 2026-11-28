@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { makeWorld, future, type World } from "./testkit";
-import { createAppointment, listAppointments, setAppointmentTeam } from "./services/agenda";
+import { createAppointment, customerPhoneFromBooking, listAppointments, setAppointmentTeam } from "./services/agenda";
 import {
   createOrderFromQuote, createServiceOrder, createStandaloneOrder, executeServiceOrderFull, getReturn, getServiceOrder, saveQuote, setOrderPayment, setQuoteStatus,
   updateServiceOrder, validUntilFrom, addOrderFile, listOrderFiles, getOrderImage, setOrderSigner,
@@ -8,7 +8,7 @@ import {
 import { orderTotals, orderBreakdowns, quoteTotals, receivableOrders, runEagleJobs } from "./services/eagle-stats";
 import { getCustomer, listCustomers, saveCustomer } from "./services/customers";
 import { createInvite, getInvite, pendingInvitesByStaff, updateInvite } from "./services/invites";
-import { customerHistory, historySummary, listHistory } from "./services/history";
+import { customerHistory, historySummary, listHistory, parseReturnNote, sheetNextReturn } from "./services/history";
 import { saveStaff } from "./services/catalog";
 import { importRecords, sheetRecords } from "./services/history-import";
 import { getUserAccess, setUserAccess } from "./services/access";
@@ -127,6 +127,21 @@ describe("endereço do agendamento", () => {
     const os = await createStandaloneOrder(w.db, w.owner, cid, { valueCents: 100 }, { appointmentId: a2 });
     expect((await getServiceOrder(w.db, w.owner, os))?.service_address).toBe("Galpão, Rua B, 99");
   });
+
+  it("telefone do agendamento vai para a ficha e aparece na agenda do técnico", async () => {
+    const cid = await saveCustomer(w.db, w.owner, { name: "Cliente Sem Telefone" });
+    await w.db.tx((q) => customerPhoneFromBooking(q, w.owner, cid, "(41) 98888-7777"));
+    expect((await getCustomer(w.db, w.owner, cid)).customer.phone).toBe("41988887777");
+    // técnico não troca telefone que já existe; quem edita clientes troca
+    await w.db.tx((q) => customerPhoneFromBooking(q, w.barber, cid, "41911112222"));
+    expect((await getCustomer(w.db, w.owner, cid)).customer.phone).toBe("41988887777");
+    await w.db.tx((q) => customerPhoneFromBooking(q, w.owner, cid, "41911112222"));
+    expect((await getCustomer(w.db, w.owner, cid)).customer.phone).toBe("41911112222");
+    expect(await msg(w.db.tx((q) => customerPhoneFromBooking(q, w.owner, cid, "1234")))).toMatch(/DDD/);
+    const a = await createAppointment(w.db, w.owner, { customerId: cid, staffId: w.barberStaffId, startsAt: future(260), serviceIds: [w.serviceId] });
+    const mine = await listAppointments(w.db, w.barber, { from: new Date(Date.now()), to: new Date(Date.now() + 400 * 3600000) });
+    expect(mine.find((r) => r.id === a)?.customer_phone).toBe("41911112222");
+  });
 });
 
 describe("serviço com mais de um técnico", () => {
@@ -195,6 +210,18 @@ describe("histórico de serviços da planilha", () => {
     const sum = await historySummary(w.db, w.owner);
     expect(sum.years.find((y) => y.year === 2023)?.total).toBe(20000);
     expect(await msg(listHistory(w.db, w.barber, {}))).toMatch(/permissão/i);
+    // visitas da ficha somam a planilha: 2 visitas, primeira e última, total gasto
+    const { customer } = await getCustomer(w.db, w.owner, c);
+    expect(Number(customer.visits)).toBe(2);
+    expect(Number(customer.sheet_visits)).toBe(2);
+    expect(Number(customer.total_spent_cents)).toBe(75000);
+    expect(new Date(customer.first_visit!).toISOString().slice(0, 10)).toBe("2021-03-10");
+    expect(new Date(customer.last_visit!).toISOString().slice(0, 10)).toBe("2023-07-01");
+    expect(parseReturnNote("26/12/2020")).toBe("2020-12-26");
+    expect(parseReturnNote("25/4/25")).toBe("2025-04-25");
+    expect(parseReturnNote("RET EM JULHO/2020")).toBe("2020-07-01");
+    expect(parseReturnNote("RET SET")).toBeNull();
+    expect(sheetNextReturn([{ ...mine[0], service_date: "2023-07-01", return_note: "RET SET" }, { ...mine[1], service_date: "2021-03-10", return_note: "10/09/2021" }])).toBe("2021-09-10");
   });
 });
 

@@ -7,6 +7,7 @@ import { listAppointments, listBlocks } from "@/server/services/agenda";
 import { listCatalog } from "@/server/services/catalog";
 import { getPrefs } from "@/server/services/access";
 import { addDays, addMonths, dayEndUtc, dayOfWeek, dayStartUtc, fmtTime, fmtYmd, monthEnd, monthStart, todayYmd, toYmd } from "@/lib/dates";
+import { fmtPhone } from "@/lib/phone";
 import { Empty, Flash, PageHead, Seg } from "@/components/ui";
 import { Calendar, type CalBlock, type CalCol, type CalEvent } from "@/components/calendar";
 import { removeBlockAction } from "@/app/actions/agenda";
@@ -75,11 +76,11 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     : staff.map((s) => ({ key: s.id, date: d, staffId: s.id, label: s.name, color: s.color, today: d === today, off: offOf(work(s.id, d)) }));
   const colKey = (a: { starts_at: Date; staff_id: string; chair_id: string }) => (view === "semana" ? toYmd(a.starts_at) : group === "cadeira" && all ? a.chair_id : a.staff_id);
   const events: CalEvent[] = appts.flatMap((a) => { const y = toYmd(a.starts_at); const ev: CalEvent = {
-    id: a.id, col: colKey(a), s: mins(a.starts_at, y), e: mins(a.ends_at, y), title: a.customer_name, sub: [a.services, view === "semana" && !staffFilter ? a.staff_name : a.address].filter(Boolean).join(" · "), status: a.status, color: a.staff_color,
+    id: a.id, col: colKey(a), s: mins(a.starts_at, y), e: mins(a.ends_at, y), title: a.customer_name, sub: [a.services, view === "semana" && !staffFilter ? a.staff_name : a.address, view === "semana" ? null : fmtPhone(a.customer_phone)].filter(Boolean).join(" · "), status: a.status, color: a.staff_color,
     movable: a.status === "agendado" && can(ctx, "agenda.edit") && (manageAll || (manageOwn && a.staff_id === ctx.staffId)), rec: !!a.series_id,
   };
   // serviço com mais de um técnico: aparece também na coluna de cada acompanhante (só o do responsável se arrasta)
-  const copies = view === "semana" ? [] : a.helper_ids.map((h): CalEvent => ({ ...ev, id: `${a.id}:${h}`, href: `/agenda/${a.id}`, col: h, movable: false, sub: [a.services, `com ${a.staff_name}`].filter(Boolean).join(" · ") }));
+  const copies = view === "semana" ? [] : a.helper_ids.map((h): CalEvent => ({ ...ev, id: `${a.id}:${h}`, href: `/agenda/${a.id}`, col: h, movable: false, sub: [a.services, `com ${a.staff_name}`, a.address, fmtPhone(a.customer_phone)].filter(Boolean).join(" · ") }));
   return [ev, ...copies]; });
   const calBlocks: CalBlock[] = view === "mes" ? [] : blocks.flatMap((b) => cols.filter((c) => (view === "semana" ? (!b.staff_id || b.staff_id === staffFilter) && !b.chair_id : group === "cadeira" && all ? (b.chair_id ? b.chair_id === c.chairId : !b.staff_id) : (b.staff_id ? b.staff_id === c.staffId : !b.chair_id))).flatMap((c) => {
     const s = Math.max(0, mins(b.starts_at, c.date)), e = Math.min(1440, mins(b.ends_at, c.date));

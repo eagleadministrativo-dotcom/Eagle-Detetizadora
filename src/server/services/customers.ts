@@ -4,7 +4,7 @@ import { DomainError } from "../errors";
 import type { Ctx } from "../permissions";
 import { cleanRow, normalizePhone, MAX_IMPORT_ROWS, type ImportRow } from "@/lib/contact-import";
 
-export interface CustomerRow { id: string; name: string; phone: string | null; email: string | null; cpf: string | null; birthdate: string | null; notes: string | null; is_active: boolean; visits: number; last_visit: Date | null; total_spent_cents: number; legal_name?: string | null; trade_name?: string | null; address?: string | null; cep?: string | null; contact_name?: string | null }
+export interface CustomerRow { id: string; name: string; phone: string | null; email: string | null; cpf: string | null; birthdate: string | null; notes: string | null; is_active: boolean; visits: number; sheet_visits?: number; last_visit: Date | null; first_visit?: Date | null; total_spent_cents: number; legal_name?: string | null; trade_name?: string | null; address?: string | null; cep?: string | null; contact_name?: string | null }
 
 const ACC_FROM = "áàâãäéèêëíìîïóòôõöúùûüçñ";
 const ACC_TO = "aaaaaeeeeiiiiooooouuuucn";
@@ -13,14 +13,22 @@ export const searchKey = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, ""
 const NORM = (expr: string) => `translate(lower(${expr}), '${ACC_FROM}', '${ACC_TO}')`;
 const SEARCH_TEXT = NORM("c.name || ' ' || coalesce(c.trade_name,'') || ' ' || coalesce(c.legal_name,'') || ' ' || coalesce(c.contact_name,'') || ' ' || coalesce(c.address,'')");
 
-// visitas e total gasto: ordens de serviço concluídas (e atendimentos antigos, se houver)
+// visitas e total gasto: ordens de serviço concluídas, atendimentos antigos e o histórico das planilhas de vendas
 const OS_VALUE = "coalesce(so.value_cents, (select sum(ai.price_cents) from appointment_services ai where ai.appointment_id=so.appointment_id), 0)";
+const OS_DAY = "coalesce(so.service_date::timestamptz + interval '12 hours', so.executed_at)";
 const VISIT_COLS = `
-       ((select count(*) from attendances a where a.customer_id=c.id and a.status='concluido') + (select count(*) from service_orders so where so.customer_id=c.id and so.status='executada'))::bigint as visits,
+       ((select count(*) from attendances a where a.customer_id=c.id and a.status='concluido') + (select count(*) from service_orders so where so.customer_id=c.id and so.status='executada')
+        + (select count(*) from service_history h where h.customer_id=c.id))::bigint as visits,
+       (select count(*) from service_history h where h.customer_id=c.id)::bigint as sheet_visits,
        greatest((select max(a.finished_at) from attendances a where a.customer_id=c.id and a.status='concluido'),
-                (select max(coalesce(so.service_date::timestamptz + interval '12 hours', so.executed_at)) from service_orders so where so.customer_id=c.id and so.status='executada')) as last_visit,
+                (select max(${OS_DAY}) from service_orders so where so.customer_id=c.id and so.status='executada'),
+                (select max(h.service_date)::timestamptz + interval '12 hours' from service_history h where h.customer_id=c.id)) as last_visit,
+       least((select min(a.finished_at) from attendances a where a.customer_id=c.id and a.status='concluido'),
+             (select min(${OS_DAY}) from service_orders so where so.customer_id=c.id and so.status='executada'),
+             (select min(h.service_date)::timestamptz + interval '12 hours' from service_history h where h.customer_id=c.id)) as first_visit,
        (coalesce((select sum(a.total_cents) from attendances a where a.customer_id=c.id and a.status='concluido'),0)
-        + coalesce((select sum(${OS_VALUE}) from service_orders so where so.customer_id=c.id and so.status='executada'),0))::bigint as total_spent_cents`;
+        + coalesce((select sum(${OS_VALUE}) from service_orders so where so.customer_id=c.id and so.status='executada'),0)
+        + coalesce((select sum(h.amount_cents) from service_history h where h.customer_id=c.id),0))::bigint as total_spent_cents`;
 
 export async function listCustomers(db: Db, ctx: Ctx, opts: { search?: string; limit?: number; offset?: number; includeInactive?: boolean } = {}) {
   need(ctx, "customers.view");

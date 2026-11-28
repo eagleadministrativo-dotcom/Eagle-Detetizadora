@@ -17,7 +17,7 @@ import { listCustomerFiles } from "@/server/services/files";
 import { OSStatusBadge, QuoteStatusBadge } from "@/components/eagle-ui";
 import { ConfirmAction } from "@/components/ui";
 import { addCustomerFileAction, deleteCustomerFileAction } from "@/app/actions/eagle";
-import { customerHistory, PAYMENT_KIND_LABEL } from "@/server/services/history";
+import { customerHistory, PAYMENT_KIND_LABEL, sheetNextReturn } from "@/server/services/history";
 
 export const metadata = { title: "Cliente" };
 
@@ -51,6 +51,14 @@ export default async function CustomerPage({ params, searchParams }: { params: P
     showHistory ? customerHistory(db, ctx, id) : Promise.resolve([]),
   ]);
   const pastTotal = past.reduce((a, h) => a + (h.amount_cents ?? 0), 0);
+  const nextReturn = sheetNextReturn(past);
+  const visitsTotal = Number(c.visits);
+  const sheetVisits = Number(c.sheet_visits ?? 0);
+  const visitLine = visitsTotal === 0 ? "Nenhuma visita registrada" : [
+    `${visitsTotal} visita(s)${sheetVisits && sheetVisits < visitsTotal ? ` (${sheetVisits} da planilha, ${visitsTotal - sheetVisits} no sistema)` : ""}`,
+    c.first_visit ? `primeira em ${fmtDate(c.first_visit)}` : null,
+    c.last_visit ? `última em ${fmtDate(c.last_visit)}` : null,
+  ].filter(Boolean).join(" · ");
   return (
     <>
       <PageHead title={c.name}>
@@ -61,7 +69,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
       <details className="card" open={!!sp.erro}>
         <summary><b>Informações adicionais do cadastro</b></summary>
         <div className="stack" style={{ marginTop: 10 }}>
-          {showHistory ? <small className="muted">{c.visits} visita(s) no sistema · total gasto {money(c.total_spent_cents)}{past.length ? ` · ${past.length} serviço(s) no histórico da planilha` : ""}</small> : null}
+          {showHistory ? <small className="muted">{visitLine} · total gasto {money(c.total_spent_cents)}{nextReturn ? <> · retorno previsto na planilha: {fmtYmd(nextReturn)}</> : null}</small> : null}
           <form action={saveCustomerAction} className="form">
             <input type="hidden" name="id" value={c.id} />
             <div className="fields">
@@ -168,7 +176,8 @@ export default async function CustomerPage({ params, searchParams }: { params: P
         {past.length ? (
           <section className="card stack" style={{ gridColumn: "1 / -1" }}>
             <h2>Histórico de serviços</h2>
-            <small className="muted">{past.length} serviço(s) prestado(s) · {money(pastTotal)} · vindo das planilhas de vendas</small>
+            <small className="muted">{past.length} visita(s) pela planilha de vendas · primeira em {fmtYmd(past[past.length - 1].service_date)} · última em {fmtYmd(past[0].service_date)} · {money(pastTotal)}</small>
+            {nextReturn ? <small>Retorno previsto na planilha: <b>{fmtYmd(nextReturn)}</b>{nextReturn < todayYmd() ? " (já passou)" : ""}</small> : null}
             <div className="tablewrap"><table>
               <thead><tr><th>Data</th><th>Serviço</th><th className="n">Valor</th><th>Pagamento</th><th>Detalhes</th></tr></thead>
               <tbody>{past.map((h) => (
