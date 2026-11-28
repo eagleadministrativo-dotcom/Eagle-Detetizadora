@@ -46,6 +46,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   add("Dedetização", [
     (can(ctx, "agenda.view_all") || can(ctx, "agenda.view_own")) && { href: "/agenda", label: "Agenda" },
     can(ctx, "customers.view") && { href: "/clientes", label: "Clientes" },
+    can(ctx, "customers.history") && { href: "/historico", label: "Histórico de serviços" },
     seesReturns && { href: "/retornos", label: "Retornos" },
     (can(ctx, "quotes.view") || can(ctx, "quotes.manage")) && { href: "/orcamentos", label: "Orçamentos" },
     (can(ctx, "agenda.manage") || can(ctx, "agenda.view_all") || can(ctx, "agenda.manage_own")) && { href: "/os", label: "Ordens de serviço" },

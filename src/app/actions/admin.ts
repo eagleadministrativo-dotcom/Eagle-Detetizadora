@@ -53,6 +53,11 @@ export async function saveStaffAction(fd: FormData) {
     const id = optStr(fd, "id");
     const db = await getDb();
     const staffId = await saveStaff(db, ctx, { id: id ?? undefined, name: str(fd, "name"), phone: optStr(fd, "phone"), contractType: optStr(fd, "contractType"), color: str(fd, "color") || "#8B6B4A", isActive: id ? bool(fd, "isActive") : true, schedules });
+    const inviteId = optStr(fd, "inviteId");
+    if (inviteId) {
+      await updateInvite(db, ctx, inviteId, { fullName: str(fd, "name"), role: str(fd, "role") as Role, staffId, permissions: fd.getAll("perm").map(String) });
+      return "Profissional e convite salvos. O novo cargo e acesso valem quando a pessoa criar o acesso.";
+    }
     const email = optStr(fd, "inviteEmail");
     if (!email) return "Profissional salvo.";
     const role = (str(fd, "role") || "tecnico") as Role;

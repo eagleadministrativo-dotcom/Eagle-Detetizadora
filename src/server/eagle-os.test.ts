@@ -7,7 +7,9 @@ import {
 } from "./services/eagle";
 import { orderTotals, orderBreakdowns, quoteTotals, receivableOrders, runEagleJobs } from "./services/eagle-stats";
 import { getCustomer, listCustomers, saveCustomer } from "./services/customers";
-import { createInvite, getInvite, updateInvite } from "./services/invites";
+import { createInvite, getInvite, pendingInvitesByStaff, updateInvite } from "./services/invites";
+import { customerHistory, historySummary, listHistory } from "./services/history";
+import { saveStaff } from "./services/catalog";
 import { getUserAccess, setUserAccess } from "./services/access";
 import { ROLE_DEFAULTS } from "./permissions";
 import { addDays, addMonths, monthEnd, monthStart, todayYmd } from "@/lib/dates";
@@ -172,6 +174,37 @@ describe("cargo e acesso por pessoa", () => {
     await setUserAccess(w.db, w.owner, uid, "tecnico", ROLE_DEFAULTS.tecnico);
     expect((await getUserAccess(w.db, w.owner, uid)).perms.has("finance.view")).toBe(false);
     expect(await msg(setUserAccess(w.db, w.owner, w.owner.userId, "tecnico", []))).toMatch(/próprio/);
+  });
+});
+
+describe("histórico de serviços da planilha", () => {
+  it("aparece na ficha, na lista com filtros e no resumo por ano; o técnico não vê", async () => {
+    const c = await saveCustomer(w.db, w.owner, { name: "Cliente Planilha", phone: "41999990000" });
+    const ins = "insert into service_history(unit_id,customer_id,service_date,description,amount_cents,payment_kind,source,source_ref) values ($1,$2,$3,$4,$5,$6,'teste',$7) on conflict do nothing";
+    await w.db.query(ins, [w.owner.unitId, c, "2021-03-10", "DD, DR, LIMP CAIXA", 55000, "pix", "a"]);
+    await w.db.query(ins, [w.owner.unitId, c, "2023-07-01", "DEDETIZAÇÃO GERAL", 20000, "boleto", "b"]);
+    await w.db.query(ins, [w.owner.unitId, c, "2023-07-01", "repetida", 1, "boleto", "b"]); // mesma linha não entra de novo
+    const mine = await customerHistory(w.db, w.owner, c);
+    expect(mine.map((h) => h.description)).toEqual(["DEDETIZAÇÃO GERAL", "DD, DR, LIMP CAIXA"]);
+    expect((await listHistory(w.db, w.owner, { year: 2021 })).rows.map((h) => h.customer_name)).toContain("Cliente Planilha");
+    const byQ = await listHistory(w.db, w.owner, { q: "limp caixa" });
+    expect(byQ.count).toBe(1);
+    expect(byQ.totalCents).toBe(55000);
+    expect((await listHistory(w.db, w.owner, { q: "99990000" })).count).toBe(2);
+    const sum = await historySummary(w.db, w.owner);
+    expect(sum.years.find((y) => y.year === 2023)?.total).toBe(20000);
+    expect(await msg(listHistory(w.db, w.barber, {}))).toMatch(/permissão/i);
+  });
+});
+
+describe("convite pela Equipe", () => {
+  it("convites pendentes aparecem por técnico para editar o cargo", async () => {
+    const staff3 = await saveStaff(w.db, w.owner, { name: "Técnico Convite", color: "#123456", isActive: true, schedules: [] });
+    const { id } = await createInvite(w.db, w.owner, { email: "equipe.convite@teste.local", fullName: "Técnico Convite", role: "tecnico", staffId: staff3 });
+    const map = await pendingInvitesByStaff(w.db, w.owner);
+    expect(map.get(staff3)?.id).toBe(id);
+    await updateInvite(w.db, w.owner, id, { fullName: "Técnico Convite", role: "vendedor", staffId: staff3, permissions: ["customers.view"] });
+    expect((await pendingInvitesByStaff(w.db, w.owner)).get(staff3)?.role).toBe("vendedor");
   });
 });
 

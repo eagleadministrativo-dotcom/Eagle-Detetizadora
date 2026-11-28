@@ -107,6 +107,15 @@ export async function getInvite(db: Db, ctx: Ctx, id: string): Promise<InviteDet
   return r ?? null;
 }
 
+/** Convites ainda em aberto ligados a técnicos da Equipe (para a tela da Equipe editar o convite já enviado). */
+export async function pendingInvitesByStaff(db: Db, ctx: Ctx): Promise<Map<string, InviteDetail>> {
+  need(ctx, "users.manage");
+  const rows = await db.query<InviteDetail & { staff_id: string }>(
+    "select id, email, full_name, role, staff_id, permissions, accepted_at, revoked_at from user_invites where unit_id=$1 and staff_id is not null and accepted_at is null and revoked_at is null order by created_at",
+    [ctx.unitId]);
+  return new Map(rows.map((r) => [r.staff_id, r]));
+}
+
 /** Muda nome, cargo, técnico vinculado e acesso de um convite que ainda não foi aceito. */
 export async function updateInvite(db: Db, ctx: Ctx, id: string, i: { fullName: string; role: Role; staffId?: string | null; permissions: string[] }) {
   need(ctx, "users.manage");

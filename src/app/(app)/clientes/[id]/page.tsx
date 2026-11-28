@@ -17,6 +17,7 @@ import { listCustomerFiles } from "@/server/services/files";
 import { OSStatusBadge, QuoteStatusBadge } from "@/components/eagle-ui";
 import { ConfirmAction } from "@/components/ui";
 import { addCustomerFileAction, deleteCustomerFileAction } from "@/app/actions/eagle";
+import { customerHistory, PAYMENT_KIND_LABEL } from "@/server/services/history";
 
 export const metadata = { title: "Cliente" };
 
@@ -43,11 +44,13 @@ export default async function CustomerPage({ params, searchParams }: { params: P
   const sensitive = can(ctx, "customers.edit_sensitive");
   const seesOrders = can(ctx, "agenda.manage") || can(ctx, "agenda.view_all");
   const seesQuotes = can(ctx, "quotes.view") || can(ctx, "quotes.manage");
-  const [orders, quotes, files] = await Promise.all([
+  const [orders, quotes, files, past] = await Promise.all([
     seesOrders ? listServiceOrders(db, ctx, { customerId: id, limit: 100 }).then((r) => r.rows) : Promise.resolve(null),
     seesQuotes ? listQuotes(db, ctx, { customerId: id, limit: 100 }).then((r) => r.rows) : Promise.resolve(null),
     listCustomerFiles(db, ctx, id),
+    showHistory ? customerHistory(db, ctx, id) : Promise.resolve([]),
   ]);
+  const pastTotal = past.reduce((a, h) => a + (h.amount_cents ?? 0), 0);
   return (
     <>
       <PageHead title={c.name} sub={showHistory ? <>{c.visits} visita(s) · total gasto {money(c.total_spent_cents)}</> : undefined}>
@@ -159,6 +162,24 @@ export default async function CustomerPage({ params, searchParams }: { params: P
             </form>
           ) : null}
         </section>
+        {past.length ? (
+          <section className="card stack" style={{ gridColumn: "1 / -1" }}>
+            <h2>Histórico de serviços</h2>
+            <small className="muted">{past.length} serviço(s) prestado(s) · {money(pastTotal)} · vindo das planilhas de vendas</small>
+            <div className="tablewrap"><table>
+              <thead><tr><th>Data</th><th>Serviço</th><th className="n">Valor</th><th>Pagamento</th><th>Detalhes</th></tr></thead>
+              <tbody>{past.map((h) => (
+                <tr key={h.id}>
+                  <td className="nowrap">{fmtYmd(h.service_date)}</td>
+                  <td>{h.description || "—"}{h.service_address ? <><br /><small>{h.service_address}</small></> : null}</td>
+                  <td className="n nowrap">{h.amount_cents != null ? money(h.amount_cents) : <small>{h.amount_note || "—"}</small>}</td>
+                  <td>{h.payment_kind ? PAYMENT_KIND_LABEL[h.payment_kind] ?? h.payment_kind : "—"}{h.payment_detail ? <><br /><small>{h.payment_detail}</small></> : null}</td>
+                  <td><small>{[h.customer_status, h.report && `Laudo: ${h.report}`, h.warranty && `Garantia: ${h.warranty}`, h.return_note && `Retorno: ${h.return_note}`, h.seller && `Vendedora: ${h.seller}`, h.notes, h.follow_up].filter(Boolean).join(" · ") || "—"}</small></td>
+                </tr>
+              ))}</tbody>
+            </table></div>
+          </section>
+        ) : null}
         {showHistory && history.length ? <section className="card stack">
           <h2>Atendimentos antigos</h2>
           {history.length === 0 ? <Empty title="Sem atendimentos concluídos" /> : (

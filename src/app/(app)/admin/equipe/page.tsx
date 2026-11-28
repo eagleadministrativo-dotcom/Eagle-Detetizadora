@@ -1,6 +1,7 @@
 import { getDb } from "@/server/db";
 import { requirePerm } from "@/server/session";
 import { listCatalog } from "@/server/services/catalog";
+import { pendingInvitesByStaff } from "@/server/services/invites";
 import { Badge, Field, Flash, PageHead } from "@/components/ui";
 import { saveStaffAction } from "@/app/actions/admin";
 import { AccessPicker } from "@/components/access-picker";
@@ -13,8 +14,10 @@ const CONTRACT: Record<string, string> = { clt: "CLT", pj: "PJ", autonomo: "Aut�
 export default async function StaffAdmin({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string }> }) {
   const sp = await searchParams;
   const { ctx } = await requirePerm("admin.catalog");
-  const cat = await listCatalog(await getDb(), ctx.unitId);
+  const db = await getDb();
+  const cat = await listCatalog(db, ctx.unitId);
   const canInvite = ctx.perms.has("users.manage");
+  const invites = canInvite ? await pendingInvitesByStaff(db, ctx) : new Map();
 
   const form = (p?: (typeof cat.staff)[number]) => {
     const sch = cat.schedules.filter((s) => p && s.staff_id === p.id);
@@ -38,7 +41,17 @@ export default async function StaffAdmin({ searchParams }: { searchParams: Promi
             })}
           </div>
         </fieldset>
-        {canInvite && !p?.user_id ? (
+        {canInvite && p && !p.user_id && invites.get(p.id) ? (() => {
+          const inv = invites.get(p.id)!;
+          return (
+            <fieldset>
+              <legend>Convite enviado para {inv.email} (ainda não aceito)</legend>
+              <input type="hidden" name="inviteId" value={inv.id} />
+              <small className="muted">Mude o cargo e o acesso aqui e toque em Salvar. Vale quando a pessoa criar o acesso; não precisa reenviar.</small>
+              <div style={{ marginTop: 10 }}><AccessPicker {...accessPickerProps(ctx)} role={inv.role} perms={inv.permissions} /></div>
+            </fieldset>
+          );
+        })() : canInvite && !p?.user_id ? (
           <>
             <Field label="E-mail para convidar ao app (opcional)"><input name="inviteEmail" type="email" autoComplete="off" placeholder="tecnico@email.com" /></Field>
             <details>
