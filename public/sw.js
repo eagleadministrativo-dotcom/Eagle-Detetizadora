@@ -3,7 +3,7 @@
    2) Agenda offline: guarda SÓ a última versão das páginas da agenda (nunca financeiro, clientes ou relatórios)
       e os arquivos estáticos do app, para a agenda do dia abrir sem internet. Ao sair da conta, o cache é apagado. */
 const PAGES = "marfim-agenda-v1";
-const ASSETS = "marfim-assets-v1";
+const ASSETS = "marfim-assets-v2"; // v2: ícones com o logo da Eagle
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => {

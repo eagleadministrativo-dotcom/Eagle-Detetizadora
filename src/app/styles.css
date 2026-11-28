@@ -1360,3 +1360,7 @@ a.signal:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); }
 .paper .cert-signs { display: grid; grid-template-columns: 1fr 1fr; align-items: end; gap: 40px; margin-top: 46px; text-align: center; font-size: 13px; }
 .paper .cert-signs .line { display: block; border-top: 1px solid #000; margin-bottom: 4px; }
 .paper .cert-signs img { max-width: 200px; max-height: 70px; display: block; margin: 0 auto 2px; }
+
+/* logo da Eagle no lugar da letra E (menu, entrada e configuração inicial) */
+:root .brand img.mark.logo { width: 44px; height: 44px; padding: 0; background: none; box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.55); border-radius: 50%; object-fit: contain; }
+:root .login .brand img.mark.logo { width: 64px; height: 64px; }

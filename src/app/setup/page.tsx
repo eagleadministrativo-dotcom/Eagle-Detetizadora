@@ -14,7 +14,7 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
     <div className="login">
       <div className="card stack" style={{ width: "min(100%, 480px)" }}>
         <div>
-          <div className="brand"><span className="mark" aria-hidden="true">E</span><span className="name">EAGLE<small>Detetizadora</small></span></div>
+          <div className="brand"><img className="mark logo" src="/brand/eagle-mark.png" alt="" aria-hidden="true" /><span className="name">EAGLE<small>Detetizadora</small></span></div>
           <h1>Primeira configuração</h1>
           <p className="muted">Crie a empresa e a conta do administrador. Todo o restante (serviços, preços, equipe, formas de pagamento, horários) é cadastrado depois, dentro do sistema.</p>
         </div>

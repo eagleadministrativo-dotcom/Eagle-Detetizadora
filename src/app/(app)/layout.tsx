@@ -89,7 +89,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="shell">
       <a className="skip" href="#conteudo">Pular para o conteúdo</a>
       <aside className="side">
-        <Link className="brand" href="/" aria-label="Eagle — início"><span className="mark" aria-hidden="true">E</span><span className="name">Eagle<small>Detetizadora</small></span></Link>
+        <Link className="brand" href="/" aria-label="Eagle — início"><img className="mark logo" src="/brand/eagle-mark.png" alt="" aria-hidden="true" /><span className="name">Eagle<small>Detetizadora</small></span></Link>
         <SideNav groups={groups} />
         <SideToggle />
       </aside>
