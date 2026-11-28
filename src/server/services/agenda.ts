@@ -9,7 +9,7 @@ import { dayOfWeek, toYmd, atLocal } from "@/lib/dates";
 
 export interface AppointmentRow {
   id: string; customer_id: string; customer_name: string; customer_phone: string | null; customer_notes: string | null;
-  staff_id: string; staff_name: string; staff_color: string; chair_id: string; chair_name: string;
+  staff_id: string; staff_name: string; staff_color: string; chair_id: string; chair_name: string; address: string | null;
   starts_at: Date; ends_at: Date; status: string; notes: string | null; cancellation_reason: string | null;
   services: string; total_cents: number; attendance_id: string | null; series_id: string | null;
 }
@@ -88,7 +88,19 @@ async function resolveServices(q: Q, unitId: string, staffId: string, serviceIds
   return out;
 }
 
-export interface CreateAppointmentInput { customerId: string; staffId: string; chairId?: string | null; startsAt: Date; serviceIds: string[]; notes?: string | null }
+export interface CreateAppointmentInput { customerId: string; staffId: string; chairId?: string | null; startsAt: Date; serviceIds: string[]; notes?: string | null; address?: string | null }
+
+/** Endereço do serviço: o digitado vale para este agendamento; se a ficha do cliente não tem endereço, ele vai para a ficha também. */
+export async function serviceAddress(q: Q, ctx: Ctx, customerId: string, typed: string | null | undefined): Promise<string | null> {
+  const t = (typed ?? "").trim().replace(/\s+/g, " ").slice(0, 300);
+  if (!t) return null;
+  const [c] = await q<{ address: string | null }>("select address from customers where id=$1 and unit_id=$2", [customerId, ctx.unitId]);
+  if (c && !(c.address ?? "").trim()) {
+    await q("update customers set address=$3, updated_at=now() where id=$1 and unit_id=$2", [customerId, ctx.unitId, t]);
+    return null;
+  }
+  return c && c.address?.trim() === t ? null : t;
+}
 
 export async function createAppointmentTx(q: Q, ctx: Ctx, input: CreateAppointmentInput, opts: { silent?: boolean; seriesId?: string } = {}): Promise<string> {
   assertManage(ctx, input.staffId, "agenda.create");
@@ -118,9 +130,10 @@ export async function createAppointmentTx(q: Q, ctx: Ctx, input: CreateAppointme
     }
     if (!chairId) throw lastErr;
   }
+  const address = await serviceAddress(q, ctx, input.customerId, input.address);
   const [a] = await q<{ id: string }>(
-    "insert into appointments(unit_id,customer_id,staff_id,chair_id,starts_at,ends_at,notes,created_by,updated_by,series_id) values ($1,$2,$3,$4,$5,$6,$7,$8,$8,$9) returning id",
-    [ctx.unitId, input.customerId, input.staffId, chairId, input.startsAt, endsAt, input.notes ?? null, ctx.userId, opts.seriesId ?? null],
+    "insert into appointments(unit_id,customer_id,staff_id,chair_id,starts_at,ends_at,notes,created_by,updated_by,series_id,service_address) values ($1,$2,$3,$4,$5,$6,$7,$8,$8,$9,$10) returning id",
+    [ctx.unitId, input.customerId, input.staffId, chairId, input.startsAt, endsAt, input.notes ?? null, ctx.userId, opts.seriesId ?? null, address],
   );
   for (const s of svcs) {
     await q("insert into appointment_services(appointment_id,service_id,name_snapshot,price_cents,duration_minutes) values ($1,$2,$3,$4,$5)", [a.id, s.id, s.name, s.price, s.minutes]);
@@ -156,7 +169,7 @@ export async function createAppointment(db: Db, ctx: Ctx, input: CreateAppointme
   }
 }
 
-export interface RescheduleInput { startsAt: Date; staffId?: string; chairId?: string; reason?: string; minutes?: number }
+export interface RescheduleInput { startsAt: Date; staffId?: string; chairId?: string; reason?: string; minutes?: number; address?: string | null }
 
 export async function rescheduleTx(q: Q, ctx: Ctx, id: string, input: RescheduleInput, silent = false) {
   const [a] = await q<{ staff_id: string; chair_id: string; starts_at: Date; ends_at: Date; status: string }>("select staff_id,chair_id,starts_at,ends_at,status from appointments where id=$1 and unit_id=$2 for update", [id, ctx.unitId]);
@@ -178,6 +191,10 @@ export async function rescheduleTx(q: Q, ctx: Ctx, id: string, input: Reschedule
   }
   await validateSlot(q, { unitId: ctx.unitId, staffId, chairId, startsAt: input.startsAt, endsAt, excludeId: id });
   await q("update appointments set staff_id=$2, chair_id=$3, starts_at=$4, ends_at=$5, updated_at=now(), updated_by=$6, reminder_sent_at=case when starts_at=$4 then reminder_sent_at end, reminder_channel=case when starts_at=$4 then reminder_channel end where id=$1", [id, staffId, chairId, input.startsAt, endsAt, ctx.userId]);
+  if (input.address !== undefined) {
+    const [c] = await q<{ customer_id: string }>("select customer_id from appointments where id=$1", [id]);
+    await q("update appointments set service_address=$2 where id=$1", [id, await serviceAddress(q, ctx, c.customer_id, input.address)]);
+  }
   await audit(q, ctx, "AGENDAMENTO_REAGENDADO", "appointment", id, { staff_id: a.staff_id, chair_id: a.chair_id, starts_at: a.starts_at, ends_at: a.ends_at }, { staff_id: staffId, chair_id: chairId, starts_at: input.startsAt, ends_at: endsAt }, input.reason);
   if (!silent) await notifyAppointment(q, ctx, id, "agendamento_reagendado", "Agendamento reagendado");
 }
@@ -233,7 +250,7 @@ export async function listAppointments(db: Db, ctx: Ctx, range: { from: Date; to
   const contact = can(ctx, "customers.view");
   return db.query<AppointmentRow>(
     `select a.id, a.series_id, a.customer_id, c.name as customer_name, ${contact ? "c.phone" : "null::text"} as customer_phone, ${contact ? "c.notes" : "null::text"} as customer_notes,
-       a.staff_id, s.name as staff_name, s.color as staff_color, a.chair_id, ch.name as chair_name,
+       a.staff_id, s.name as staff_name, s.color as staff_color, a.chair_id, ch.name as chair_name, nullif(trim(coalesce(a.service_address, c.address)), '') as address,
        a.starts_at, a.ends_at, a.status, a.notes, a.cancellation_reason,
        coalesce((select string_agg(x.name_snapshot, ' + ' order by x.name_snapshot) from appointment_services x where x.appointment_id=a.id),'') as services,
        coalesce((select sum(x.price_cents) from appointment_services x where x.appointment_id=a.id),0)::bigint as total_cents,

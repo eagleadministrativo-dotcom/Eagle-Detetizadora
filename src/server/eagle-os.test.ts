@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { makeWorld, type World } from "./testkit";
+import { makeWorld, future, type World } from "./testkit";
+import { createAppointment, listAppointments } from "./services/agenda";
 import {
   createOrderFromQuote, createStandaloneOrder, executeServiceOrderFull, getReturn, getServiceOrder, saveQuote, setOrderPayment, setQuoteStatus,
   updateServiceOrder, validUntilFrom, addOrderFile, listOrderFiles, getOrderImage, setOrderSigner,
@@ -104,6 +105,21 @@ describe("fotos e assinatura", () => {
     expect((await getOrderImage(w.db, w.owner, photo))?.mime).toBe("image/jpeg");
     expect(await getServiceOrder(w.db, w.owner, os)).toMatchObject({ confirmed_by_customer: "Rose", customer_confirmed: true });
     expect(await msg(addOrderFile(w.db, w.barber2, os, { kind: "foto", name: "a.jpg", mime: "image/jpeg", bytes: png }))).toMatch(/permissão/);
+  });
+});
+
+describe("endereço do agendamento", () => {
+  it("ficha sem endereço recebe o digitado; endereço diferente vale só para o agendamento e vai para a OS", async () => {
+    const cid = await saveCustomer(w.db, w.owner, { name: "Cliente Sem Endereço" });
+    const a1 = await createAppointment(w.db, w.owner, { customerId: cid, staffId: w.barberStaffId, startsAt: future(200), serviceIds: [w.serviceId], address: "  Rua A,  10 - Centro " });
+    expect((await getCustomer(w.db, w.owner, cid)).customer.address).toBe("Rua A, 10 - Centro");
+    const a2 = await createAppointment(w.db, w.owner, { customerId: cid, staffId: w.barberStaffId, startsAt: future(220), serviceIds: [w.serviceId], address: "Galpão, Rua B, 99" });
+    const rows = await listAppointments(w.db, w.owner, { from: new Date(Date.now()), to: new Date(Date.now() + 400 * 3600000) });
+    expect(rows.find((r) => r.id === a1)?.address).toBe("Rua A, 10 - Centro");
+    expect(rows.find((r) => r.id === a2)?.address).toBe("Galpão, Rua B, 99");
+    expect((await getCustomer(w.db, w.owner, cid)).customer.address).toBe("Rua A, 10 - Centro");
+    const os = await createStandaloneOrder(w.db, w.owner, cid, { valueCents: 100 }, { appointmentId: a2 });
+    expect((await getServiceOrder(w.db, w.owner, os))?.service_address).toBe("Galpão, Rua B, 99");
   });
 });
 

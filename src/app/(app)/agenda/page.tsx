@@ -26,7 +26,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const prefs = await getPrefs(db, ctx.userId);
   const view = sp.v === "dia" || sp.v === "semana" || sp.v === "mes" ? sp.v : prefs.agenda_view;
   const all = can(ctx, "agenda.view_all");
-  const group = sp.g === "cadeira" ? "cadeira" : "prof";
+  const group: string = "prof"; // a visão por "local" (herança da barbearia) saiu: na Eagle o que importa é o técnico e o endereço
   const staffFilter = all ? (/^[0-9a-f-]{36}$/.test(sp.s ?? "") ? sp.s! : null) : ctx.staffId ?? null;
   const cat = await listCatalog(db, ctx.unitId);
   const settings = await getSettings(db.query, ctx.unitId);
@@ -75,7 +75,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     : staff.map((s) => ({ key: s.id, date: d, staffId: s.id, label: s.name, color: s.color, today: d === today, off: offOf(work(s.id, d)) }));
   const colKey = (a: { starts_at: Date; staff_id: string; chair_id: string }) => (view === "semana" ? toYmd(a.starts_at) : group === "cadeira" && all ? a.chair_id : a.staff_id);
   const events: CalEvent[] = appts.map((a) => { const y = toYmd(a.starts_at); return {
-    id: a.id, col: colKey(a), s: mins(a.starts_at, y), e: mins(a.ends_at, y), title: a.customer_name, sub: [a.services, view === "semana" && !staffFilter ? a.staff_name : group === "cadeira" ? a.staff_name : a.chair_name].join(" · "), status: a.status, color: a.staff_color,
+    id: a.id, col: colKey(a), s: mins(a.starts_at, y), e: mins(a.ends_at, y), title: a.customer_name, sub: [a.services, view === "semana" && !staffFilter ? a.staff_name : a.address].filter(Boolean).join(" · "), status: a.status, color: a.staff_color,
     movable: a.status === "agendado" && can(ctx, "agenda.edit") && (manageAll || (manageOwn && a.staff_id === ctx.staffId)), rec: !!a.series_id,
   }; });
   const calBlocks: CalBlock[] = view === "mes" ? [] : blocks.flatMap((b) => cols.filter((c) => (view === "semana" ? (!b.staff_id || b.staff_id === staffFilter) && !b.chair_id : group === "cadeira" && all ? (b.chair_id ? b.chair_id === c.chairId : !b.staff_id) : (b.staff_id ? b.staff_id === c.staffId : !b.chair_id))).flatMap((c) => {
@@ -100,7 +100,6 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         <div className="row">
           <form method="get" className="row datejump"><input type="hidden" name="v" value={view} /><input type="hidden" name="g" value={group} />{staffFilter && all ? <input type="hidden" name="s" value={staffFilter} /> : null}<input type="date" name="d" defaultValue={d} aria-label="Ir para a data" style={{ width: 150 }} /><button className="btn small ghost" type="submit">Ir</button></form>
           <Seg items={[{ href: href({ v: "dia" }), label: "Dia", active: view === "dia" }, { href: href({ v: "semana" }), label: "Semana", active: view === "semana" }, { href: href({ v: "mes" }), label: "Mês", active: view === "mes" }]} />
-          {all && view === "dia" ? <Seg items={[{ href: href({ g: "prof" }), label: "Técnicos", active: group === "prof" }, { href: href({ g: "cadeira" }), label: "Locais", active: group === "cadeira" }]} /> : null}
         </div>
       </div>
       {all && cat.staff.filter((s) => s.is_active).length > 1 ? (
@@ -123,7 +122,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
             );
           })}
         </div>
-      ) : cols.length === 0 ? <Empty title="Nada para mostrar">Cadastre técnicos e locais em Administração.</Empty> : (
+      ) : cols.length === 0 ? <Empty title="Nada para mostrar">Cadastre os técnicos em Administração.</Empty> : (
         <Calendar cols={cols} events={events} blocks={calBlocks} start={start} end={end} canBook={canBook} canBlock={can(ctx, "agenda.block")} />
       )}
       {view !== "mes" && canBook ? <small>Arraste um horário para reagendar, puxe a borda de baixo para mudar a duração ou selecione um espaço livre. No celular, segure o horário antes de arrastar.</small> : null}
@@ -133,7 +132,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           <div className="stack">
             {blocks.map((b) => (
               <div className="row" key={b.id}>
-                <span className="grow"><b>{fmtTime(b.starts_at)}–{fmtTime(b.ends_at)}</b> · {b.reason} <small>({b.chair_name ?? b.staff_name ?? "toda a unidade"})</small></span>
+                <span className="grow"><b>{fmtTime(b.starts_at)}–{fmtTime(b.ends_at)}</b> · {b.reason} <small>({b.staff_name ?? "todos os técnicos"})</small></span>
                 {can(ctx, "agenda.block") ? <form action={removeBlockAction}><input type="hidden" name="id" value={b.id} /><input type="hidden" name="d" value={d} /><button className="btn small ghost" type="submit">Remover</button></form> : null}
               </div>
             ))}

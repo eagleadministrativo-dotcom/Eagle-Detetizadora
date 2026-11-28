@@ -341,8 +341,10 @@ details.confirm p.warn { padding: 6px 12px 0; font-size: 13px; color: var(--warn
 .week .day h3 { font-size: 13px; margin-bottom: 8px; }
 @media (max-width: 1100px) { .week { grid-template-columns: 1fr; } }
 .only-mobile { display: none; }
-@media (max-width: 860px) { .only-desktop { display: none !important; } .only-mobile { display: block; } .sticky-actions { bottom: 84px; z-index: 4; } }
+@media (max-width: 860px) { .only-desktop { display: none !important; } .only-mobile { display: block; } }
 .sticky-actions { position: sticky; bottom: 0; padding: 12px 0; }
+/* celular: o botão fica acima da barra de baixo (que flutua 10 px ou a área segura do iPhone, com ~70 px de altura) */
+@media (max-width: 860px) { .sticky-actions { bottom: calc(max(10px, env(safe-area-inset-bottom)) + 76px); z-index: 4; } }
 /* ───────── login / setup (atmosfera do estúdio) ───────── */
 .login { min-height: 100vh; display: grid; place-items: center; padding: 24px; position: relative; overflow: hidden; color: var(--cream-100);
   background:

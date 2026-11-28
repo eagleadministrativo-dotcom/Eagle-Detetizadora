@@ -3,7 +3,7 @@ import { requirePerm } from "@/server/session";
 import { can } from "@/server/core";
 import { listCatalog, listServices } from "@/server/services/catalog";
 import { customerOptions } from "@/server/services/customers";
-import { CustomerPicker } from "@/components/customer-picker";
+import { AppointmentCustomer } from "@/components/appointment-customer";
 import { fmtBRL } from "@/lib/money";
 import { todayYmd } from "@/lib/dates";
 import { Empty, Field, Flash, PageHead, Seg } from "@/components/ui";
@@ -24,19 +24,9 @@ export default async function NewAppointment({ searchParams }: { searchParams: P
   const d = /^\d{4}-\d{2}-\d{2}$/.test(sp.d ?? "") ? sp.d! : todayYmd();
   const ownOnly = !can(ctx, "agenda.manage") && can(ctx, "agenda.manage_own");
   const staff = cat.staff.filter((s) => s.is_active && (!ownOnly || s.id === ctx.staffId));
-  const chairs = cat.chairs.filter((c) => c.is_active);
   const canBook = can(ctx, "agenda.manage") || can(ctx, "agenda.manage_own");
 
-  const customerFields = (
-    <fieldset>
-      <legend>Cliente</legend>
-      <div className="fields">
-        <CustomerPicker label="Cliente cadastrado" customers={customers} defaultValue={sp.cust} />
-        <Field label="…ou novo cliente (nome)"><input name="newName" placeholder="Nome" /></Field>
-        <Field label="Telefone (opcional)"><input name="newPhone" inputMode="tel" placeholder="41 99999-0000" /></Field>
-      </div>
-    </fieldset>
-  );
+  const customerFields = <AppointmentCustomer customers={customers} defaultCustomer={sp.cust} />;
   const serviceFields = services.length === 0 ? <Empty title="Nenhum serviço cadastrado">Cadastre em Administração → Serviços e preços.</Empty> : (
     <fieldset>
       <legend>Serviços</legend>
@@ -52,16 +42,10 @@ export default async function NewAppointment({ searchParams }: { searchParams: P
   );
   const staffChair = (
     <div className="fields">
-      <Field label="Profissional">
+      <Field label="Técnico">
         <select name="staffId" defaultValue={sp.s ?? (ownOnly ? ctx.staffId ?? "" : "")} required>
           <option value="" disabled>— escolher —</option>
           {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-      </Field>
-      <Field label="Local">
-        <select name="chairId" defaultValue={sp.c ?? ""}>
-          <option value="">Automático (primeiro livre)</option>
-          {chairs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </Field>
     </div>
@@ -111,10 +95,7 @@ export default async function NewAppointment({ searchParams }: { searchParams: P
             <Field label="Até (mesma data)"><input type="time" name="to" step={900} defaultValue={sp.te ?? ""} required /></Field>
           </div>
           <div className="fields">
-            <Field label="Local (opcional)">
-              <select name="chairId" defaultValue={sp.c ?? ""}><option value="">Todas</option>{chairs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-            </Field>
-            <Field label="Profissional (opcional)">
+            <Field label="Técnico (em branco bloqueia todos)">
               <select name="staffId" defaultValue={sp.s ?? ""}><option value="">Todos</option>{cat.staff.filter((s) => s.is_active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
             </Field>
           </div>

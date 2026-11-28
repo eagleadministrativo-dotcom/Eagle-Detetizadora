@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { flushPush } from "@/server/services/push";
 import { getDb } from "@/server/db";
 import { bool, requireSession, run, str, optStr } from "@/server/session";
-import { cancelAppointment, createAppointment, createBlock, cancelBlock, markNoShow, rescheduleAppointment } from "@/server/services/agenda";
+import { cancelAppointment, createAppointment, createBlock, cancelBlock, markNoShow, rescheduleAppointment, serviceAddress } from "@/server/services/agenda";
 import { quickAttendance, startAttendance } from "@/server/services/attendance";
 import { saveCustomer } from "@/server/services/customers";
 import { cancelSeries, createSeries, updateSeries } from "@/server/services/series";
@@ -67,7 +67,7 @@ async function resolveCustomer(fd: FormData, ctx: Awaited<ReturnType<typeof requ
   if (existing) return existing;
   const name = str(fd, "newName");
   if (!name) throw new DomainError("invalid", "Escolha um cliente ou informe o nome de um novo cliente.");
-  return saveCustomer(await getDb(), ctx, { name, phone: optStr(fd, "newPhone") });
+  return saveCustomer(await getDb(), ctx, { name, phone: optStr(fd, "newPhone"), address: optStr(fd, "address") });
 }
 
 export async function createAppointmentAction(fd: FormData) {
@@ -79,6 +79,7 @@ export async function createAppointmentAction(fd: FormData) {
     const plan = str(fd, "plan"), rule = plan ? ruleFromForm((k) => str(fd, k)) : null;
     if (plan && !rule) throw new DomainError("invalid", "Escolha a frequência do retorno.");
     if (plan === "serie") {
+      await serviceAddress(db.query, ctx, customerId, optStr(fd, "address")); // série usa o endereço da ficha
       const r = await createSeries(db, ctx, {
         customerId, staffId: str(fd, "staffId"), chairId: optStr(fd, "chairId"), serviceIds: fd.getAll("services").map(String), rule: rule!, time: str(fd, "time"), startDate: str(fd, "date"),
         endDate: optStr(fd, "endDate"), maxOccurrences: str(fd, "maxOcc") ? Number.parseInt(str(fd, "maxOcc"), 10) : null, confirmed: bool(fd, "confirmed"), confirmedNote: str(fd, "confirmedNote"),
@@ -88,7 +89,7 @@ export async function createAppointmentAction(fd: FormData) {
     }
     if (plan === "pref") await saveReturnRule(db, ctx, { customerId, rule });
     await createAppointment(db, ctx, {
-      customerId, staffId: str(fd, "staffId"), chairId: optStr(fd, "chairId"), startsAt: startsAt(fd), serviceIds: fd.getAll("services").map(String), notes: optStr(fd, "notes"),
+      customerId, staffId: str(fd, "staffId"), chairId: optStr(fd, "chairId"), startsAt: startsAt(fd), serviceIds: fd.getAll("services").map(String), notes: optStr(fd, "notes"), address: optStr(fd, "address"),
     });
     pushNow(db);
     return { to: `/agenda?d=${str(fd, "date")}`, ok: "Agendamento criado." };
@@ -139,7 +140,7 @@ export async function rescheduleAction(fd: FormData) {
   const id = str(fd, "id");
   await run(`/agenda/${id}`, async () => {
     const db = await getDb();
-    await rescheduleAppointment(db, ctx, id, { startsAt: startsAt(fd), staffId: optStr(fd, "staffId") ?? undefined, chairId: optStr(fd, "chairId") ?? undefined, reason: optStr(fd, "reason") ?? undefined });
+    await rescheduleAppointment(db, ctx, id, { startsAt: startsAt(fd), staffId: optStr(fd, "staffId") ?? undefined, chairId: optStr(fd, "chairId") ?? undefined, reason: optStr(fd, "reason") ?? undefined, address: fd.has("address") ? optStr(fd, "address") : undefined });
     pushNow(db);
     return "Agendamento reagendado.";
   });

@@ -35,7 +35,7 @@ export default async function AppointmentPage({ params, searchParams }: { params
 
   return (
     <>
-      <PageHead title={a.customer_name} sub={<>{fmtDate(a.starts_at)} · {fmtTime(a.starts_at)}–{fmtTime(a.ends_at)} · {a.staff_name} · {a.chair_name}</>}>
+      <PageHead title={a.customer_name} sub={<>{fmtDate(a.starts_at)} · {fmtTime(a.starts_at)}–{fmtTime(a.ends_at)} · {a.staff_name}</>}>
         <ApptBadge s={a.status} />
         <Link className="btn ghost" href={`/agenda?d=${ymd}`}>Voltar à agenda</Link>
       </PageHead>
@@ -44,6 +44,7 @@ export default async function AppointmentPage({ params, searchParams }: { params
         <section className="card stack">
           <h2>Detalhes</h2>
           <div><small>Serviços</small><br />{a.services} · <b className="mono">{fmtBRL(a.total_cents)}</b></div>
+          <div><small>Endereço do serviço</small><br />{a.address ? <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(a.address)}`} target="_blank" rel="noreferrer">{a.address}</a> : <span className="muted">Sem endereço. Complete na <Link href={`/clientes/${a.customer_id}`}>ficha do cliente</Link>.</span>}</div>
           {a.customer_phone ? <div><small>Telefone</small><br />{a.customer_phone}</div> : null}
           {a.customer_notes ? <div><small>Observações do cliente</small><br />{a.customer_notes}</div> : null}
           {a.notes ? <div><small>Observações do agendamento</small><br />{a.notes}</div> : null}
@@ -64,12 +65,10 @@ export default async function AppointmentPage({ params, searchParams }: { params
                 <Field label="Data"><input type="date" name="date" defaultValue={ymd} required /></Field>
                 <Field label="Hora"><input type="time" name="time" step={900} defaultValue={fmtTime(a.starts_at)} required /></Field>
                 {can(ctx, "agenda.manage") ? (
-                  <>
-                    <Field label="Profissional"><select name="staffId" defaultValue={a.staff_id}>{cat.staff.filter((s) => s.is_active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
-                    <Field label="Local"><select name="chairId" defaultValue={a.chair_id}>{cat.chairs.filter((c) => c.is_active).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-                  </>
+                  <Field label="Técnico"><select name="staffId" defaultValue={a.staff_id}>{cat.staff.filter((s) => s.is_active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
                 ) : null}
               </div>
+              <Field label="Endereço do serviço"><input name="address" defaultValue={a.address ?? ""} maxLength={300} placeholder="Rua, número, bairro, cidade" /></Field>
               <Field label="Motivo (opcional)"><input name="reason" /></Field>
             </ConfirmAction>
             {series ? (
@@ -81,7 +80,7 @@ export default async function AppointmentPage({ params, searchParams }: { params
                     <Field label="Aplicar a"><select name="scope"><option value="seguintes">Este e os seguintes</option><option value="todas">Todos os futuros</option></select></Field>
                     <Field label="Nova data deste"><input type="date" name="date" defaultValue={ymd} required /></Field>
                     <Field label="Novo horário"><input type="time" name="time" step={900} defaultValue={fmtTime(a.starts_at)} required /></Field>
-                    {can(ctx, "agenda.manage") ? <Field label="Profissional"><select name="staffId" defaultValue={a.staff_id}>{cat.staff.filter((s) => s.is_active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field> : null}
+                    {can(ctx, "agenda.manage") ? <Field label="Técnico"><select name="staffId" defaultValue={a.staff_id}>{cat.staff.filter((s) => s.is_active).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field> : null}
                   </div>
                 </ConfirmAction>
                 {can(ctx, "agenda.cancel") ? <ConfirmAction label="Cancelar a série" action={seriesAction} submit="Cancelar série">
